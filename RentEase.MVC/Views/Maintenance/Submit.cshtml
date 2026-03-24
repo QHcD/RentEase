@@ -1,0 +1,73 @@
+@model PropertyLeasing.MVC.ViewModels.CreateMaintenanceViewModel
+@{
+    ViewData["Title"] = "Submit Maintenance Request";
+}
+
+<div class="row justify-content-center">
+    <div class="col-md-7">
+        <div class="card shadow-sm">
+            <div class="card-header bg-warning">
+                <h4 class="mb-0"><i class="fa fa-wrench me-2"></i>Submit Maintenance Request</h4>
+            </div>
+            <div class="card-body">
+                @if (!string.IsNullOrEmpty(Model.UnitNumber))
+                {
+                    <div class="alert alert-info mb-3">
+                        <strong>Unit:</strong> @Model.UnitNumber &nbsp;|&nbsp;
+                        <strong>Property:</strong> @Model.PropertyName
+                    </div>
+                }
+
+                <form asp-action="Submit" method="post">
+                    @Html.AntiForgeryToken()
+                    <input asp-for="UnitId" type="hidden" />
+                    <input asp-for="UnitNumber" type="hidden" />
+                    <input asp-for="PropertyName" type="hidden" />
+
+                    <div class="mb-3">
+                        <label asp-for="Title" class="form-label"></label>
+                        <input asp-for="Title" class="form-control" placeholder="e.g. Leaking pipe in bathroom" />
+                        <span asp-validation-for="Title" class="text-danger small"></span>
+                    </div>
+                    <div class="mb-3">
+                        <label asp-for="Description" class="form-label"></label>
+                        <textarea asp-for="Description" class="form-control" rows="3"
+                                  placeholder="Describe the issue in detail..."></textarea>
+                    </div>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label asp-for="RequestType" class="form-label"></label>
+                            <select asp-for="RequestType" class="form-select">
+                                <option value="">Select type...</option>
+                                <option value="Plumbing">Plumbing</option>
+                                <option value="Electrical">Electrical</option>
+                                <option value="HVAC">HVAC</option>
+                                <option value="General">General</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label asp-for="Priority" class="form-label"></label>
+                            <select asp-for="Priority" class="form-select">
+                                <option value="Low">Low</option>
+                                <option value="Medium" selected>Medium</option>
+                                <option value="High">High</option>
+                                <option value="Urgent">Urgent</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-warning flex-fill">
+                            <i class="fa fa-paper-plane me-1"></i> Submit Request
+                        </button>
+                        <a asp-action="Index" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}

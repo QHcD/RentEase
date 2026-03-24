@@ -1,0 +1,80 @@
+@model List<PropertyLeasing.MVC.ViewModels.PropertyListViewModel>
+@{
+    ViewData["Title"] = "Properties";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2><i class="fa fa-building me-2"></i>Browse Properties</h2>
+    @if (User.IsInRole("PropertyManager"))
+    {
+        <a asp-action="Create" class="btn btn-success">
+            <i class="fa fa-plus me-1"></i> Add Property
+        </a>
+    }
+</div>
+
+<!-- Search & Filter -->
+<form method="get" class="row g-2 mb-4">
+    <div class="col-md-5">
+        <input name="search" value="@ViewBag.Search" class="form-control" placeholder="Search by name, address or city..." />
+    </div>
+    <div class="col-md-3">
+        <select name="type" class="form-select">
+            <option value="">All Types</option>
+            <option value="Residential" selected="@(ViewBag.Type == "Residential")">Residential</option>
+            <option value="Commercial" selected="@(ViewBag.Type == "Commercial")">Commercial</option>
+        </select>
+    </div>
+    <div class="col-md-2">
+        <button type="submit" class="btn btn-primary w-100"><i class="fa fa-search me-1"></i>Search</button>
+    </div>
+    <div class="col-md-2">
+        <a asp-action="Index" class="btn btn-outline-secondary w-100">Clear</a>
+    </div>
+</form>
+
+@if (!Model.Any())
+{
+    <div class="alert alert-info">No properties found matching your search.</div>
+}
+
+<div class="row g-3">
+    @foreach (var p in Model)
+    {
+        <div class="col-md-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <h5 class="card-title"><i class="fa fa-building me-1 text-primary"></i>@p.Name</h5>
+                        <span class="badge bg-secondary">@p.PropertyType</span>
+                    </div>
+                    <p class="text-muted small"><i class="fa fa-map-marker-alt me-1"></i>@p.Address, @p.City</p>
+                    <p class="card-text">@(p.Description ?? "No description available.")</p>
+                    <div class="d-flex gap-2">
+                        <span class="badge bg-success">@p.AvailableUnits Available</span>
+                        <span class="badge bg-secondary">@p.TotalUnits Total Units</span>
+                    </div>
+                </div>
+                <div class="card-footer d-flex gap-2">
+                    <a asp-action="Units" asp-route-propertyId="@p.PropertyId"
+                       class="btn btn-outline-primary btn-sm flex-fill">
+                        <i class="fa fa-door-open me-1"></i> View Units
+                    </a>
+                    @if (User.IsInRole("PropertyManager"))
+                    {
+                        <a asp-action="Edit" asp-route-id="@p.PropertyId" class="btn btn-outline-warning btn-sm">
+                            <i class="fa fa-edit"></i>
+                        </a>
+                        <form asp-action="Delete" asp-route-id="@p.PropertyId" method="post"
+                              onsubmit="return confirm('Delete this property?')">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="btn btn-outline-danger btn-sm">
+                                <i class="fa fa-trash"></i>
+                            </button>
+                        </form>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>

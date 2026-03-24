@@ -1,0 +1,169 @@
+@model PropertyLeasing.Reporting.ViewModels.ReportDashboardViewModel
+@{
+    ViewData["Title"] = "Operations Dashboard";
+}
+
+<!-- Payment KPIs -->
+@if (Model.PaymentReport != null)
+{
+    var p = Model.PaymentReport;
+    var collectionRate = p.TotalDue > 0 ? Math.Round((double)(p.TotalPaid / p.TotalDue) * 100, 1) : 0;
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card kpi-card border-success">
+                <div class="card-body">
+                    <div class="stat-num text-success">BD @p.TotalPaid.ToString("N0")</div>
+                    <div class="text-muted small">Total Collected</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card kpi-card border-primary">
+                <div class="card-body">
+                    <div class="stat-num text-primary">BD @p.TotalDue.ToString("N0")</div>
+                    <div class="text-muted small">Total Due</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card kpi-card border-danger">
+                <div class="card-body">
+                    <div class="stat-num text-danger">@p.OverdueCount</div>
+                    <div class="text-muted small">Overdue Payments</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card kpi-card border-info">
+                <div class="card-body">
+                    <div class="stat-num text-info">@collectionRate%</div>
+                    <div class="text-muted small">Collection Rate</div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<div class="row g-3 mb-4">
+    <!-- Occupancy by Property -->
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header fw-bold">
+                <i class="fa fa-building me-1 text-primary"></i> Occupancy by Property
+            </div>
+            <div class="card-body">
+                @foreach (var item in Model.OccupancyReport)
+                {
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="fw-semibold">@item.PropertyName</span>
+                            <span class="text-muted small">@item.OccupiedUnits/@item.TotalUnits units (@item.OccupancyRate%)</span>
+                        </div>
+                        <div class="progress" style="height:10px;">
+                            <div class="progress-bar bg-success" style="width:@item.OccupancyRate%"
+                                 title="@item.OccupancyRate% occupied"></div>
+                        </div>
+                        <div class="d-flex justify-content-between mt-1">
+                            <span class="badge bg-success">@item.OccupiedUnits Occupied</span>
+                            <span class="badge bg-secondary">@item.AvailableUnits Available</span>
+                        </div>
+                    </div>
+                }
+            </div>
+            <div class="card-footer">
+                <a asp-action="Occupancy" class="btn btn-sm btn-outline-primary">Full Report</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Maintenance Summary -->
+    @if (Model.MaintenanceReport != null)
+    {
+        var m = Model.MaintenanceReport;
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header fw-bold">
+                    <i class="fa fa-wrench me-1 text-warning"></i> Maintenance Summary
+                </div>
+                <div class="card-body">
+                    <div class="row g-2 text-center">
+                        <div class="col-6">
+                            <div class="p-3 bg-light rounded">
+                                <div class="fs-3 fw-bold text-danger">@m.PendingRequests</div>
+                                <small class="text-muted">Pending / Assigned</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="p-3 bg-light rounded">
+                                <div class="fs-3 fw-bold text-primary">@m.InProgressRequests</div>
+                                <small class="text-muted">In Progress</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="p-3 bg-light rounded">
+                                <div class="fs-3 fw-bold text-success">@m.ResolvedRequests</div>
+                                <small class="text-muted">Resolved / Closed</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="p-3 bg-light rounded">
+                                <div class="fs-3 fw-bold text-info">@m.AvgResolutionHours h</div>
+                                <small class="text-muted">Avg Resolution Time</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <a asp-action="Maintenance" class="btn btn-sm btn-outline-warning">Full Report</a>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Recent Applications Table -->
+<div class="card">
+    <div class="card-header fw-bold">
+        <i class="fa fa-file-alt me-1 text-info"></i> Recent Lease Applications
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Tenant</th>
+                        <th>Unit</th>
+                        <th>Property</th>
+                        <th>Start Date</th>
+                        <th>Status</th>
+                        <th>Applied</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var a in Model.Applications.Take(10))
+                    {
+                        var badgeColor = a.Status switch
+                        {
+                            "Approved" => "success",
+                            "Rejected" => "danger",
+                            "Screening" => "info",
+                            _ => "warning"
+                        };
+                        <tr>
+                            <td>@a.TenantName</td>
+                            <td>@a.UnitNumber</td>
+                            <td>@a.PropertyName</td>
+                            <td>@(a.RequestedStartDate?.ToString("dd MMM yyyy") ?? "-")</td>
+                            <td><span class="badge bg-@badgeColor">@a.Status</span></td>
+                            <td>@a.CreatedAt.ToString("dd MMM yyyy")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="card-footer">
+        <a asp-action="Applications" class="btn btn-sm btn-outline-info">View All</a>
+    </div>
+</div>

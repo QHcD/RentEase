@@ -1,0 +1,78 @@
+@model List<PropertyLeasing.MVC.ViewModels.PaymentListViewModel>
+@{
+    ViewData["Title"] = "Payments";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2><i class="fa fa-money-bill me-2"></i>Payments</h2>
+</div>
+
+<!-- Status filter -->
+<ul class="nav nav-tabs mb-3">
+    <li class="nav-item">
+        <a class="nav-link @(ViewBag.Status == null ? "active" : "")" asp-action="Index">All</a>
+    </li>
+    @foreach (var s in new[] { "Pending", "Paid", "PartiallyPaid", "Overdue" })
+    {
+        <li class="nav-item">
+            <a class="nav-link @(ViewBag.Status == s ? "active" : "")"
+               asp-action="Index" asp-route-status="@s">@s</a>
+        </li>
+    }
+</ul>
+
+<div class="table-responsive">
+    <table class="table table-hover">
+        <thead class="table-dark">
+            <tr>
+                <th>Unit</th>
+                <th>Property</th>
+                @if (User.IsInRole("PropertyManager")) { <th>Tenant</th> }
+                <th>Amount Due</th>
+                <th>Amount Paid</th>
+                <th>Due Date</th>
+                <th>Status</th>
+                @if (User.IsInRole("PropertyManager")) { <th>Action</th> }
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var p in Model)
+            {
+                var statusColor = p.PaymentStatus switch
+                {
+                    "Paid"          => "success",
+                    "Overdue"       => "danger",
+                    "PartiallyPaid" => "warning",
+                    _               => "secondary"
+                };
+                <tr>
+                    <td>@p.UnitNumber</td>
+                    <td>@p.PropertyName</td>
+                    @if (User.IsInRole("PropertyManager")) { <td>@p.TenantName</td> }
+                    <td>BD @p.AmountDue.ToString("N2")</td>
+                    <td>@(p.AmountPaid.HasValue ? "BD " + p.AmountPaid.Value.ToString("N2") : "-")</td>
+                    <td class="@(p.DueDate < DateTime.Now && p.PaymentStatus == "Pending" ? "text-danger fw-bold" : "")">
+                        @p.DueDate.ToString("dd MMM yyyy")
+                    </td>
+                    <td><span class="badge bg-@statusColor">@p.PaymentStatus</span></td>
+                    @if (User.IsInRole("PropertyManager") && p.PaymentStatus != "Paid")
+                    {
+                        <td>
+                            <form asp-action="RecordPayment" method="post" class="d-flex gap-1">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="paymentId" value="@p.PaymentId" />
+                                <input type="number" name="amountPaid" value="@p.AmountDue"
+                                       class="form-control form-control-sm" style="width:100px" step="0.01" />
+                                <button class="btn btn-success btn-sm">Record</button>
+                            </form>
+                        </td>
+                    }
+                    else if (User.IsInRole("PropertyManager"))
+                    {
+                        <td><span class="text-muted small">Paid @p.PaidDate?.ToString("dd MMM")</span></td>
+                    }
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>

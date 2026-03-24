@@ -1,0 +1,179 @@
+@model PropertyLeasing.MVC.ViewModels.DashboardViewModel
+@{
+    ViewData["Title"] = "Dashboard";
+}
+
+<h2 class="mb-4"><i class="fa fa-chart-bar me-2"></i>Property Manager Dashboard</h2>
+
+<!-- KPI Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card border-primary text-center">
+            <div class="card-body">
+                <h3 class="fw-bold text-primary">@Model.TotalProperties</h3>
+                <small class="text-muted">Total Properties</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-success text-center">
+            <div class="card-body">
+                <h3 class="fw-bold text-success">@Model.AvailableUnits / @Model.TotalUnits</h3>
+                <small class="text-muted">Available / Total Units</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-warning text-center">
+            <div class="card-body">
+                <h3 class="fw-bold text-warning">@Model.PendingApplications</h3>
+                <small class="text-muted">Pending Applications</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-danger text-center">
+            <div class="card-body">
+                <h3 class="fw-bold text-danger">@Model.OverduePayments</h3>
+                <small class="text-muted">Overdue Payments</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <!-- Occupancy by Property -->
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header"><i class="fa fa-building me-1"></i>Occupancy by Property</div>
+            <div class="card-body">
+                @foreach (var p in Model.PropertyOccupancy)
+                {
+                    <div class="mb-2">
+                        <div class="d-flex justify-content-between">
+                            <span>@p.PropertyName</span>
+                            <span class="text-muted">@p.OccupiedUnits/@p.TotalUnits (@p.OccupancyRate%)</span>
+                        </div>
+                        <div class="progress" style="height:8px;">
+                            <div class="progress-bar bg-success" style="width:@p.OccupancyRate%"></div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Real-Time Maintenance Board (SignalR) -->
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="fa fa-wrench me-1"></i>Live Maintenance Board</span>
+                <span id="signalr-status" class="badge bg-secondary">Connecting...</span>
+            </div>
+            <div class="card-body p-0">
+                <div id="maintenance-board" style="max-height:280px; overflow-y:auto;">
+                    <table class="table table-sm mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Ticket</th>
+                                <th>Title</th>
+                                <th>Priority</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="maintenance-rows">
+                            @foreach (var r in Model.RecentMaintenance)
+                            {
+                                <tr id="row-@r.RequestId">
+                                    <td><small>@r.TicketNumber</small></td>
+                                    <td>@r.Title</td>
+                                    <td>
+                                        <span class="badge bg-@(r.Priority == "Urgent" ? "danger" : r.Priority == "High" ? "warning" : "secondary")">
+                                            @r.Priority
+                                        </span>
+                                    </td>
+                                    <td><span class="badge bg-info">@r.Status</span></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Applications -->
+<div class="card mb-4">
+    <div class="card-header"><i class="fa fa-file-alt me-1"></i>Recent Lease Applications</div>
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr><th>Tenant</th><th>Unit</th><th>Property</th><th>Status</th><th>Date</th><th></th></tr>
+            </thead>
+            <tbody>
+                @foreach (var a in Model.RecentApplications)
+                {
+                    <tr>
+                        <td>@a.TenantName</td>
+                        <td>@a.UnitNumber</td>
+                        <td>@a.PropertyName</td>
+                        <td>
+                            <span class="badge bg-@(a.Status == "Approved" ? "success" : a.Status == "Rejected" ? "danger" : "warning")">
+                                @a.Status
+                            </span>
+                        </td>
+                        <td>@a.CreatedAt.ToString("dd MMM yyyy")</td>
+                        <td>
+                            <a asp-controller="LeaseApplications" asp-action="Index" class="btn btn-sm btn-outline-primary">View</a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@section Scripts {
+<script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+<script>
+const connection = new signalR.HubConnectionBuilder()
+    .withUrl("/hubs/maintenance")
+    .withAutomaticReconnect()
+    .build();
+
+// New request submitted
+connection.on("NewRequest", (data) => {
+    const tbody = document.getElementById("maintenance-rows");
+    const priorityColor = data.priority === "Urgent" ? "danger" : data.priority === "High" ? "warning" : "secondary";
+    const row = `<tr id="row-${data.requestId}" class="table-warning">
+        <td><small>${data.ticketNumber}</small></td>
+        <td>${data.title}</td>
+        <td><span class="badge bg-${priorityColor}">${data.priority}</span></td>
+        <td><span class="badge bg-secondary">${data.status}</span></td>
+    </tr>`;
+    tbody.insertAdjacentHTML("afterbegin", row);
+});
+
+// Status updated
+connection.on("StatusUpdated", (data) => {
+    const row = document.getElementById(`row-${data.requestId}`);
+    if (row) {
+        const badge = row.querySelector("td:last-child span");
+        if (badge) badge.textContent = data.newStatus;
+        row.classList.add("table-info");
+        setTimeout(() => row.classList.remove("table-info"), 3000);
+    }
+});
+
+connection.start()
+    .then(() => {
+        document.getElementById("signalr-status").textContent = "Live";
+        document.getElementById("signalr-status").className = "badge bg-success";
+    })
+    .catch(() => {
+        document.getElementById("signalr-status").textContent = "Offline";
+        document.getElementById("signalr-status").className = "badge bg-danger";
+    });
+</script>
+}

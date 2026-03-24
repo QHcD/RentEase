@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - Reporting Portal</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <style>
+        body { background-color: #f8f9fa; }
+        .sidebar { min-height: 100vh; background: #1a1a2e; }
+        .sidebar .nav-link { color: #adb5bd; padding: .6rem 1rem; border-radius: 6px; }
+        .sidebar .nav-link:hover, .sidebar .nav-link.active { background: #0f3460; color: #fff; }
+        .sidebar .brand { color: #e94560; font-weight: 700; font-size: 1.2rem; }
+        .kpi-card { border-left: 4px solid; border-radius: 8px; }
+        .stat-num { font-size: 2rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+<div class="container-fluid">
+    <div class="row">
+        <!-- Sidebar -->
+        <nav class="col-md-2 d-none d-md-block sidebar py-4 px-3">
+            <div class="brand mb-4 px-2">
+                <i class="fa fa-chart-pie me-2"></i>Reporting
+            </div>
+            @if (User.Identity?.IsAuthenticated == true)
+            {
+                <div class="text-muted small px-2 mb-3">
+                    <i class="fa fa-user me-1"></i>
+                    @(User.FindFirst("FullName")?.Value ?? User.Identity?.Name)
+                </div>
+                <ul class="nav flex-column gap-1">
+                    <li class="nav-item">
+                        <a class="nav-link @(ViewContext.RouteData.Values["action"]?.ToString() == "Index" ? "active" : "")"
+                           asp-controller="Reports" asp-action="Index">
+                            <i class="fa fa-tachometer-alt me-2"></i>Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link @(ViewContext.RouteData.Values["action"]?.ToString() == "Occupancy" ? "active" : "")"
+                           asp-controller="Reports" asp-action="Occupancy">
+                            <i class="fa fa-building me-2"></i>Occupancy
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link @(ViewContext.RouteData.Values["action"]?.ToString() == "Maintenance" ? "active" : "")"
+                           asp-controller="Reports" asp-action="Maintenance">
+                            <i class="fa fa-wrench me-2"></i>Maintenance
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link @(ViewContext.RouteData.Values["action"]?.ToString() == "Payments" ? "active" : "")"
+                           asp-controller="Reports" asp-action="Payments">
+                            <i class="fa fa-money-bill me-2"></i>Payments
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link @(ViewContext.RouteData.Values["action"]?.ToString() == "Applications" ? "active" : "")"
+                           asp-controller="Reports" asp-action="Applications">
+                            <i class="fa fa-file-alt me-2"></i>Applications
+                        </a>
+                    </li>
+                    <li class="nav-item mt-4">
+                        <form asp-controller="Account" asp-action="Logout" method="post">
+                            <button type="submit" class="nav-link border-0 bg-transparent text-danger w-100 text-start">
+                                <i class="fa fa-sign-out-alt me-2"></i>Logout
+                            </button>
+                        </form>
+                    </li>
+                </ul>
+            }
+        </nav>
+
+        <!-- Main content -->
+        <main class="col-md-10 ms-sm-auto px-4 py-4">
+            <h4 class="mb-4 text-muted">@ViewData["Title"]</h4>
+            @RenderBody()
+        </main>
+    </div>
+</div>
+
+<script src="~/lib/jquery/dist/jquery.min.js"></script>
+<script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+@await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

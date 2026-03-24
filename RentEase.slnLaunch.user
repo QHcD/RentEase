@@ -1,0 +1,19 @@
+[
+  {
+    "Name": "New Profile",
+    "Projects": [
+      {
+        "Path": "RentEase.API\\RentEase.API.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "RentEase.MVC\\RentEase.MVC.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "RentEase.Reporting\\RentEase.Reporting.csproj",
+        "Action": "Start"
+      }
+    ]
+  }
+]

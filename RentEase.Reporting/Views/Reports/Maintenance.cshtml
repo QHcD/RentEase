@@ -1,0 +1,66 @@
+@* ── Maintenance.cshtml ── *@
+@model PropertyLeasing.Reporting.ViewModels.MaintenanceReportItem
+@{
+    ViewData["Title"] = "Maintenance Report";
+}
+
+@if (Model == null)
+{
+    <div class="alert alert-warning">No data available.</div>
+}
+else
+{
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card kpi-card border-primary text-center">
+                <div class="card-body">
+                    <div class="stat-num text-primary">@Model.TotalRequests</div>
+                    <div class="text-muted small">Total Requests</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card kpi-card border-danger text-center">
+                <div class="card-body">
+                    <div class="stat-num text-danger">@Model.PendingRequests</div>
+                    <div class="text-muted small">Pending / Assigned</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card kpi-card border-warning text-center">
+                <div class="card-body">
+                    <div class="stat-num text-warning">@Model.InProgressRequests</div>
+                    <div class="text-muted small">In Progress</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card kpi-card border-success text-center">
+                <div class="card-body">
+                    <div class="stat-num text-success">@Model.ResolvedRequests</div>
+                    <div class="text-muted small">Resolved / Closed</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <h6>Average Resolution Time</h6>
+            <div class="display-6 fw-bold text-info">@Model.AvgResolutionHours hours</div>
+            <small class="text-muted">Based on resolved requests</small>
+
+            <hr/>
+            <h6>Backlog Rate</h6>
+            @{
+                var backlogRate = Model.TotalRequests > 0
+                    ? Math.Round((double)Model.PendingRequests / Model.TotalRequests * 100, 1) : 0;
+            }
+            <div class="progress mt-2" style="height:20px;">
+                <div class="progress-bar bg-danger" style="width:@backlogRate%">@backlogRate% Backlog</div>
+                <div class="progress-bar bg-success" style="width:@(100 - backlogRate)%">@(100 - backlogRate)% Resolved</div>
+            </div>
+        </div>
+    </div>
+}

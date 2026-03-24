@@ -1,0 +1,54 @@
+@model PropertyLeasing.Reporting.ViewModels.LoginViewModel
+@{
+    ViewData["Title"] = "Login";
+    Layout = null;
+}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Reporting Portal — Login</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css"/>
+    <style>
+        body { background: #1a1a2e; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+        .login-card { background: #fff; border-radius: 12px; padding: 2.5rem; width: 100%; max-width: 420px; }
+        .brand { color: #e94560; font-weight: 700; font-size: 1.4rem; }
+    </style>
+</head>
+<body>
+<div class="login-card shadow-lg">
+    <div class="text-center mb-4">
+        <div class="brand"><i class="fa fa-chart-pie me-2"></i>Reporting Portal</div>
+        <p class="text-muted small mt-1">Property Manager access only</p>
+    </div>
+
+    <form asp-action="Login" method="post">
+        @Html.AntiForgeryToken()
+        <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2 small" style="display:@(ViewData.ModelState.ErrorCount > 0 ? "block" : "none")"></div>
+
+        <div class="mb-3">
+            <label asp-for="Email" class="form-label">Email</label>
+            <input asp-for="Email" class="form-control" placeholder="manager@propleasing.com" />
+            <span asp-validation-for="Email" class="text-danger small"></span>
+        </div>
+        <div class="mb-4">
+            <label asp-for="Password" class="form-label">Password</label>
+            <input asp-for="Password" class="form-control" placeholder="••••••••" />
+            <span asp-validation-for="Password" class="text-danger small"></span>
+        </div>
+        <button type="submit" class="btn btn-danger w-100">
+            <i class="fa fa-sign-in-alt me-1"></i> Sign In
+        </button>
+    </form>
+
+    <div class="text-center mt-3">
+        <small class="text-muted">Demo: manager@propleasing.com / Manager@123</small>
+    </div>
+</div>
+
+<script src="~/lib/jquery/dist/jquery.min.js"></script>
+<script src="~/lib/jquery-validation/dist/jquery.validate.min.js"></script>
+<script src="~/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.min.js"></script>
+</body>
+</html>

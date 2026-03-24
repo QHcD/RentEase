@@ -1,0 +1,78 @@
+/* ── General ─────────────────────────────────────── */
+body {
+    background-color: #f8f9fa;
+}
+
+/* ── Navbar ──────────────────────────────────────── */
+.navbar-brand {
+    font-size: 1.3rem;
+    letter-spacing: 0.5px;
+}
+
+/* ── Cards ───────────────────────────────────────── */
+.card {
+    border-radius: 10px;
+}
+
+.card-header {
+    border-radius: 10px 10px 0 0 !important;
+}
+
+/* ── Status badges ───────────────────────────────── */
+.badge {
+    font-weight: 500;
+    letter-spacing: 0.3px;
+}
+
+/* ── Tables ──────────────────────────────────────── */
+.table th {
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: #6c757d;
+}
+
+/* ── Priority colors ─────────────────────────────── */
+.priority-urgent { border-left: 4px solid #dc3545 !important; }
+.priority-high   { border-left: 4px solid #ffc107 !important; }
+.priority-medium { border-left: 4px solid #0dcaf0 !important; }
+.priority-low    { border-left: 4px solid #6c757d !important; }
+
+/* ── Timeline (maintenance history) ─────────────── */
+.timeline { border-left: 2px solid #dee2e6; padding-left: 1rem; }
+.timeline .fa-circle-dot { margin-left: -1.4rem; background: #fff; }
+
+/* ── Footer ──────────────────────────────────────── */
+.footer {
+    font-size: 0.85rem;
+}
+
+/* ── Form focus ──────────────────────────────────── */
+.form-control:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.15);
+}
+
+/* ── Progress bars ───────────────────────────────── */
+.progress {
+    border-radius: 50px;
+}
+
+/* ── Unit cards ──────────────────────────────────── */
+.unit-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    transition: all 0.2s ease;
+}
+
+/* ── Notification dot ────────────────────────────── */
+.notif-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #dc3545;
+    display: inline-block;
+    margin-left: 2px;
+    vertical-align: middle;
+}

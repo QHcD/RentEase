@@ -1,0 +1,105 @@
+@model List<PropertyLeasing.MVC.ViewModels.MaintenanceListViewModel>
+@{
+    ViewData["Title"] = "Maintenance Requests";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2><i class="fa fa-wrench me-2"></i>Maintenance Requests</h2>
+    @if (User.IsInRole("Tenant"))
+    {
+        <a asp-action="Submit" class="btn btn-success">
+            <i class="fa fa-plus me-1"></i> New Request
+        </a>
+    }
+</div>
+
+<!-- Filters -->
+<form method="get" class="row g-2 mb-3">
+    <div class="col-md-3">
+        <select name="status" class="form-select">
+            <option value="">All Statuses</option>
+            @foreach (var s in new[] { "Submitted", "Assigned", "InProgress", "Resolved", "Closed" })
+            {
+                <option value="@s" selected="@(ViewBag.Status == s)">@s</option>
+            }
+        </select>
+    </div>
+    <div class="col-md-3">
+        <select name="priority" class="form-select">
+            <option value="">All Priorities</option>
+            @foreach (var p in new[] { "Low", "Medium", "High", "Urgent" })
+            {
+                <option value="@p" selected="@(ViewBag.Priority == p)">@p</option>
+            }
+        </select>
+    </div>
+    <div class="col-md-2">
+        <button type="submit" class="btn btn-primary w-100">Filter</button>
+    </div>
+    <div class="col-md-2">
+        <a asp-action="Index" class="btn btn-outline-secondary w-100">Clear</a>
+    </div>
+</form>
+
+@if (!Model.Any())
+{
+    <div class="alert alert-info">No maintenance requests found.</div>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-hover">
+            <thead class="table-dark">
+                <tr>
+                    <th>Ticket</th>
+                    <th>Title</th>
+                    <th>Unit</th>
+                    @if (!User.IsInRole("Tenant")) { <th>Tenant</th> }
+                    <th>Priority</th>
+                    <th>Status</th>
+                    <th>Submitted</th>
+                    @if (!User.IsInRole("Tenant")) { <th>Actions</th> }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var r in Model)
+                {
+                    var statusColor = r.Status switch
+                    {
+                        "Submitted"  => "secondary",
+                        "Assigned"   => "info",
+                        "InProgress" => "primary",
+                        "Resolved"   => "success",
+                        "Closed"     => "dark",
+                        _            => "secondary"
+                    };
+                    var priorityColor = r.Priority switch
+                    {
+                        "Urgent" => "danger",
+                        "High"   => "warning",
+                        "Medium" => "info",
+                        _        => "secondary"
+                    };
+                    <tr>
+                        <td><small class="text-muted">@r.TicketNumber</small></td>
+                        <td>@r.Title</td>
+                        <td>@r.UnitNumber <small class="text-muted">@r.PropertyName</small></td>
+                        @if (!User.IsInRole("Tenant")) { <td>@r.TenantName</td> }
+                        <td><span class="badge bg-@priorityColor">@r.Priority</span></td>
+                        <td><span class="badge bg-@statusColor">@r.Status</span></td>
+                        <td>@r.SubmittedAt.ToString("dd MMM yyyy")</td>
+                        @if (!User.IsInRole("Tenant"))
+                        {
+                            <td>
+                                <a asp-action="Update" asp-route-id="@r.RequestId"
+                                   class="btn btn-warning btn-sm">
+                                    <i class="fa fa-edit"></i> Update
+                                </a>
+                            </td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}

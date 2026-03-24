@@ -1,0 +1,62 @@
+@* ── Payments.cshtml ── *@
+@model PropertyLeasing.Reporting.ViewModels.PaymentReportItem
+@{
+    ViewData["Title"] = "Payment Report";
+}
+
+@if (Model == null)
+{
+    <div class="alert alert-warning">No payment data available.</div>
+}
+else
+{
+    var collectionRate = Model.TotalDue > 0
+        ? Math.Round((double)(Model.TotalPaid / Model.TotalDue) * 100, 1) : 0;
+    var outstanding = Model.TotalDue - Model.TotalPaid;
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card kpi-card border-primary text-center">
+                <div class="card-body">
+                    <div class="stat-num text-primary">BD @Model.TotalDue.ToString("N2")</div>
+                    <div class="text-muted small">Total Due</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card kpi-card border-success text-center">
+                <div class="card-body">
+                    <div class="stat-num text-success">BD @Model.TotalPaid.ToString("N2")</div>
+                    <div class="text-muted small">Total Collected</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card kpi-card border-danger text-center">
+                <div class="card-body">
+                    <div class="stat-num text-danger">BD @Model.TotalOverdue.ToString("N2")</div>
+                    <div class="text-muted small">Overdue Amount</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card kpi-card border-warning text-center">
+                <div class="card-body">
+                    <div class="stat-num text-warning">@Model.OverdueCount</div>
+                    <div class="text-muted small">Overdue Payments</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <h6>Collection Rate</h6>
+            <div class="progress mt-2 mb-3" style="height:24px;">
+                <div class="progress-bar bg-success fs-6" style="width:@collectionRate%">@collectionRate% Collected</div>
+                <div class="progress-bar bg-danger fs-6" style="width:@(100 - collectionRate)%">@(100 - collectionRate)% Outstanding</div>
+            </div>
+            <p class="text-muted small">Outstanding balance: <strong>BD @outstanding.ToString("N2")</strong></p>
+        </div>
+    </div>
+}

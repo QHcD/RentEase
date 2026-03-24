@@ -1,0 +1,98 @@
+@model List<PropertyLeasing.MVC.ViewModels.LeaseApplicationListViewModel>
+@{
+    ViewData["Title"] = "Lease Applications";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2><i class="fa fa-file-alt me-2"></i>Lease Applications</h2>
+</div>
+
+<!-- Status filter tabs -->
+<ul class="nav nav-tabs mb-3">
+    <li class="nav-item">
+        <a class="nav-link @(ViewBag.Status == null ? "active" : "")" asp-action="Index">All</a>
+    </li>
+    @foreach (var s in new[] { "Pending", "Screening", "Approved", "Rejected" })
+    {
+        <li class="nav-item">
+            <a class="nav-link @(ViewBag.Status == s ? "active" : "")"
+               asp-action="Index" asp-route-status="@s">@s</a>
+        </li>
+    }
+</ul>
+
+@if (!Model.Any())
+{
+    <div class="alert alert-info">No applications found.</div>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-hover">
+            <thead class="table-dark">
+                <tr>
+                    <th>#</th>
+                    @if (User.IsInRole("PropertyManager")) { <th>Tenant</th> }
+                    <th>Unit</th>
+                    <th>Property</th>
+                    <th>Start Date</th>
+                    <th>Status</th>
+                    <th>Applied</th>
+                    @if (User.IsInRole("PropertyManager")) { <th>Actions</th> }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var a in Model)
+                {
+                    var badgeColor = a.Status switch
+                    {
+                        "Approved"  => "success",
+                        "Rejected"  => "danger",
+                        "Screening" => "info",
+                        _           => "warning"
+                    };
+                    <tr>
+                        <td class="text-muted small">@a.ApplicationId</td>
+                        @if (User.IsInRole("PropertyManager")) { <td>@a.TenantName</td> }
+                        <td>@a.UnitNumber</td>
+                        <td>@a.PropertyName</td>
+                        <td>@(a.RequestedStartDate?.ToString("dd MMM yyyy") ?? "-")</td>
+                        <td><span class="badge bg-@badgeColor">@a.Status</span></td>
+                        <td>@a.CreatedAt.ToString("dd MMM yyyy")</td>
+                        @if (User.IsInRole("PropertyManager"))
+                        {
+                            <td>
+                                <div class="d-flex gap-1">
+                                    @if (a.Status == "Pending")
+                                    {
+                                        <form asp-action="UpdateStatus" method="post">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="applicationId" value="@a.ApplicationId" />
+                                            <input type="hidden" name="newStatus" value="Screening" />
+                                            <button class="btn btn-info btn-sm">Screen</button>
+                                        </form>
+                                    }
+                                    @if (a.Status is "Pending" or "Screening")
+                                    {
+                                        <form asp-action="UpdateStatus" method="post">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="applicationId" value="@a.ApplicationId" />
+                                            <input type="hidden" name="newStatus" value="Approved" />
+                                            <button class="btn btn-success btn-sm">Approve</button>
+                                        </form>
+                                        <form asp-action="UpdateStatus" method="post">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="applicationId" value="@a.ApplicationId" />
+                                            <input type="hidden" name="newStatus" value="Rejected" />
+                                            <button class="btn btn-danger btn-sm">Reject</button>
+                                        </form>
+                                    }
+                                </div>
+                            </td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}

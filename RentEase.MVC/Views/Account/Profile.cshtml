@@ -1,0 +1,63 @@
+@model PropertyLeasing.MVC.ViewModels.ProfileViewModel
+@{
+    ViewData["Title"] = "My Profile";
+}
+
+<div class="row justify-content-center">
+    <div class="col-md-7">
+        <div class="card shadow-sm">
+            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                <h4 class="mb-0"><i class="fa fa-user me-2"></i>My Profile</h4>
+                <span class="badge bg-info">@Model.Role</span>
+            </div>
+            <div class="card-body">
+                <form asp-action="Profile" method="post">
+                    @Html.AntiForgeryToken()
+                    <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2 small"></div>
+
+                    <h6 class="text-muted mb-3">Personal Information</h6>
+                    <div class="mb-3">
+                        <label asp-for="FullName" class="form-label"></label>
+                        <input asp-for="FullName" class="form-control" />
+                        <span asp-validation-for="FullName" class="text-danger small"></span>
+                    </div>
+                    <div class="mb-3">
+                        <label asp-for="Email" class="form-label"></label>
+                        <input asp-for="Email" class="form-control" readonly />
+                    </div>
+                    <div class="mb-4">
+                        <label asp-for="Phone" class="form-label"></label>
+                        <input asp-for="Phone" class="form-control" />
+                        <span asp-validation-for="Phone" class="text-danger small"></span>
+                    </div>
+
+                    <hr/>
+                    <h6 class="text-muted mb-3">Change Password <small class="text-muted">(leave blank to keep current)</small></h6>
+                    <div class="mb-3">
+                        <label asp-for="CurrentPassword" class="form-label"></label>
+                        <input asp-for="CurrentPassword" class="form-control" />
+                        <span asp-validation-for="CurrentPassword" class="text-danger small"></span>
+                    </div>
+                    <div class="mb-3">
+                        <label asp-for="NewPassword" class="form-label"></label>
+                        <input asp-for="NewPassword" class="form-control" />
+                        <span asp-validation-for="NewPassword" class="text-danger small"></span>
+                    </div>
+                    <div class="mb-4">
+                        <label asp-for="ConfirmNewPassword" class="form-label"></label>
+                        <input asp-for="ConfirmNewPassword" class="form-control" />
+                        <span asp-validation-for="ConfirmNewPassword" class="text-danger small"></span>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fa fa-save me-1"></i> Save Changes
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}

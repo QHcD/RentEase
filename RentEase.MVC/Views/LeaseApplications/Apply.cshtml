@@ -1,0 +1,59 @@
+@model PropertyLeasing.MVC.ViewModels.CreateLeaseApplicationViewModel
+@{
+    ViewData["Title"] = "Apply for Lease";
+}
+
+<div class="row justify-content-center">
+    <div class="col-md-7">
+        <div class="card shadow-sm">
+            <div class="card-header bg-success text-white">
+                <h4 class="mb-0"><i class="fa fa-file-alt me-2"></i>Lease Application</h4>
+            </div>
+            <div class="card-body">
+                <!-- Unit summary -->
+                <div class="alert alert-info mb-4">
+                    <strong>Unit:</strong> @Model.UnitNumber &nbsp;|&nbsp;
+                    <strong>Property:</strong> @Model.PropertyName &nbsp;|&nbsp;
+                    <strong>Rent:</strong> BD @Model.MonthlyRent?.ToString("N0") /month
+                </div>
+
+                <form asp-action="Apply" method="post">
+                    @Html.AntiForgeryToken()
+                    <input asp-for="UnitId" type="hidden" />
+                    <input asp-for="UnitNumber" type="hidden" />
+                    <input asp-for="PropertyName" type="hidden" />
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label asp-for="RequestedStartDate" class="form-label"></label>
+                            <input asp-for="RequestedStartDate" type="date" class="form-control" />
+                            <span asp-validation-for="RequestedStartDate" class="text-danger small"></span>
+                        </div>
+                        <div class="col-md-6">
+                            <label asp-for="RequestedEndDate" class="form-label"></label>
+                            <input asp-for="RequestedEndDate" type="date" class="form-control" />
+                            <span asp-validation-for="RequestedEndDate" class="text-danger small"></span>
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                        <label asp-for="Notes" class="form-label"></label>
+                        <textarea asp-for="Notes" class="form-control" rows="3"
+                                  placeholder="Any special requirements or notes..."></textarea>
+                        <span asp-validation-for="Notes" class="text-danger small"></span>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-success flex-fill">
+                            <i class="fa fa-paper-plane me-1"></i> Submit Application
+                        </button>
+                        <a asp-controller="Properties" asp-action="Index" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}

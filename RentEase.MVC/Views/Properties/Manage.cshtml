@@ -1,0 +1,48 @@
+@* ── Manage.cshtml ── *@
+@model List<PropertyLeasing.API.Models.Property>
+@{
+    ViewData["Title"] = "Manage Properties";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4><i class="fa fa-building me-2"></i>Manage Properties</h4>
+    <a asp-action="Create" class="btn btn-success">
+        <i class="fa fa-plus me-1"></i> Add Property
+    </a>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+            <thead class="table-dark">
+                <tr>
+                    <th>Name</th><th>Address</th><th>City</th><th>Type</th>
+                    <th>Units</th><th>Available</th><th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var p in Model)
+                {
+                    <tr>
+                        <td class="fw-semibold">@p.Name</td>
+                        <td>@p.Address</td>
+                        <td>@p.City</td>
+                        <td><span class="badge bg-secondary">@p.PropertyType</span></td>
+                        <td>@p.Units.Count</td>
+                        <td class="text-success">@p.Units.Count(u => u.AvailabilityStatus == "Available")</td>
+                        <td>
+                            <a asp-action="Edit" asp-route-id="@p.PropertyId" class="btn btn-sm btn-outline-primary">Edit</a>
+                            <a asp-controller="Properties" asp-action="Units" asp-route-propertyId="@p.PropertyId"
+                               class="btn btn-sm btn-outline-info">Units</a>
+                            <form asp-action="Delete" asp-route-id="@p.PropertyId" method="post" class="d-inline"
+                                  data-confirm="Delete this property?">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

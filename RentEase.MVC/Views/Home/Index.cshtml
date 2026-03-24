@@ -1,0 +1,77 @@
+@{
+    ViewData["Title"] = "Welcome";
+}
+
+<!-- Hero Section -->
+<div class="p-5 mb-4 bg-dark text-white rounded-3">
+    <div class="container-fluid py-3">
+        <h1 class="display-5 fw-bold"><i class="fa fa-building me-2"></i>Property Leasing & Maintenance</h1>
+        <p class="col-md-8 fs-4">Find your perfect property. Manage leases. Track maintenance — all in one place.</p>
+        <div class="d-flex gap-2 flex-wrap">
+            <a asp-controller="Properties" asp-action="Index" class="btn btn-primary btn-lg">
+                <i class="fa fa-search me-1"></i> Browse Properties
+            </a>
+            <a asp-controller="Home" asp-action="MaintenanceLookup" class="btn btn-outline-light btn-lg">
+                <i class="fa fa-wrench me-1"></i> Track Maintenance Request
+            </a>
+            @if (!User.Identity!.IsAuthenticated)
+            {
+                <a asp-controller="Account" asp-action="Register" class="btn btn-success btn-lg">
+                    <i class="fa fa-user-plus me-1"></i> Register
+                </a>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Stats Row -->
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card text-center border-primary">
+            <div class="card-body">
+                <h2 class="display-4 fw-bold text-primary">@ViewBag.TotalProperties</h2>
+                <p class="text-muted">Properties Available</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center border-success">
+            <div class="card-body">
+                <h2 class="display-4 fw-bold text-success">@ViewBag.AvailableUnits</h2>
+                <p class="text-muted">Units Available Now</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center border-info">
+            <div class="card-body">
+                <h2 class="display-4 fw-bold text-info">@ViewBag.TotalUnits</h2>
+                <p class="text-muted">Total Units</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Featured Properties -->
+<h3 class="mb-3"><i class="fa fa-star me-2 text-warning"></i>Featured Properties</h3>
+<div class="row g-3">
+    @foreach (var property in (ViewBag.FeaturedProperties as List<PropertyLeasing.API.Models.Property> ?? new()))
+    {
+        <div class="col-md-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="fa fa-building me-1 text-primary"></i>@property.Name</h5>
+                    <p class="text-muted small"><i class="fa fa-map-marker-alt me-1"></i>@property.Address</p>
+                    <span class="badge bg-secondary">@property.PropertyType</span>
+                    <p class="card-text mt-2">@(property.Description ?? "Modern property in a great location.")</p>
+                </div>
+                <div class="card-footer">
+                    <a asp-controller="Properties" asp-action="Units" asp-route-propertyId="@property.PropertyId"
+                       class="btn btn-outline-primary btn-sm w-100">
+                        View Units
+                    </a>
+                </div>
+            </div>
+        </div>
+    }
+</div>

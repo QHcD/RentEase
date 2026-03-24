@@ -1,0 +1,121 @@
+@model PropertyLeasing.API.Models.Unit
+@{
+    ViewData["Title"] = $"Unit {Model.UnitNumber}";
+}
+
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a asp-controller="Properties" asp-action="Index">Properties</a></li>
+        <li class="breadcrumb-item">
+            <a asp-controller="Properties" asp-action="Units" asp-route-propertyId="@Model.PropertyId">@Model.Property.Name</a>
+        </li>
+        <li class="breadcrumb-item active">Unit @Model.UnitNumber</li>
+    </ol>
+</nav>
+
+<div class="row g-4">
+    <div class="col-md-7">
+        <div class="card shadow-sm">
+            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fa fa-door-open me-2"></i>Unit @Model.UnitNumber</h5>
+                @{
+                    var statusColor = Model.AvailabilityStatus switch {
+                        "Available"       => "success",
+                        "Occupied"        => "danger",
+                        "UnderMaintenance"=> "warning",
+                        _                 => "secondary"
+                    };
+                }
+                <span class="badge bg-@statusColor">@Model.AvailabilityStatus</span>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-6">
+                        <small class="text-muted d-block">Property</small>
+                        <strong>@Model.Property.Name</strong>
+                    </div>
+                    <div class="col-6">
+                        <small class="text-muted d-block">Unit Type</small>
+                        <strong>@Model.UnitType</strong>
+                    </div>
+                    <div class="col-6">
+                        <small class="text-muted d-block">Size</small>
+                        <strong>@Model.Sizesqm m²</strong>
+                    </div>
+                    <div class="col-6">
+                        <small class="text-muted d-block">Monthly Rent</small>
+                        <strong class="text-success fs-5">BD @Model.MonthlyRent?.ToString("N2")</strong>
+                    </div>
+                    <div class="col-12">
+                        <small class="text-muted d-block">Address</small>
+                        <strong><i class="fa fa-map-marker-alt me-1 text-danger"></i>@Model.Property.Address</strong>
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(Model.Amenities))
+                    {
+                        <div class="col-12">
+                            <small class="text-muted d-block">Amenities</small>
+                            @foreach (var a in Model.Amenities.Split(','))
+                            {
+                                <span class="badge bg-light text-dark border me-1">@a.Trim()</span>
+                            }
+                        </div>
+                    }
+                </div>
+
+                @if (Model.AvailabilityStatus == "Available" && User.Identity!.IsAuthenticated && User.IsInRole("Tenant"))
+                {
+                    <div class="mt-4">
+                        <a asp-controller="LeaseApplications" asp-action="Apply" asp-route-unitId="@Model.UnitId"
+                           class="btn btn-success w-100">
+                            <i class="fa fa-file-signature me-1"></i> Apply for Lease
+                        </a>
+                    </div>
+                }
+                else if (!User.Identity!.IsAuthenticated && Model.AvailabilityStatus == "Available")
+                {
+                    <div class="alert alert-info mt-3 mb-0">
+                        <a asp-controller="Account" asp-action="Login">Login</a> to apply for this unit.
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Feedback Section -->
+    <div class="col-md-5">
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <i class="fa fa-star me-1 text-warning"></i> Tenant Reviews
+                <span class="badge bg-secondary ms-1">@Model.Feedbacks.Count</span>
+            </div>
+            <div class="card-body" style="max-height:350px; overflow-y:auto;">
+                @if (!Model.Feedbacks.Any())
+                {
+                    <p class="text-muted text-center py-3">No reviews yet.</p>
+                }
+                @foreach (var fb in Model.Feedbacks)
+                {
+                    <div class="border-bottom pb-2 mb-2">
+                        <div class="d-flex justify-content-between">
+                            <strong class="small">@fb.User.FullName</strong>
+                            <small class="text-muted">@fb.CreatedAt.ToString("dd MMM yyyy")</small>
+                        </div>
+                        @if (fb.Rating.HasValue)
+                        {
+                            <div>
+                                @for (int i = 1; i <= 5; i++)
+                                {
+                                    <i class="fa fa-star @(i <= fb.Rating ? "text-warning" : "text-muted")" style="font-size:12px;"></i>
+                                }
+                            </div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(fb.Comment))
+                        {
+                            <p class="small mb-0 mt-1">@fb.Comment</p>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>

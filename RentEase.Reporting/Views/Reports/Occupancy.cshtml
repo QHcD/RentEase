@@ -1,0 +1,40 @@
+@* ── Occupancy.cshtml ── *@
+@model List<PropertyLeasing.Reporting.ViewModels.OccupancyReportItem>
+@{
+    ViewData["Title"] = "Occupancy Report";
+}
+
+<div class="card">
+    <div class="card-header fw-bold"><i class="fa fa-building me-1"></i> Occupancy by Property</div>
+    <div class="card-body">
+        @foreach (var item in Model)
+        {
+            <div class="mb-4 p-3 border rounded">
+                <h6 class="fw-bold">@item.PropertyName</h6>
+                <div class="row g-2 mb-2">
+                    <div class="col-3 text-center">
+                        <div class="fs-4 fw-bold">@item.TotalUnits</div>
+                        <small class="text-muted">Total</small>
+                    </div>
+                    <div class="col-3 text-center">
+                        <div class="fs-4 fw-bold text-success">@item.OccupiedUnits</div>
+                        <small class="text-muted">Occupied</small>
+                    </div>
+                    <div class="col-3 text-center">
+                        <div class="fs-4 fw-bold text-primary">@item.AvailableUnits</div>
+                        <small class="text-muted">Available</small>
+                    </div>
+                    <div class="col-3 text-center">
+                        <div class="fs-4 fw-bold text-info">@item.OccupancyRate%</div>
+                        <small class="text-muted">Rate</small>
+                    </div>
+                </div>
+                <div class="progress" style="height:14px;">
+                    <div class="progress-bar bg-success fw-bold" style="width:@item.OccupancyRate%">
+                        @item.OccupancyRate%
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
