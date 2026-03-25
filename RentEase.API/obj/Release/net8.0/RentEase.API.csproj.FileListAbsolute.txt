@@ -140,7 +140,6 @@ C:\Users\97338\Desktop\RentEase\RentEase\RentEase.API\obj\Release\net8.0\staticw
 C:\Users\97338\Desktop\RentEase\RentEase\RentEase.API\obj\Release\net8.0\staticwebassets.build.json.cache
 C:\Users\97338\Desktop\RentEase\RentEase\RentEase.API\obj\Release\net8.0\staticwebassets.development.json
 C:\Users\97338\Desktop\RentEase\RentEase\RentEase.API\obj\Release\net8.0\staticwebassets.build.endpoints.json
-C:\Users\97338\Desktop\RentEase\RentEase\RentEase.API\obj\Release\net8.0\staticwebassets.upToDateCheck.txt
 C:\Users\97338\Desktop\RentEase\RentEase\RentEase.API\obj\Release\net8.0\RentEase.ACB760DF.Up2Date
 C:\Users\97338\Desktop\RentEase\RentEase\RentEase.API\obj\Release\net8.0\RentEase.API.dll
 C:\Users\97338\Desktop\RentEase\RentEase\RentEase.API\obj\Release\net8.0\refint\RentEase.API.dll

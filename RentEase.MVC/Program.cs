@@ -17,10 +17,10 @@ builder.Services.AddDbContext<AppIdentityDbContext>(options =>
 // ── ASP.NET Identity ──────────────────────────────────
 builder.Services.AddIdentity<AppUser, IdentityRole>(options =>
 {
-    options.Password.RequireDigit           = true;
-    options.Password.RequiredLength         = 6;
+    options.Password.RequireDigit = true;
+    options.Password.RequiredLength = 6;
     options.Password.RequireNonAlphanumeric = false;
-    options.Password.RequireUppercase       = true;
+    options.Password.RequireUppercase = true;
 })
 .AddEntityFrameworkStores<AppIdentityDbContext>()
 .AddDefaultTokenProviders();
@@ -28,7 +28,7 @@ builder.Services.AddIdentity<AppUser, IdentityRole>(options =>
 // Configure login path
 builder.Services.ConfigureApplicationCookie(options =>
 {
-    options.LoginPath       = "/Account/Login";
+    options.LoginPath = "/Account/Login";
     options.AccessDeniedPath = "/Account/AccessDenied";
 });
 
@@ -67,10 +67,11 @@ app.MapControllerRoute(
 // ── Seed roles and users on startup ──────────────────
 using (var scope = app.Services.CreateScope())
 {
-    var services = scope.ServiceProvider;
-    var identityDb = services.GetRequiredService<AppIdentityDbContext>();
-    identityDb.Database.EnsureCreated();
-    await ContextSeed.SeedRolesAndUsersAsync(services);
+    try
+    {
+        await ContextSeed.SeedRolesAndUsersAsync(scope.ServiceProvider);
+    }
+    catch { }
 }
 
 app.Run();

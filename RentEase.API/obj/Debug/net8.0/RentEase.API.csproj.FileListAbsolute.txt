@@ -139,10 +139,10 @@ C:\Users\97338\Desktop\RentEase\RentEase\RentEase.API\obj\Debug\net8.0\staticweb
 C:\Users\97338\Desktop\RentEase\RentEase\RentEase.API\obj\Debug\net8.0\staticwebassets.build.json.cache
 C:\Users\97338\Desktop\RentEase\RentEase\RentEase.API\obj\Debug\net8.0\staticwebassets.development.json
 C:\Users\97338\Desktop\RentEase\RentEase\RentEase.API\obj\Debug\net8.0\staticwebassets.build.endpoints.json
-C:\Users\97338\Desktop\RentEase\RentEase\RentEase.API\obj\Debug\net8.0\staticwebassets.upToDateCheck.txt
 C:\Users\97338\Desktop\RentEase\RentEase\RentEase.API\obj\Debug\net8.0\RentEase.ACB760DF.Up2Date
 C:\Users\97338\Desktop\RentEase\RentEase\RentEase.API\obj\Debug\net8.0\RentEase.API.dll
 C:\Users\97338\Desktop\RentEase\RentEase\RentEase.API\obj\Debug\net8.0\refint\RentEase.API.dll
 C:\Users\97338\Desktop\RentEase\RentEase\RentEase.API\obj\Debug\net8.0\RentEase.API.pdb
 C:\Users\97338\Desktop\RentEase\RentEase\RentEase.API\obj\Debug\net8.0\RentEase.API.genruntimeconfig.cache
 C:\Users\97338\Desktop\RentEase\RentEase\RentEase.API\obj\Debug\net8.0\ref\RentEase.API.dll
+C:\Users\97338\Desktop\RentEase\RentEase\RentEase.API\obj\Debug\net8.0\RentEase.API.sourcelink.json

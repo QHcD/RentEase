@@ -5961,7 +5961,8 @@
           "targetAlias": "net8.0",
           "projectReferences": {
             "C:\\Users\\97338\\Desktop\\RentEase\\RentEase\\RentEase.API\\RentEase.API.csproj": {
-              "projectPath": "C:\\Users\\97338\\Desktop\\RentEase\\RentEase\\RentEase.API\\RentEase.API.csproj"
+              "projectPath": "C:\\Users\\97338\\Desktop\\RentEase\\RentEase\\RentEase.API\\RentEase.API.csproj",
+              "excludeAssets": "contentfiles"
             }
           }
         }
