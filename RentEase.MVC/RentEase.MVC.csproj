@@ -10,7 +10,6 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\RentEase.API\RentEase.API.csproj">
-			<Private>false</Private>
 			<ExcludeAssets>contentFiles</ExcludeAssets>
 		</ProjectReference>
 	</ItemGroup>
