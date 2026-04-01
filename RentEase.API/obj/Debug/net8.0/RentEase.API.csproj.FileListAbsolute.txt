@@ -142,10 +142,10 @@ C:\Users\Mohammed Altajer\Desktop\RentEase\RentEase.API\obj\Debug\net8.0\staticw
 C:\Users\Mohammed Altajer\Desktop\RentEase\RentEase.API\obj\Debug\net8.0\staticwebassets.development.json
 C:\Users\Mohammed Altajer\Desktop\RentEase\RentEase.API\obj\Debug\net8.0\staticwebassets.build.endpoints.json
 C:\Users\Mohammed Altajer\Desktop\RentEase\RentEase.API\obj\Debug\net8.0\swae.build.ex.cache
-C:\Users\Mohammed Altajer\Desktop\RentEase\RentEase.API\obj\Debug\net8.0\staticwebassets.upToDateCheck.txt
 C:\Users\Mohammed Altajer\Desktop\RentEase\RentEase.API\obj\Debug\net8.0\RentEase.ACB760DF.Up2Date
 C:\Users\Mohammed Altajer\Desktop\RentEase\RentEase.API\obj\Debug\net8.0\RentEase.API.dll
 C:\Users\Mohammed Altajer\Desktop\RentEase\RentEase.API\obj\Debug\net8.0\refint\RentEase.API.dll
 C:\Users\Mohammed Altajer\Desktop\RentEase\RentEase.API\obj\Debug\net8.0\RentEase.API.pdb
 C:\Users\Mohammed Altajer\Desktop\RentEase\RentEase.API\obj\Debug\net8.0\RentEase.API.genruntimeconfig.cache
 C:\Users\Mohammed Altajer\Desktop\RentEase\RentEase.API\obj\Debug\net8.0\ref\RentEase.API.dll
+C:\Users\Mohammed Altajer\Desktop\RentEase\RentEase.API\obj\Debug\net8.0\staticwebassets.upToDateCheck.txt

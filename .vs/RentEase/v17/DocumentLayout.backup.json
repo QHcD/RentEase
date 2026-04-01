@@ -1,12 +1,40 @@
 {
   "Version": 1,
   "WorkspaceRootPath": "C:\\Users\\Mohammed Altajer\\Desktop\\RentEase\\",
-  "Documents": [],
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{11111111-1111-1111-1111-111111111111}|RentEase.API\\RentEase.API.csproj|c:\\users\\mohammed altajer\\desktop\\rentease\\rentease.api\\rentease.api.csproj||{04B8AB82-A572-4FEF-95CE-5222444B6B64}|",
+      "RelativeMoniker": "D:0:0:{11111111-1111-1111-1111-111111111111}|RentEase.API\\RentEase.API.csproj|solutionrelative:rentease.api\\rentease.api.csproj||{04B8AB82-A572-4FEF-95CE-5222444B6B64}|"
+    }
+  ],
   "DocumentGroupContainers": [
     {
       "Orientation": 0,
       "VerticalTabListWidth": 256,
-      "DocumentGroups": []
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 0,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "RentEase.API",
+              "DocumentMoniker": "C:\\Users\\Mohammed Altajer\\Desktop\\RentEase\\RentEase.API\\RentEase.API.csproj",
+              "RelativeDocumentMoniker": "RentEase.API\\RentEase.API.csproj",
+              "ToolTip": "C:\\Users\\Mohammed Altajer\\Desktop\\RentEase\\RentEase.API\\RentEase.API.csproj",
+              "RelativeToolTip": "RentEase.API\\RentEase.API.csproj",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000758|",
+              "WhenOpened": "2026-04-01T12:01:02.396Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{269a02dc-6af8-11d3-bdc4-00c04f688e50}"
+            }
+          ]
+        }
+      ]
     }
   ]
 }
