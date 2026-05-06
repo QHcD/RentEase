@@ -40,4 +40,7 @@ public partial class Lease
 
     [InverseProperty("Lease")]
     public virtual ICollection<PaymentRecord> PaymentRecords { get; set; } = new List<PaymentRecord>();
+
+    [InverseProperty("Lease")]
+    public virtual ICollection<LeaseLog> LeaseLogs { get; set; } = new List<LeaseLog>();
 }

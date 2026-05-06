@@ -59,4 +59,10 @@ public partial class User
 
     [InverseProperty("User")]
     public virtual ICollection<Document> Documents { get; set; } = new List<Document>();
+
+    [InverseProperty("ChangedByUser")]
+    public virtual ICollection<LeaseApplicationLog> LeaseApplicationLogs { get; set; } = new List<LeaseApplicationLog>();
+
+    [InverseProperty("ChangedByUser")]
+    public virtual ICollection<LeaseLog> LeaseLogs { get; set; } = new List<LeaseLog>();
 }

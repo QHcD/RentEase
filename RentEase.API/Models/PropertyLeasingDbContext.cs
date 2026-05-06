@@ -21,6 +21,8 @@ public partial class PropertyLeasingDbContext : DbContext
     public virtual DbSet<Feedback> Feedbacks { get; set; }
     public virtual DbSet<Log> Logs { get; set; }
     public virtual DbSet<Document> Documents { get; set; }
+    public virtual DbSet<LeaseApplicationLog> LeaseApplicationLogs { get; set; }
+    public virtual DbSet<LeaseLog> LeaseLogs { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) { }
 
@@ -129,6 +131,34 @@ public partial class PropertyLeasingDbContext : DbContext
             entity.HasOne(d => d.User)
                 .WithMany(p => p.Documents)
                 .HasConstraintName("FK_Document_User");
+        });
+
+        // LeaseApplication -> LeaseApplicationLogs
+        modelBuilder.Entity<LeaseApplicationLog>(entity =>
+        {
+            entity.HasOne(d => d.Application)
+                .WithMany(p => p.ApplicationLogs)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_LeaseApplicationLog_Application");
+
+            entity.HasOne(d => d.ChangedByUser)
+                .WithMany(p => p.LeaseApplicationLogs)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_LeaseApplicationLog_User");
+        });
+
+        // Lease -> LeaseLogs
+        modelBuilder.Entity<LeaseLog>(entity =>
+        {
+            entity.HasOne(d => d.Lease)
+                .WithMany(p => p.LeaseLogs)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_LeaseLog_Lease");
+
+            entity.HasOne(d => d.ChangedByUser)
+                .WithMany(p => p.LeaseLogs)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_LeaseLog_User");
         });
 
         OnModelCreatingPartial(modelBuilder);

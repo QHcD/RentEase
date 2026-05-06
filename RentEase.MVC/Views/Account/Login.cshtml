@@ -1,27 +1,40 @@
 @model PropertyLeasing.MVC.ViewModels.LoginViewModel
 @{
     ViewData["Title"] = "Login";
+
+    // Demo accounts shown in the quick-access panel
+    var demoAccounts = new[]
+    {
+        new { Role = "Property Manager", Name = "Ahmed Al-Mansoori",  Email = "manager@propleasing.com", Password = "Manager@123", Icon = "fa-user-tie",    Color = "dark"    },
+        new { Role = "Tenant",           Name = "Sara Al-Khalifa",    Email = "tenant1@example.com",     Password = "Tenant@123",  Icon = "fa-user",        Color = "primary" },
+        new { Role = "Tenant",           Name = "Mohammed Al-Baker",  Email = "tenant2@example.com",     Password = "Tenant@123",  Icon = "fa-user",        Color = "primary" },
+        new { Role = "Tenant",           Name = "Noor Ibrahim",       Email = "tenant3@example.com",     Password = "Tenant@123",  Icon = "fa-user",        Color = "primary" },
+        new { Role = "Maint. Staff",     Name = "Ali Hassan",         Email = "staff1@propleasing.com",  Password = "Staff@123",   Icon = "fa-hard-hat",    Color = "warning" },
+        new { Role = "Maint. Staff",     Name = "Yusuf Al-Darwish",   Email = "staff2@propleasing.com",  Password = "Staff@123",   Icon = "fa-hard-hat",    Color = "warning" },
+    };
 }
 
-<div class="row justify-content-center">
+<div class="row justify-content-center g-4">
+
+    <!-- ── Login form ─────────────────────────────────────────────────────── -->
     <div class="col-md-5">
         <div class="card shadow-sm">
             <div class="card-header bg-dark text-white">
                 <h4 class="mb-0"><i class="fa fa-lock me-2"></i>Login</h4>
             </div>
             <div class="card-body">
-                <form asp-action="Login" method="post">
+                <form asp-action="Login" method="post" id="loginForm">
                     @Html.AntiForgeryToken()
                     <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2 small"></div>
 
                     <div class="mb-3">
                         <label asp-for="Email" class="form-label"></label>
-                        <input asp-for="Email" class="form-control" placeholder="your@email.com" />
+                        <input asp-for="Email" id="loginEmail" class="form-control" placeholder="your@email.com" autocomplete="username" />
                         <span asp-validation-for="Email" class="text-danger small"></span>
                     </div>
                     <div class="mb-4">
                         <label asp-for="Password" class="form-label"></label>
-                        <input asp-for="Password" class="form-control" />
+                        <input asp-for="Password" id="loginPassword" class="form-control" autocomplete="current-password" />
                         <span asp-validation-for="Password" class="text-danger small"></span>
                     </div>
                     <div class="mb-3 form-check">
@@ -34,22 +47,66 @@
                 </form>
             </div>
             <div class="card-footer text-center text-muted small">
-                Don't have an account?
-                <a asp-action="Register">Register here</a>
-            </div>
-        </div>
-
-        <div class="card mt-3 border-info">
-            <div class="card-body small">
-                <strong>Demo Accounts:</strong><br/>
-                Manager: manager@propleasing.com / Manager@123<br/>
-                Tenant: tenant1@example.com / Tenant@123<br/>
-                Staff: staff1@propleasing.com / Staff@123
+                Don't have an account? <a asp-action="Register">Register here</a>
             </div>
         </div>
     </div>
+
+    <!-- ── Quick-access demo panel ────────────────────────────────────────── -->
+    <div class="col-md-5">
+        <div class="card shadow-sm border-info">
+            <div class="card-header bg-info text-white">
+                <i class="fa fa-bolt me-2"></i><strong>Quick Access — Demo Accounts</strong>
+                <small class="d-block mt-1 opacity-75">Click any account to auto-fill the login form</small>
+            </div>
+            <div class="card-body p-2">
+                @foreach (var acc in demoAccounts)
+                {
+                    <button type="button"
+                            class="btn btn-outline-@acc.Color w-100 text-start mb-2 demo-btn"
+                            data-email="@acc.Email"
+                            data-password="@acc.Password">
+                        <div class="d-flex align-items-center gap-3">
+                            <span class="fa-stack" style="font-size:.75em;">
+                                <i class="fa fa-circle fa-stack-2x text-@acc.Color opacity-10"></i>
+                                <i class="fa @acc.Icon fa-stack-1x"></i>
+                            </span>
+                            <div>
+                                <span class="fw-semibold d-block">@acc.Name</span>
+                                <small class="text-muted">@acc.Role &nbsp;·&nbsp; @acc.Email</small>
+                            </div>
+                            <i class="fa fa-arrow-right ms-auto opacity-50"></i>
+                        </div>
+                    </button>
+                }
+            </div>
+            <div class="card-footer text-muted small text-center">
+                All passwords: &nbsp;
+                <code>Manager@123</code> &nbsp;/&nbsp;
+                <code>Tenant@123</code> &nbsp;/&nbsp;
+                <code>Staff@123</code>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 @section Scripts {
     @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+
+    <script>
+        document.querySelectorAll('.demo-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                document.getElementById('loginEmail').value    = this.dataset.email;
+                document.getElementById('loginPassword').value = this.dataset.password;
+
+                // Highlight the selected account
+                document.querySelectorAll('.demo-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+
+                // Submit the form automatically
+                document.getElementById('loginForm').submit();
+            });
+        });
+    </script>
 }

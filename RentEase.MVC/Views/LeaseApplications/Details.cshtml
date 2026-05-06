@@ -1,0 +1,181 @@
+@model PropertyLeasing.MVC.ViewModels.LeaseApplicationDetailViewModel
+@{
+    ViewData["Title"] = "Application Details";
+    var badgeColor = Model.Status switch
+    {
+        "Approved"  => "success",
+        "Rejected"  => "danger",
+        "Screening" => "info",
+        _           => "warning"
+    };
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2><i class="fa fa-file-alt me-2"></i>Application #@Model.ApplicationId</h2>
+    <a asp-action="Index" class="btn btn-outline-secondary btn-sm">
+        <i class="fa fa-arrow-left me-1"></i>Back to List
+    </a>
+</div>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show">
+        @TempData["Success"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show">
+        @TempData["Error"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<div class="row g-4">
+
+    <!-- Application Info -->
+    <div class="col-md-7">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <span><i class="fa fa-info-circle me-2"></i>Application Details</span>
+                <span class="badge bg-light text-dark fs-6">@Model.Status</span>
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">Property</dt>
+                    <dd class="col-sm-8">@Model.PropertyName</dd>
+
+                    <dt class="col-sm-4">Unit</dt>
+                    <dd class="col-sm-8">@Model.UnitNumber</dd>
+
+                    <dt class="col-sm-4">Requested Start</dt>
+                    <dd class="col-sm-8">@(Model.RequestedStartDate?.ToString("dd MMM yyyy") ?? "-")</dd>
+
+                    <dt class="col-sm-4">Requested End</dt>
+                    <dd class="col-sm-8">@(Model.RequestedEndDate?.ToString("dd MMM yyyy") ?? "-")</dd>
+
+                    <dt class="col-sm-4">Status</dt>
+                    <dd class="col-sm-8"><span class="badge bg-@badgeColor fs-6">@Model.Status</span></dd>
+
+                    <dt class="col-sm-4">Submitted</dt>
+                    <dd class="col-sm-8">@Model.CreatedAt.ToString("dd MMM yyyy, HH:mm")</dd>
+
+                    @if (!string.IsNullOrWhiteSpace(Model.Notes))
+                    {
+                        <dt class="col-sm-4">Notes</dt>
+                        <dd class="col-sm-8">@Model.Notes</dd>
+                    }
+                </dl>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tenant Info -->
+    <div class="col-md-5">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-secondary text-white">
+                <i class="fa fa-user me-2"></i>Tenant Information
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">Name</dt>
+                    <dd class="col-sm-8">@Model.TenantName</dd>
+
+                    <dt class="col-sm-4">Email</dt>
+                    <dd class="col-sm-8">@(Model.TenantEmail ?? "-")</dd>
+
+                    <dt class="col-sm-4">Phone</dt>
+                    <dd class="col-sm-8">@(Model.TenantPhone ?? "-")</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manager Actions -->
+    @if (User.IsInRole("PropertyManager"))
+    {
+        <div class="col-12">
+            <div class="card shadow-sm border-warning">
+                <div class="card-header bg-warning text-dark">
+                    <i class="fa fa-tasks me-2"></i>Manager Actions
+                </div>
+                <div class="card-body">
+                    @if (Model.Status == "Pending")
+                    {
+                        <p class="text-muted mb-3">This application is waiting for screening. Start the screening process to review the tenant.</p>
+                        <form asp-action="StartScreening" method="post" class="d-inline">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="applicationId" value="@Model.ApplicationId" />
+                            <button type="submit" class="btn btn-info">
+                                <i class="fa fa-search me-1"></i>Start Screening
+                            </button>
+                        </form>
+                    }
+                    else if (Model.Status == "Screening")
+                    {
+                        <p class="text-muted mb-3">Screening is in progress. Approve or reject this application.</p>
+                        <div class="d-flex gap-2">
+                            <form asp-action="Approve" method="post">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="applicationId" value="@Model.ApplicationId" />
+                                <button type="submit" class="btn btn-success"
+                                        onclick="return confirm('Approve this application? The unit will be marked as Occupied and conflicting applications will be auto-rejected.')">
+                                    <i class="fa fa-check me-1"></i>Approve
+                                </button>
+                            </form>
+                            <form asp-action="Reject" method="post">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="applicationId" value="@Model.ApplicationId" />
+                                <button type="submit" class="btn btn-danger"
+                                        onclick="return confirm('Reject this application?')">
+                                    <i class="fa fa-times me-1"></i>Reject
+                                </button>
+                            </form>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted mb-0">
+                            This application is <strong>@Model.Status</strong>. No further actions available.
+                        </p>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Status History / Logs -->
+    @if (Model.Logs.Any())
+    {
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <i class="fa fa-history me-2"></i>Status History
+                </div>
+                <div class="card-body p-0">
+                    <ul class="list-group list-group-flush">
+                        @foreach (var log in Model.Logs)
+                        {
+                            var logBadge = log.Status switch
+                            {
+                                "Approved"  => "success",
+                                "Rejected"  => "danger",
+                                "Screening" => "info",
+                                _           => "warning"
+                            };
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <div>
+                                    <span class="badge bg-@logBadge me-2">@log.Status</span>
+                                    <small class="text-muted">by @log.ChangedByUserName</small>
+                                </div>
+                                <small class="text-muted">@log.CreatedAt.ToString("dd MMM yyyy, HH:mm")</small>
+                            </li>
+                        }
+                    </ul>
+                </div>
+            </div>
+        </div>
+    }
+
+</div>

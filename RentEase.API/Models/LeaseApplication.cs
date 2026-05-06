@@ -47,4 +47,7 @@ public partial class LeaseApplication
 
     [InverseProperty("Application")]
     public virtual ICollection<Document> Documents { get; set; } = new List<Document>();
+
+    [InverseProperty("Application")]
+    public virtual ICollection<LeaseApplicationLog> ApplicationLogs { get; set; } = new List<LeaseApplicationLog>();
 }

@@ -1,98 +1,316 @@
-@model List<PropertyLeasing.MVC.ViewModels.LeaseApplicationListViewModel>
+@model PropertyLeasing.MVC.ViewModels.ApplicationsAndLeasesViewModel
 @{
-    ViewData["Title"] = "Lease Applications";
+    ViewData["Title"] = Model.IsManager ? "Applications & Leases" : "My Applications & Leases";
+
+    string[] appStatuses   = { "All", "Pending", "Screening", "Approved", "Rejected" };
+    string[] leaseStatuses = { "All", "Active", "Expired", "Terminated", "Renewed" };
+
+    string AppBadge(string s) => s switch
+    {
+        "Approved"  => "success",
+        "Rejected"  => "danger",
+        "Screening" => "info",
+        "Pending"   => "warning",
+        _           => "secondary"
+    };
+    string LeaseBadge(string s) => s switch
+    {
+        "Active"     => "success",
+        "Renewed"    => "primary",
+        "Expired"    => "secondary",
+        "Terminated" => "danger",
+        _            => "secondary"
+    };
+
+    string AppUrl(string status) =>
+        $"?tab=applications&appStatus={status}&leaseStatus={Model.LeaseStatusFilter}";
+    string LeaseUrl(string status) =>
+        $"?tab=leases&appStatus={Model.AppStatusFilter}&leaseStatus={status}";
+
+    // Row counts for the active filter
+    int appRowCount = Model.IsManager
+        ? Model.ApplicationGroups.Sum(g => g.ApplicationCount)
+        : Model.Applications.Count;
+    int leaseRowCount = Model.Leases.Count;
 }
 
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h2><i class="fa fa-file-alt me-2"></i>Lease Applications</h2>
+    <h2>
+        <i class="fa fa-file-contract me-2"></i>@ViewData["Title"]
+    </h2>
 </div>
 
-<!-- Status filter tabs -->
-<ul class="nav nav-tabs mb-3">
+<!-- ══ MAIN TABS ═══════════════════════════════════════════════════════════ -->
+<ul class="nav nav-tabs" id="mainTabs">
     <li class="nav-item">
-        <a class="nav-link @(ViewBag.Status == null ? "active" : "")" asp-action="Index">All</a>
+        <a class="nav-link @(Model.ActiveTab == "applications" ? "active fw-semibold" : "")"
+           href="?tab=applications&appStatus=@Model.AppStatusFilter&leaseStatus=@Model.LeaseStatusFilter">
+            <i class="fa fa-file-alt me-1"></i>
+            @(Model.IsManager ? "Applications" : "My Applications")
+            <span class="badge bg-dark ms-1">@Model.AppCounts["All"]</span>
+        </a>
     </li>
-    @foreach (var s in new[] { "Pending", "Screening", "Approved", "Rejected" })
-    {
-        <li class="nav-item">
-            <a class="nav-link @(ViewBag.Status == s ? "active" : "")"
-               asp-action="Index" asp-route-status="@s">@s</a>
-        </li>
-    }
+    <li class="nav-item">
+        <a class="nav-link @(Model.ActiveTab == "leases" ? "active fw-semibold" : "")"
+           href="?tab=leases&appStatus=@Model.AppStatusFilter&leaseStatus=@Model.LeaseStatusFilter">
+            <i class="fa fa-key me-1"></i>
+            @(Model.IsManager ? "Leases" : "My Leases")
+            <span class="badge bg-dark ms-1">@Model.LeaseCounts["All"]</span>
+        </a>
+    </li>
 </ul>
 
-@if (!Model.Any())
-{
-    <div class="alert alert-info">No applications found.</div>
-}
-else
-{
-    <div class="table-responsive">
-        <table class="table table-hover">
-            <thead class="table-dark">
-                <tr>
-                    <th>#</th>
-                    @if (User.IsInRole("PropertyManager")) { <th>Tenant</th> }
-                    <th>Unit</th>
-                    <th>Property</th>
-                    <th>Start Date</th>
-                    <th>Status</th>
-                    <th>Applied</th>
-                    @if (User.IsInRole("PropertyManager")) { <th>Actions</th> }
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var a in Model)
+<div class="tab-content border border-top-0 rounded-bottom p-3 bg-white shadow-sm">
+
+    <!-- ══ APPLICATIONS PANEL ══════════════════════════════════════════════ -->
+    <div class="@(Model.ActiveTab == "applications" ? "" : "d-none")">
+
+        <!-- Status sub-tabs (no counts — clean labels only) -->
+        <ul class="nav nav-pills mb-3 flex-wrap gap-1">
+            @foreach (var s in appStatuses)
+            {
+                bool isActive = Model.AppStatusFilter == s;
+                <li class="nav-item">
+                    <a class="nav-link py-1 px-3 @(isActive ? "active" : "text-dark border")"
+                       href="@AppUrl(s)">@s</a>
+                </li>
+            }
+        </ul>
+
+        @if (appRowCount == 0)
+        {
+            <div class="alert alert-info mb-0">
+                <i class="fa fa-info-circle me-2"></i>
+                No @(Model.AppStatusFilter == "All" ? "" : Model.AppStatusFilter.ToLower() + " ")applications found.
+            </div>
+        }
+        else
+        {
+            <!-- Row count summary -->
+            <p class="text-muted small mb-2">
+                Showing <strong>@appRowCount</strong>
+                @(Model.AppStatusFilter == "All" ? "" : Model.AppStatusFilter.ToLower() + " ")
+                application@(appRowCount == 1 ? "" : "s")
+            </p>
+
+            @if (Model.IsManager)
+            {
+                <!-- Manager: grouped by unit -->
+                @foreach (var group in Model.ApplicationGroups)
                 {
-                    var badgeColor = a.Status switch
-                    {
-                        "Approved"  => "success",
-                        "Rejected"  => "danger",
-                        "Screening" => "info",
-                        _           => "warning"
-                    };
-                    <tr>
-                        <td class="text-muted small">@a.ApplicationId</td>
-                        @if (User.IsInRole("PropertyManager")) { <td>@a.TenantName</td> }
-                        <td>@a.UnitNumber</td>
-                        <td>@a.PropertyName</td>
-                        <td>@(a.RequestedStartDate?.ToString("dd MMM yyyy") ?? "-")</td>
-                        <td><span class="badge bg-@badgeColor">@a.Status</span></td>
-                        <td>@a.CreatedAt.ToString("dd MMM yyyy")</td>
-                        @if (User.IsInRole("PropertyManager"))
-                        {
-                            <td>
-                                <div class="d-flex gap-1">
-                                    @if (a.Status == "Pending")
+                    string unitBadge = group.AvailabilityStatus == "Available" ? "success" : "secondary";
+                    <div class="card mb-3 shadow-sm">
+                        <div class="card-header d-flex justify-content-between align-items-center bg-light">
+                            <div>
+                                <i class="fa fa-home me-2 text-primary"></i>
+                                <strong>@group.UnitNumber</strong>
+                                <span class="text-muted ms-1">— @group.PropertyName</span>
+                                <span class="badge bg-@unitBadge ms-2">@group.AvailabilityStatus</span>
+                            </div>
+                            <span class="badge bg-dark">@group.ApplicationCount application(s)</span>
+                        </div>
+                        <div class="card-body p-0">
+                            <table class="table table-hover mb-0 align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="ps-3">#</th>
+                                        <th>Tenant</th>
+                                        <th>Start Date</th>
+                                        <th>End Date</th>
+                                        <th>Status</th>
+                                        <th>Applied</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var a in group.Applications)
                                     {
-                                        <form asp-action="UpdateStatus" method="post">
-                                            @Html.AntiForgeryToken()
-                                            <input type="hidden" name="applicationId" value="@a.ApplicationId" />
-                                            <input type="hidden" name="newStatus" value="Screening" />
-                                            <button class="btn btn-info btn-sm">Screen</button>
-                                        </form>
+                                        <tr>
+                                            <td class="ps-3 text-muted small">@a.ApplicationId</td>
+                                            <td>@a.TenantName</td>
+                                            <td>@(a.RequestedStartDate?.ToString("dd MMM yyyy") ?? "-")</td>
+                                            <td>@(a.RequestedEndDate?.ToString("dd MMM yyyy") ?? "-")</td>
+                                            <td>
+                                                <span class="badge bg-@AppBadge(a.Status)">@a.Status</span>
+                                            </td>
+                                            <td class="text-muted small">@a.CreatedAt.ToString("dd MMM yyyy")</td>
+                                            <td>
+                                                <a asp-action="Details" asp-route-id="@a.ApplicationId"
+                                                   class="btn btn-outline-primary btn-sm">
+                                                    <i class="fa fa-eye me-1"></i>View
+                                                </a>
+                                            </td>
+                                        </tr>
                                     }
-                                    @if (a.Status is "Pending" or "Screening")
-                                    {
-                                        <form asp-action="UpdateStatus" method="post">
-                                            @Html.AntiForgeryToken()
-                                            <input type="hidden" name="applicationId" value="@a.ApplicationId" />
-                                            <input type="hidden" name="newStatus" value="Approved" />
-                                            <button class="btn btn-success btn-sm">Approve</button>
-                                        </form>
-                                        <form asp-action="UpdateStatus" method="post">
-                                            @Html.AntiForgeryToken()
-                                            <input type="hidden" name="applicationId" value="@a.ApplicationId" />
-                                            <input type="hidden" name="newStatus" value="Rejected" />
-                                            <button class="btn btn-danger btn-sm">Reject</button>
-                                        </form>
-                                    }
-                                </div>
-                            </td>
-                        }
-                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 }
-            </tbody>
-        </table>
+            }
+            else
+            {
+                <!-- Tenant: flat list -->
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>#</th>
+                                <th>Unit</th>
+                                <th>Property</th>
+                                <th>Start Date</th>
+                                <th>End Date</th>
+                                <th>Status</th>
+                                <th>Applied</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var a in Model.Applications)
+                            {
+                                <tr>
+                                    <td class="text-muted small">@a.ApplicationId</td>
+                                    <td>@a.UnitNumber</td>
+                                    <td>@a.PropertyName</td>
+                                    <td>@(a.RequestedStartDate?.ToString("dd MMM yyyy") ?? "-")</td>
+                                    <td>@(a.RequestedEndDate?.ToString("dd MMM yyyy") ?? "-")</td>
+                                    <td>
+                                        <span class="badge bg-@AppBadge(a.Status)">@a.Status</span>
+                                    </td>
+                                    <td class="text-muted small">@a.CreatedAt.ToString("dd MMM yyyy")</td>
+                                    <td>
+                                        <a asp-action="Details" asp-route-id="@a.ApplicationId"
+                                           class="btn btn-outline-primary btn-sm">
+                                            <i class="fa fa-eye me-1"></i>View
+                                        </a>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
     </div>
-}
+
+    <!-- ══ LEASES PANEL ════════════════════════════════════════════════════ -->
+    <div class="@(Model.ActiveTab == "leases" ? "" : "d-none")">
+
+        <!-- Status sub-tabs (no counts) -->
+        <ul class="nav nav-pills mb-3 flex-wrap gap-1">
+            @foreach (var s in leaseStatuses)
+            {
+                bool isActive = Model.LeaseStatusFilter == s;
+                <li class="nav-item">
+                    <a class="nav-link py-1 px-3 @(isActive ? "active" : "text-dark border")"
+                       href="@LeaseUrl(s)">@s</a>
+                </li>
+            }
+        </ul>
+
+        @if (leaseRowCount == 0)
+        {
+            <div class="alert alert-info mb-0">
+                <i class="fa fa-info-circle me-2"></i>
+                No @(Model.LeaseStatusFilter == "All" ? "" : Model.LeaseStatusFilter.ToLower() + " ")leases found.
+            </div>
+        }
+        else
+        {
+            <!-- Row count summary -->
+            <p class="text-muted small mb-2">
+                Showing <strong>@leaseRowCount</strong>
+                @(Model.LeaseStatusFilter == "All" ? "" : Model.LeaseStatusFilter.ToLower() + " ")
+                lease@(leaseRowCount == 1 ? "" : "s")
+            </p>
+
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>#</th>
+                            @if (Model.IsManager) { <th>Tenant</th> }
+                            <th>Unit</th>
+                            <th>Property</th>
+                            <th>Start</th>
+                            <th>End</th>
+                            <th>Rent / mo</th>
+                            <th>Status</th>
+                            <th>History</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var l in Model.Leases)
+                        {
+                            bool isOverdue  = l.LeaseEndDate < DateTime.Today && l.Status == "Active";
+                            string rowClass = isOverdue ? "table-warning" : "";
+                            <tr class="@rowClass">
+                                <td class="text-muted small">@l.LeaseId</td>
+                                @if (Model.IsManager) { <td>@l.TenantName</td> }
+                                <td>@l.UnitNumber</td>
+                                <td>@l.PropertyName</td>
+                                <td>@l.LeaseStartDate.ToString("dd MMM yyyy")</td>
+                                <td>
+                                    @l.LeaseEndDate.ToString("dd MMM yyyy")
+                                    @if (isOverdue)
+                                    {
+                                        <span class="badge bg-warning text-dark ms-1">Overdue</span>
+                                    }
+                                </td>
+                                <td>BD @l.MonthlyRent.ToString("N0")</td>
+                                <td>
+                                    <span class="badge bg-@LeaseBadge(l.Status)">@l.Status</span>
+                                </td>
+                                <td>
+                                    @if (l.Logs.Any())
+                                    {
+                                        <button class="btn btn-outline-secondary btn-sm"
+                                                type="button"
+                                                data-bs-toggle="collapse"
+                                                data-bs-target="#log-@l.LeaseId"
+                                                aria-expanded="false">
+                                            <i class="fa fa-history me-1"></i>@l.Logs.Count
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted small">—</span>
+                                    }
+                                </td>
+                            </tr>
+                            @if (l.Logs.Any())
+                            {
+                                <tr class="collapse" id="log-@l.LeaseId">
+                                    <td colspan="@(Model.IsManager ? 9 : 8)" class="p-0">
+                                        <div class="px-4 py-2 bg-light border-top">
+                                            <small class="fw-semibold text-muted d-block mb-2">
+                                                <i class="fa fa-history me-1"></i>Status History (read-only)
+                                            </small>
+                                            <ul class="list-unstyled mb-0">
+                                                @foreach (var log in l.Logs)
+                                                {
+                                                    <li class="d-flex align-items-center gap-2 mb-1">
+                                                        <span class="badge bg-@LeaseBadge(log.Status)">@log.Status</span>
+                                                        <small class="text-muted">by @log.ChangedByUserName</small>
+                                                        @if (!string.IsNullOrWhiteSpace(log.Notes))
+                                                        {
+                                                            <small class="text-muted fst-italic">— @log.Notes</small>
+                                                        }
+                                                        <small class="ms-auto text-muted">
+                                                            @log.CreatedAt.ToString("dd MMM yyyy, HH:mm")
+                                                        </small>
+                                                    </li>
+                                                }
+                                            </ul>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+
+</div>

@@ -18,50 +18,74 @@
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu">
                     <span class="navbar-toggler-icon"></span>
                 </button>
+
+                @{
+                    // Single nav-link helper — shared by all links below
+                    var navCtrl = ViewContext.RouteData.Values["controller"]?.ToString();
+                    var navAct  = ViewContext.RouteData.Values["action"]?.ToString();
+                    string Lnk(string controller, string? action = null) =>
+                        navCtrl == controller && (action == null || navAct == action)
+                            ? "nav-link active"
+                            : "nav-link";
+                }
+
                 <div class="collapse navbar-collapse" id="navMenu">
                     <ul class="navbar-nav me-auto">
+
                         <li class="nav-item">
-                            <a class="nav-link" asp-controller="Properties" asp-action="Index">
+                            <a class="@Lnk("Properties")" asp-controller="Properties" asp-action="Index">
                                 <i class="fa fa-home me-1"></i>Properties
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" asp-controller="Home" asp-action="MaintenanceLookup">
+                            <a class="@Lnk("Home","MaintenanceLookup")"
+                               asp-controller="Home" asp-action="MaintenanceLookup">
                                 <i class="fa fa-search me-1"></i>Track Request
                             </a>
                         </li>
+
                         @if (User.Identity?.IsAuthenticated == true)
                         {
                             <li class="nav-item">
-                                <a class="nav-link" asp-controller="LeaseApplications" asp-action="Index">
-                                    <i class="fa fa-file-alt me-1"></i>My Applications
+                                <a class="@Lnk("LeaseApplications")"
+                                   asp-controller="LeaseApplications" asp-action="Index">
+                                    <i class="fa fa-file-contract me-1"></i>
+                                    @(User.IsInRole("PropertyManager")
+                                        ? "Applications & Leases"
+                                        : "My Applications & Leases")
                                 </a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link" asp-controller="Maintenance" asp-action="Index">
+                                <a class="@Lnk("Maintenance")"
+                                   asp-controller="Maintenance" asp-action="Index">
                                     <i class="fa fa-wrench me-1"></i>Maintenance
                                 </a>
                             </li>
+
                             @if (User.IsInRole("PropertyManager"))
                             {
                                 <li class="nav-item">
-                                    <a class="nav-link" asp-controller="Dashboard" asp-action="Index">
+                                    <a class="@Lnk("Dashboard")"
+                                       asp-controller="Dashboard" asp-action="Index">
                                         <i class="fa fa-chart-bar me-1"></i>Dashboard
                                     </a>
                                 </li>
                                 <li class="nav-item">
-                                    <a class="nav-link" asp-controller="Payments" asp-action="Index">
+                                    <a class="@Lnk("Payments")"
+                                       asp-controller="Payments" asp-action="Index">
                                         <i class="fa fa-money-bill me-1"></i>Payments
                                     </a>
                                 </li>
                             }
                         }
                     </ul>
+
                     <ul class="navbar-nav">
                         @if (User.Identity?.IsAuthenticated == true)
                         {
                             <li class="nav-item">
-                                <a class="nav-link" asp-controller="Notifications" asp-action="Index">
+                                <a class="@Lnk("Notifications")"
+                                   asp-controller="Notifications" asp-action="Index">
                                     <i class="fa fa-bell"></i>
                                 </a>
                             </li>
@@ -70,11 +94,18 @@
                                     <i class="fa fa-user me-1"></i>@User.Identity.Name
                                 </a>
                                 <ul class="dropdown-menu dropdown-menu-end">
-                                    <li><a class="dropdown-item" asp-controller="Account" asp-action="Profile">Profile</a></li>
+                                    <li>
+                                        <a class="dropdown-item" asp-controller="Account" asp-action="Profile">
+                                            <i class="fa fa-id-card me-1"></i>Profile
+                                        </a>
+                                    </li>
                                     <li><hr class="dropdown-divider"></li>
                                     <li>
                                         <form asp-controller="Account" asp-action="Logout" method="post">
-                                            <button type="submit" class="dropdown-item">Logout</button>
+                                            @Html.AntiForgeryToken()
+                                            <button type="submit" class="dropdown-item text-danger">
+                                                <i class="fa fa-sign-out-alt me-1"></i>Logout
+                                            </button>
                                         </form>
                                     </li>
                                 </ul>
@@ -83,10 +114,16 @@
                         else
                         {
                             <li class="nav-item">
-                                <a class="nav-link" asp-controller="Account" asp-action="Login">Login</a>
+                                <a class="@Lnk("Account","Login")"
+                                   asp-controller="Account" asp-action="Login">
+                                    <i class="fa fa-sign-in-alt me-1"></i>Login
+                                </a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link" asp-controller="Account" asp-action="Register">Register</a>
+                                <a class="@Lnk("Account","Register")"
+                                   asp-controller="Account" asp-action="Register">
+                                    <i class="fa fa-user-plus me-1"></i>Register
+                                </a>
                             </li>
                         }
                     </ul>
@@ -118,7 +155,7 @@
 
     <footer class="border-top footer text-muted mt-5 py-3">
         <div class="container text-center">
-            &copy; @DateTime.Now.Year - RentEase Leasing & Maintenance Platform
+            &copy; @DateTime.Now.Year - RentEase Leasing &amp; Maintenance Platform
         </div>
     </footer>
 
