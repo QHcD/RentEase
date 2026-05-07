@@ -210,35 +210,63 @@ public class PaymentsController : Controller
         return appUser;
     }
 
-    // Upcoming → Unpaid when due date arrives; Unpaid → Overdue after grace period
+    // Auto-fix all payment statuses on every page load
     private async Task UpdatePaymentStatusesAsync()
     {
         var today = DateTime.Today;
+
+        // ── 1. Fix properties with missing grace/late-fee settings ──────────
+        var propsToFix = await _db.Properties
+            .Where(p => p.GracePeriodDays == 0 || p.LateFeePercent == 0)
+            .ToListAsync();
+        foreach (var prop in propsToFix)
+        {
+            if (prop.GracePeriodDays == 0) prop.GracePeriodDays = 5;
+            if (prop.LateFeePercent  == 0) prop.LateFeePercent  = 5;
+        }
+        if (propsToFix.Any()) await _db.SaveChangesAsync();
+
+        // ── 2. Load all non-paid records ─────────────────────────────────────
         var active = await _db.PaymentRecords
             .Include(p => p.Lease)
                 .ThenInclude(l => l.Application)
                 .ThenInclude(a => a.Unit)
                 .ThenInclude(u => u.Property)
-            .Where(p => p.PaymentStatus == "Upcoming" || p.PaymentStatus == "Unpaid" || p.PaymentStatus == "Pending")
+            .Where(p => p.PaymentStatus == "Upcoming" ||
+                        p.PaymentStatus == "Unpaid"   ||
+                        p.PaymentStatus == "Pending")
             .ToListAsync();
 
         bool changed = false;
 
-        // Migrate legacy "Pending" → "Unpaid"
-        foreach (var p in active.Where(p => p.PaymentStatus == "Pending"))
-        {
-            p.PaymentStatus = "Unpaid";
-            changed = true;
-        }
-
         foreach (var p in active)
         {
+            // Legacy "Pending" → "Unpaid"
+            if (p.PaymentStatus == "Pending")
+            {
+                p.PaymentStatus = "Unpaid";
+                changed = true;
+                continue;
+            }
+
+            // Future "Unpaid" (old data) → "Upcoming"
+            if (p.PaymentStatus == "Unpaid" && p.DueDate > today.AddDays(2))
+            {
+                p.PaymentStatus = "Upcoming";
+                changed = true;
+                continue;
+            }
+
+            // "Upcoming" → "Unpaid" when due date is within 2 days
             if (p.PaymentStatus == "Upcoming" && p.DueDate <= today.AddDays(2))
             {
                 p.PaymentStatus = "Unpaid";
                 changed = true;
+                continue;
             }
-            else if (p.PaymentStatus == "Unpaid")
+
+            // "Unpaid" → "Overdue" after grace period
+            if (p.PaymentStatus == "Unpaid")
             {
                 int grace = p.Lease.Application.Unit.Property.GracePeriodDays;
                 if (p.DueDate.AddDays(grace) < today)
@@ -249,8 +277,8 @@ public class PaymentsController : Controller
                 }
             }
         }
-        if (changed)
-            await _db.SaveChangesAsync();
+
+        if (changed) await _db.SaveChangesAsync();
     }
 
     // GET /Payments
