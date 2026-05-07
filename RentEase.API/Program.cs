@@ -125,6 +125,14 @@ app.MapHub<MaintenanceHub>("/hubs/maintenance");
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
+
+    try
+    {
+        var db = services.GetRequiredService<PropertyLeasingDbContext>();
+        await db.Database.MigrateAsync();
+    }
+    catch { }
+
     try
     {
         await ContextSeed.SeedRolesAndUsersAsync(services);

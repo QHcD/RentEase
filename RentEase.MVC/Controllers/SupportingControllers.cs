@@ -25,7 +25,17 @@ public class NotificationsController : Controller
     {
         var identity = await _userManager.GetUserAsync(User);
         if (identity == null) return null;
-        return await _db.Users.FirstOrDefaultAsync(u => u.IdentityUserId == identity.Id);
+
+        var appUser = await _db.Users.FirstOrDefaultAsync(u => u.IdentityUserId == identity.Id)
+                   ?? await _db.Users.FirstOrDefaultAsync(u => u.Email == identity.Email);
+
+        if (appUser != null && appUser.IdentityUserId != identity.Id)
+        {
+            appUser.IdentityUserId = identity.Id;
+            await _db.SaveChangesAsync();
+        }
+
+        return appUser;
     }
 
     // GET /Notifications
@@ -181,7 +191,17 @@ public class PaymentsController : Controller
     {
         var identity = await _userManager.GetUserAsync(User);
         if (identity == null) return null;
-        return await _db.Users.FirstOrDefaultAsync(u => u.IdentityUserId == identity.Id);
+
+        var appUser = await _db.Users.FirstOrDefaultAsync(u => u.IdentityUserId == identity.Id)
+                   ?? await _db.Users.FirstOrDefaultAsync(u => u.Email == identity.Email);
+
+        if (appUser != null && appUser.IdentityUserId != identity.Id)
+        {
+            appUser.IdentityUserId = identity.Id;
+            await _db.SaveChangesAsync();
+        }
+
+        return appUser;
     }
 
     // GET /Payments

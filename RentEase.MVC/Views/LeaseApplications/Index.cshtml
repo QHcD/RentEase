@@ -236,7 +236,7 @@
                             <th>End</th>
                             <th>Rent / mo</th>
                             <th>Status</th>
-                            <th>History</th>
+                            <th></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -262,50 +262,12 @@
                                     <span class="badge bg-@LeaseBadge(l.Status)">@l.Status</span>
                                 </td>
                                 <td>
-                                    @if (l.Logs.Any())
-                                    {
-                                        <button class="btn btn-outline-secondary btn-sm"
-                                                type="button"
-                                                data-bs-toggle="collapse"
-                                                data-bs-target="#log-@l.LeaseId"
-                                                aria-expanded="false">
-                                            <i class="fa fa-history me-1"></i>@l.Logs.Count
-                                        </button>
-                                    }
-                                    else
-                                    {
-                                        <span class="text-muted small">—</span>
-                                    }
+                                    <a asp-action="LeaseDetails" asp-route-id="@l.LeaseId"
+                                       class="btn btn-outline-primary btn-sm">
+                                        <i class="fa fa-eye me-1"></i>View
+                                    </a>
                                 </td>
                             </tr>
-                            @if (l.Logs.Any())
-                            {
-                                <tr class="collapse" id="log-@l.LeaseId">
-                                    <td colspan="@(Model.IsManager ? 9 : 8)" class="p-0">
-                                        <div class="px-4 py-2 bg-light border-top">
-                                            <small class="fw-semibold text-muted d-block mb-2">
-                                                <i class="fa fa-history me-1"></i>Status History (read-only)
-                                            </small>
-                                            <ul class="list-unstyled mb-0">
-                                                @foreach (var log in l.Logs)
-                                                {
-                                                    <li class="d-flex align-items-center gap-2 mb-1">
-                                                        <span class="badge bg-@LeaseBadge(log.Status)">@log.Status</span>
-                                                        <small class="text-muted">by @log.ChangedByUserName</small>
-                                                        @if (!string.IsNullOrWhiteSpace(log.Notes))
-                                                        {
-                                                            <small class="text-muted fst-italic">— @log.Notes</small>
-                                                        }
-                                                        <small class="ms-auto text-muted">
-                                                            @log.CreatedAt.ToString("dd MMM yyyy, HH:mm")
-                                                        </small>
-                                                    </li>
-                                                }
-                                            </ul>
-                                        </div>
-                                    </td>
-                                </tr>
-                            }
                         }
                     </tbody>
                 </table>

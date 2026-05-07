@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using PropertyLeasing.API.Data;
 using PropertyLeasing.API.DTOs;
 using PropertyLeasing.API.Hubs;
 using PropertyLeasing.API.Models;

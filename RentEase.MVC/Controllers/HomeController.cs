@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using PropertyLeasing.API.Data;
 using PropertyLeasing.API.Models;
 using PropertyLeasing.MVC.Services;
 using PropertyLeasing.MVC.ViewModels;

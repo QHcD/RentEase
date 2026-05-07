@@ -30,7 +30,19 @@ public class LeaseApplicationsController : Controller
     {
         var identity = await _userManager.GetUserAsync(User);
         if (identity == null) return null;
-        return await _db.Users.FirstOrDefaultAsync(u => u.IdentityUserId == identity.Id);
+
+        // Primary lookup by IdentityUserId; fall back to email for rows that were
+        // seeded via SQL scripts and may have a null IdentityUserId.
+        var appUser = await _db.Users.FirstOrDefaultAsync(u => u.IdentityUserId == identity.Id)
+                   ?? await _db.Users.FirstOrDefaultAsync(u => u.Email == identity.Email);
+
+        if (appUser != null && appUser.IdentityUserId != identity.Id)
+        {
+            appUser.IdentityUserId = identity.Id;
+            await _db.SaveChangesAsync();
+        }
+
+        return appUser;
     }
 
     // ── Unified Index: Applications & Leases ─────────────────────────────────
@@ -223,6 +235,55 @@ public class LeaseApplicationsController : Controller
                     CreatedAt         = l.CreatedAt
                 })
                 .ToList()
+        };
+
+        return View("LeaseApplicationDetails", vm);
+    }
+
+    // ── Lease Details ─────────────────────────────────────────────────────────
+    // GET /LeaseApplications/LeaseDetails/{id}
+    public async Task<IActionResult> LeaseDetails(int id)
+    {
+        var appUser = await GetAppUserAsync();
+        if (appUser == null) return Unauthorized();
+
+        var lease = await _db.Leases
+            .Include(l => l.Application)
+                .ThenInclude(a => a.Unit)
+                .ThenInclude(u => u.Property)
+            .Include(l => l.Application.User)
+            .Include(l => l.LeaseLogs)
+                .ThenInclude(ll => ll.ChangedByUser)
+            .Include(l => l.PaymentRecords)
+            .FirstOrDefaultAsync(l => l.LeaseId == id);
+
+        if (lease == null) return NotFound();
+
+        if (appUser.Role == "Tenant" && lease.Application.UserId != appUser.UserId)
+            return Forbid();
+
+        var vm = new LeaseListViewModel
+        {
+            LeaseId         = lease.LeaseId,
+            ApplicationId   = lease.ApplicationId,
+            UnitNumber      = lease.Application.Unit.UnitNumber,
+            PropertyName    = lease.Application.Unit.Property.Name,
+            TenantName      = lease.Application.User.FullName,
+            LeaseStartDate  = lease.LeaseStartDate,
+            LeaseEndDate    = lease.LeaseEndDate,
+            MonthlyRent     = lease.MonthlyRent,
+            SecurityDeposit = lease.SecurityDeposit,
+            Status          = lease.Status,
+            CreatedAt       = lease.CreatedAt,
+            Logs            = lease.LeaseLogs
+                .OrderBy(ll => ll.CreatedAt)
+                .Select(ll => new LeaseLogViewModel
+                {
+                    Status            = ll.Status,
+                    ChangedByUserName = ll.ChangedByUser.FullName,
+                    Notes             = ll.Notes,
+                    CreatedAt         = ll.CreatedAt
+                }).ToList()
         };
 
         return View(vm);
@@ -423,7 +484,10 @@ public class LeaseApplicationsController : Controller
         _db.Leases.Add(lease);
         application.Unit.AvailabilityStatus = "Occupied";
 
-        // First payment record
+        // Save here so the DB assigns lease.LeaseId before child records reference it.
+        await _db.SaveChangesAsync();
+
+        // First payment record — lease.LeaseId is now the real identity value.
         _db.PaymentRecords.Add(new PaymentRecord
         {
             LeaseId       = lease.LeaseId,
@@ -432,9 +496,7 @@ public class LeaseApplicationsController : Controller
             PaymentStatus = "Pending"
         });
 
-        await _db.SaveChangesAsync();
-
-        // Log the lease creation
+        // Log the lease creation.
         _db.LeaseLogs.Add(new LeaseLog
         {
             LeaseId         = lease.LeaseId,

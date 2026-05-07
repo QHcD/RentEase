@@ -64,14 +64,36 @@ app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
 
-// ── Seed roles and users on startup ──────────────────
+// ── Apply pending EF migrations then seed ────────────
 using (var scope = app.Services.CreateScope())
 {
+    var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>()
+                     .CreateLogger("Startup");
+    try
+    {
+        // Business database: apply all outstanding migrations
+        var db = scope.ServiceProvider.GetRequiredService<PropertyLeasingDbContext>();
+        await db.Database.MigrateAsync();
+        logger.LogInformation("Business DB migrations applied.");
+    }
+    catch (Exception ex) { logger.LogError(ex, "Business DB migration failed."); }
+
+    try
+    {
+        // Identity database: no migrations exist, so EnsureCreated creates
+        // the schema on first run (no-op on an existing database).
+        var identityDb = scope.ServiceProvider.GetRequiredService<AppIdentityDbContext>();
+        await identityDb.Database.EnsureCreatedAsync();
+        logger.LogInformation("Identity DB ready.");
+    }
+    catch (Exception ex) { logger.LogError(ex, "Identity DB setup failed."); }
+
     try
     {
         await ContextSeed.SeedRolesAndUsersAsync(scope.ServiceProvider);
+        logger.LogInformation("Seed completed.");
     }
-    catch { }
+    catch (Exception ex) { logger.LogError(ex, "Seed failed."); }
 }
 
 app.Run();

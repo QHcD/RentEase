@@ -27,14 +27,6 @@ public partial class User
     [StringLength(50)]
     public string Role { get; set; } = "Tenant";
 
-    // For MaintenanceStaff: Plumbing, Electrical, HVAC, General
-    [StringLength(200)]
-    public string? SkillProfile { get; set; }
-
-    // For MaintenanceStaff: Available / Busy / OffDuty
-    [StringLength(50)]
-    public string? AvailabilityStatus { get; set; }
-
     // Links to ASP.NET Identity user
     [StringLength(450)]
     public string? IdentityUserId { get; set; }
@@ -65,4 +57,7 @@ public partial class User
 
     [InverseProperty("ChangedByUser")]
     public virtual ICollection<LeaseLog> LeaseLogs { get; set; } = new List<LeaseLog>();
+
+    [InverseProperty("User")]
+    public virtual MaintenanceStaff? StaffProfile { get; set; }
 }
