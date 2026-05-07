@@ -22,6 +22,7 @@ public partial class PropertyLeasingDbContext : DbContext
     public virtual DbSet<Feedback> Feedbacks { get; set; }
     public virtual DbSet<Log> Logs { get; set; }
     public virtual DbSet<Document> Documents { get; set; }
+    public virtual DbSet<PasswordResetCode> PasswordResetCodes { get; set; }
     public virtual DbSet<LeaseApplicationLog> LeaseApplicationLogs { get; set; }
     public virtual DbSet<LeaseLog> LeaseLogs { get; set; }
     public virtual DbSet<MaintenanceStaff> MaintenanceStaffs { get; set; }

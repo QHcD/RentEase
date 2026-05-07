@@ -1,0 +1,149 @@
+@model PropertyLeasing.MVC.ViewModels.TenantPayViewModel
+@{
+    ViewData["Title"] = "Pay Installment";
+}
+
+<div class="row justify-content-center g-4">
+
+    <!-- Order Summary -->
+    <div class="col-md-4">
+        <div class="card shadow-sm">
+            <div class="card-header bg-dark text-white">
+                <i class="fa fa-file-invoice-dollar me-2"></i>Payment Summary
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-6">Unit</dt>
+                    <dd class="col-6">@Model.UnitNumber</dd>
+
+                    <dt class="col-6">Property</dt>
+                    <dd class="col-6">@Model.PropertyName</dd>
+
+                    <dt class="col-6">Installment</dt>
+                    <dd class="col-6">@Model.InstallmentNum of @Model.TotalInstallments</dd>
+
+                    <dt class="col-6">Due Date</dt>
+                    <dd class="col-6">@Model.DueDate.ToString("dd MMM yyyy")</dd>
+
+                    <hr class="my-2" />
+
+                    <dt class="col-6">Amount Due</dt>
+                    <dd class="col-6">BD @Model.AmountDue.ToString("N2")</dd>
+
+                    @if (Model.LateFee.HasValue && Model.LateFee > 0)
+                    {
+                        <dt class="col-6 text-danger">Late Fee</dt>
+                        <dd class="col-6 text-danger">BD @Model.LateFee.Value.ToString("N2")</dd>
+                    }
+
+                    <dt class="col-6 fw-bold fs-5 mt-1">Total</dt>
+                    <dd class="col-6 fw-bold fs-5 text-success mt-1">BD @Model.TotalAmount.ToString("N2")</dd>
+                </dl>
+            </div>
+        </div>
+
+        @if (Model.LateFee.HasValue && Model.LateFee > 0)
+        {
+            <div class="alert alert-danger mt-3">
+                <i class="fa fa-exclamation-triangle me-2"></i>
+                This payment is <strong>overdue</strong>. A late fee of BD @Model.LateFee.Value.ToString("N2") has been added.
+            </div>
+        }
+    </div>
+
+    <!-- Card Form -->
+    <div class="col-md-5">
+        <div class="card shadow-sm">
+            <div class="card-header bg-success text-white">
+                <i class="fa fa-credit-card me-2"></i>Card Details
+            </div>
+            <div class="card-body">
+                <form asp-action="TenantPay" method="post" id="payForm">
+                    @Html.AntiForgeryToken()
+
+                    <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2 small"></div>
+
+                    <input type="hidden" asp-for="PaymentId" />
+                    <input type="hidden" asp-for="LeaseId" />
+                    <input type="hidden" asp-for="UnitNumber" />
+                    <input type="hidden" asp-for="PropertyName" />
+                    <input type="hidden" asp-for="InstallmentNum" />
+                    <input type="hidden" asp-for="TotalInstallments" />
+                    <input type="hidden" asp-for="AmountDue" />
+                    <input type="hidden" asp-for="LateFee" />
+                    <input type="hidden" asp-for="DueDate" />
+
+                    <div class="mb-3">
+                        <label asp-for="CardholderName" class="form-label fw-semibold"></label>
+                        <input asp-for="CardholderName" class="form-control" placeholder="Name on card" />
+                        <span asp-validation-for="CardholderName" class="text-danger small"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="CardNumber" class="form-label fw-semibold"></label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fa fa-credit-card"></i></span>
+                            <input asp-for="CardNumber" class="form-control" placeholder="0000 0000 0000 0000"
+                                   maxlength="19" id="cardNum" autocomplete="cc-number" />
+                        </div>
+                        <span asp-validation-for="CardNumber" class="text-danger small"></span>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <label asp-for="ExpiryDate" class="form-label fw-semibold"></label>
+                            <input asp-for="ExpiryDate" class="form-control" placeholder="MM/YY"
+                                   maxlength="5" id="expiry" autocomplete="cc-exp" />
+                            <span asp-validation-for="ExpiryDate" class="text-danger small"></span>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label asp-for="Cvv" class="form-label fw-semibold"></label>
+                            <input asp-for="Cvv" class="form-control" placeholder="CVV"
+                                   maxlength="4" autocomplete="cc-csc" />
+                            <span asp-validation-for="Cvv" class="text-danger small"></span>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-success w-100" id="payBtn">
+                        <i class="fa fa-lock me-1"></i> Pay BD @Model.TotalAmount.ToString("N2")
+                    </button>
+                </form>
+            </div>
+            <div class="card-footer text-center text-muted small">
+                <i class="fa fa-shield-alt me-1"></i> Simulated secure payment — no real card is charged
+            </div>
+        </div>
+
+        <div class="mt-2 text-center">
+            <a asp-action="Index" class="text-muted small">
+                <i class="fa fa-arrow-left me-1"></i>Back to Payments
+            </a>
+        </div>
+    </div>
+
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    <script>
+        // Auto-format card number with spaces
+        document.getElementById('cardNum').addEventListener('input', function () {
+            var v = this.value.replace(/\D/g, '').substring(0, 16);
+            this.value = v.replace(/(.{4})/g, '$1 ').trim();
+        });
+
+        // Auto-format expiry MM/YY
+        document.getElementById('expiry').addEventListener('input', function () {
+            var v = this.value.replace(/\D/g, '').substring(0, 4);
+            if (v.length >= 3) v = v.substring(0, 2) + '/' + v.substring(2);
+            this.value = v;
+        });
+
+        // Spinner on submit
+        document.getElementById('payForm').addEventListener('submit', function () {
+            var btn = document.getElementById('payBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Processing...';
+        });
+    </script>
+}

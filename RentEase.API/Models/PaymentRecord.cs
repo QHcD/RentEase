@@ -26,9 +26,12 @@ public partial class PaymentRecord
     [Column(TypeName = "datetime")]
     public DateTime? PaidDate { get; set; }
 
-    // Paid / Pending / Overdue / PartiallyPaid
+    // Unpaid / Paid / Overdue
     [StringLength(50)]
-    public string PaymentStatus { get; set; } = "Pending";
+    public string PaymentStatus { get; set; } = "Unpaid";
+
+    [Column(TypeName = "decimal(10,2)")]
+    public decimal? LateFee { get; set; }
 
     [StringLength(250)]
     public string? Notes { get; set; }

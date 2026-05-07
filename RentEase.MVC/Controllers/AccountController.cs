@@ -194,6 +194,103 @@ public class AccountController : Controller
         return RedirectToAction("Profile");
     }
 
+    // GET /Account/ForgotPassword
+    [HttpGet]
+    public IActionResult ForgotPassword() => View();
+
+    // POST /Account/ForgotPassword
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ForgotPassword(ForgotPasswordViewModel model)
+    {
+        if (!ModelState.IsValid) return View(model);
+
+        var identityUser = await _userManager.FindByEmailAsync(model.Email);
+        if (identityUser == null)
+        {
+            ModelState.AddModelError(string.Empty, "Account not found in our system.");
+            return View(model);
+        }
+
+        // Invalidate previous codes for this email
+        var oldCodes = _db.PasswordResetCodes
+            .Where(c => c.Email == model.Email && !c.IsUsed && c.ExpiresAt > DateTime.Now);
+        foreach (var c in oldCodes) c.IsUsed = true;
+
+        var code = new Random().Next(100000, 999999).ToString();
+        _db.PasswordResetCodes.Add(new PropertyLeasing.API.Models.PasswordResetCode
+        {
+            Email     = model.Email,
+            Code      = code,
+            ExpiresAt = DateTime.Now.AddMinutes(15),
+            IsUsed    = false,
+            CreatedAt = DateTime.Now
+        });
+        await _db.SaveChangesAsync();
+
+        // In production this would be emailed; for now show it on screen
+        TempData["ResetCode"]  = code;
+        TempData["ResetEmail"] = model.Email;
+        return RedirectToAction("ResetPassword");
+    }
+
+    // GET /Account/ResetPassword
+    [HttpGet]
+    public IActionResult ResetPassword()
+    {
+        var email = TempData.Peek("ResetEmail") as string;
+        if (string.IsNullOrEmpty(email))
+            return RedirectToAction("ForgotPassword");
+
+        var model = new VerifyResetCodeViewModel { Email = email };
+        return View(model);
+    }
+
+    // POST /Account/ResetPassword
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ResetPassword(VerifyResetCodeViewModel model)
+    {
+        if (!ModelState.IsValid) return View(model);
+
+        var record = await _db.PasswordResetCodes
+            .Where(c => c.Email == model.Email
+                     && c.Code  == model.Code
+                     && !c.IsUsed
+                     && c.ExpiresAt > DateTime.Now)
+            .OrderByDescending(c => c.CreatedAt)
+            .FirstOrDefaultAsync();
+
+        if (record == null)
+        {
+            ModelState.AddModelError(string.Empty, "Invalid or expired reset code. Please request a new one.");
+            return View(model);
+        }
+
+        var identityUser = await _userManager.FindByEmailAsync(model.Email);
+        if (identityUser == null)
+        {
+            ModelState.AddModelError(string.Empty, "Account not found.");
+            return View(model);
+        }
+
+        var token  = await _userManager.GeneratePasswordResetTokenAsync(identityUser);
+        var result = await _userManager.ResetPasswordAsync(identityUser, token, model.NewPassword);
+
+        if (!result.Succeeded)
+        {
+            foreach (var error in result.Errors)
+                ModelState.AddModelError(string.Empty, error.Description);
+            return View(model);
+        }
+
+        record.IsUsed = true;
+        await _db.SaveChangesAsync();
+
+        TempData["Success"] = "Password reset successfully. You can now log in with your new password.";
+        return RedirectToAction("Login");
+    }
+
     // GET /Account/AccessDenied
     public IActionResult AccessDenied() => View();
 }

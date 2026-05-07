@@ -91,8 +91,27 @@ public class LeaseListViewModel
     public decimal  SecurityDeposit   { get; set; }
     // Active / Expired / Terminated / Renewed
     public string   Status            { get; set; } = string.Empty;
+    public string?  PaymentPlanType   { get; set; }
     public DateTime CreatedAt         { get; set; }
+    public int      GracePeriodDays   { get; set; }
+    public decimal  LateFeePercent    { get; set; }
     public List<LeaseLogViewModel> Logs { get; set; } = new();
+    public List<PaymentSummaryViewModel> Payments { get; set; } = new();
+}
+
+// ── Payment summary row (shown inside Lease Details) ─────────────────────────
+public class PaymentSummaryViewModel
+{
+    public int       PaymentId     { get; set; }
+    public int       InstallmentNum { get; set; }
+    public int       TotalInstallments { get; set; }
+    public decimal   AmountDue     { get; set; }
+    public decimal?  AmountPaid    { get; set; }
+    public decimal?  LateFee       { get; set; }
+    public DateTime  DueDate       { get; set; }
+    public DateTime? PaidDate      { get; set; }
+    public string    Status        { get; set; } = string.Empty;
+    public string?   Notes         { get; set; }
 }
 
 // ── Lease log entry (read-only) ───────────────────────────────────────────────

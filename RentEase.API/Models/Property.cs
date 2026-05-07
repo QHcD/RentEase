@@ -32,6 +32,13 @@ public partial class Property
     [StringLength(100)]
     public string? ImgPath { get; set; }
 
+    // Days after DueDate before a payment becomes Overdue
+    public int GracePeriodDays { get; set; } = 5;
+
+    // Late fee as a percentage of AmountDue (e.g. 5 = 5%)
+    [Column(TypeName = "decimal(5,2)")]
+    public decimal LateFeePercent { get; set; } = 5;
+
     [InverseProperty("Property")]
     public virtual ICollection<Unit> Units { get; set; } = new List<Unit>();
 }

@@ -1,0 +1,131 @@
+@model PropertyLeasing.MVC.ViewModels.SelectPlanViewModel
+@{
+    ViewData["Title"] = "Choose Payment Plan";
+}
+
+<div class="container" style="max-width:750px;">
+    <div class="d-flex align-items-center mb-4">
+        <i class="fa fa-credit-card fa-2x text-primary me-3"></i>
+        <div>
+            <h2 class="mb-0">Choose Your Payment Plan</h2>
+            <small class="text-muted">@Model.PropertyName — Unit @Model.UnitNumber</small>
+        </div>
+    </div>
+
+    @if (!ViewData.ModelState.IsValid)
+    {
+        <div class="alert alert-danger">
+            <i class="fa fa-exclamation-circle me-2"></i>Please select a payment plan.
+        </div>
+    }
+
+    <!-- Lease Summary -->
+    <div class="card bg-light border-0 mb-4">
+        <div class="card-body">
+            <div class="row text-center">
+                <div class="col-4 border-end">
+                    <div class="text-muted small">Lease Period</div>
+                    <div class="fw-bold">@Model.TotalMonths months</div>
+                    <div class="text-muted small">@Model.LeaseStartDate.ToString("dd MMM yyyy") – @Model.LeaseEndDate.ToString("dd MMM yyyy")</div>
+                </div>
+                <div class="col-4 border-end">
+                    <div class="text-muted small">Monthly Rent</div>
+                    <div class="fw-bold text-success fs-5">BD @Model.MonthlyRent.ToString("N2")</div>
+                </div>
+                <div class="col-4">
+                    <div class="text-muted small">Total Amount</div>
+                    <div class="fw-bold text-primary fs-5">BD @Model.TotalAmount.ToString("N2")</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <form asp-action="SelectPlan" method="post">
+        <input type="hidden" asp-for="LeaseId" />
+        <input type="hidden" asp-for="UnitNumber" />
+        <input type="hidden" asp-for="PropertyName" />
+        <input type="hidden" asp-for="LeaseStartDate" />
+        <input type="hidden" asp-for="LeaseEndDate" />
+        <input type="hidden" asp-for="MonthlyRent" />
+        <input type="hidden" asp-for="SecurityDeposit" />
+        <input type="hidden" asp-for="TotalMonths" />
+        <input type="hidden" asp-for="TotalAmount" />
+
+        <div class="row g-3 mb-4">
+            <!-- Full Payment Card -->
+            <div class="col-md-6">
+                <label class="w-100 h-100" style="cursor:pointer;">
+                    <input type="radio" asp-for="SelectedPlan" value="Full" class="d-none plan-radio" id="planFull" />
+                    <div class="card h-100 border-2 plan-card" id="cardFull">
+                        <div class="card-body text-center p-4">
+                            <div class="mb-3">
+                                <i class="fa fa-money-bill-wave fa-3x text-success"></i>
+                            </div>
+                            <h5 class="fw-bold">Pay in Full</h5>
+                            <p class="text-muted small mb-3">Pay the entire lease amount now and enjoy peace of mind.</p>
+                            <div class="bg-success bg-opacity-10 rounded p-2">
+                                <div class="text-muted small">Total Due Now</div>
+                                <div class="fs-4 fw-bold text-success">BD @Model.TotalAmount.ToString("N2")</div>
+                            </div>
+                            <div class="mt-2">
+                                <span class="badge bg-success">One-time payment</span>
+                            </div>
+                        </div>
+                    </div>
+                </label>
+            </div>
+
+            <!-- Monthly Installments Card -->
+            <div class="col-md-6">
+                <label class="w-100 h-100" style="cursor:pointer;">
+                    <input type="radio" asp-for="SelectedPlan" value="Monthly" class="d-none plan-radio" id="planMonthly" />
+                    <div class="card h-100 border-2 plan-card" id="cardMonthly">
+                        <div class="card-body text-center p-4">
+                            <div class="mb-3">
+                                <i class="fa fa-calendar-alt fa-3x text-primary"></i>
+                            </div>
+                            <h5 class="fw-bold">Monthly Installments</h5>
+                            <p class="text-muted small mb-3">Pay month by month. First installment is due today.</p>
+                            <div class="bg-primary bg-opacity-10 rounded p-2">
+                                <div class="text-muted small">Per Month</div>
+                                <div class="fs-4 fw-bold text-primary">BD @Model.MonthlyRent.ToString("N2")</div>
+                            </div>
+                            <div class="mt-2">
+                                <span class="badge bg-primary">@Model.TotalMonths installments</span>
+                            </div>
+                        </div>
+                    </div>
+                </label>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-between">
+            <a asp-controller="LeaseApplications" asp-action="Index" asp-route-tab="leases"
+               class="btn btn-outline-secondary">
+                <i class="fa fa-arrow-left me-1"></i>Back
+            </a>
+            <button type="submit" class="btn btn-primary px-4" id="proceedBtn" disabled>
+                <i class="fa fa-arrow-right me-1"></i>Proceed to Checkout
+            </button>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+<script>
+    const radios = document.querySelectorAll('.plan-radio');
+    const proceedBtn = document.getElementById('proceedBtn');
+
+    radios.forEach(radio => {
+        radio.addEventListener('change', function () {
+            document.querySelectorAll('.plan-card').forEach(c => {
+                c.classList.remove('border-primary', 'border-success', 'shadow');
+            });
+            const card = document.getElementById('card' + (this.value === 'Full' ? 'Full' : 'Monthly'));
+            const color = this.value === 'Full' ? 'border-success' : 'border-primary';
+            card.classList.add(color, 'shadow');
+            proceedBtn.disabled = false;
+        });
+    });
+</script>
+}

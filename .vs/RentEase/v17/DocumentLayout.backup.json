@@ -1,22 +1,30 @@
 {
   "Version": 1,
-  "WorkspaceRootPath": "C:\\Users\\User\\source\\repos\\RentEase\\",
+  "WorkspaceRootPath": "C:\\Users\\murta\\Desktop\\RentEase\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{22222222-2222-2222-2222-222222222222}|RentEase.MVC\\RentEase.MVC.csproj|c:\\users\\user\\source\\repos\\rentease\\rentease.mvc\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
+      "AbsoluteMoniker": "D:0:0:{11111111-1111-1111-1111-111111111111}|RentEase.API\\RentEase.API.csproj|c:\\users\\murta\\desktop\\rentease\\rentease.api\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{11111111-1111-1111-1111-111111111111}|RentEase.API\\RentEase.API.csproj|solutionrelative:rentease.api\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\murta\\Desktop\\RentEase\\SQL\\02_PropertyLeasingDB_SeedData.sql||{CC5D8DF0-88F4-4BB2-9DBB-B48CEE65C30A}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:SQL\\02_PropertyLeasingDB_SeedData.sql||{CC5D8DF0-88F4-4BB2-9DBB-B48CEE65C30A}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\murta\\Desktop\\RentEase\\SQL\\01_PropertyLeasingDB_Schema.sql||{CC5D8DF0-88F4-4BB2-9DBB-B48CEE65C30A}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:SQL\\01_PropertyLeasingDB_Schema.sql||{CC5D8DF0-88F4-4BB2-9DBB-B48CEE65C30A}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{22222222-2222-2222-2222-222222222222}|RentEase.MVC\\RentEase.MVC.csproj|c:\\users\\murta\\desktop\\rentease\\rentease.mvc\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
       "RelativeMoniker": "D:0:0:{22222222-2222-2222-2222-222222222222}|RentEase.MVC\\RentEase.MVC.csproj|solutionrelative:rentease.mvc\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{11111111-1111-1111-1111-111111111111}|RentEase.API\\RentEase.API.csproj|c:\\users\\user\\source\\repos\\rentease\\rentease.api\\migrations\\propertyleasingdb\\propertyleasingdbcontextmodelsnapshot.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "AbsoluteMoniker": "D:0:0:{11111111-1111-1111-1111-111111111111}|RentEase.API\\RentEase.API.csproj|c:\\users\\murta\\desktop\\rentease\\rentease.api\\migrations\\propertyleasingdb\\propertyleasingdbcontextmodelsnapshot.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{11111111-1111-1111-1111-111111111111}|RentEase.API\\RentEase.API.csproj|solutionrelative:rentease.api\\migrations\\propertyleasingdb\\propertyleasingdbcontextmodelsnapshot.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{11111111-1111-1111-1111-111111111111}|RentEase.API\\RentEase.API.csproj|c:\\users\\user\\source\\repos\\rentease\\rentease.api\\migrations\\propertyleasingdb\\20260506195811_addleaselogs.designer.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "AbsoluteMoniker": "D:0:0:{11111111-1111-1111-1111-111111111111}|RentEase.API\\RentEase.API.csproj|c:\\users\\murta\\desktop\\rentease\\rentease.api\\migrations\\propertyleasingdb\\20260506195811_addleaselogs.designer.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{11111111-1111-1111-1111-111111111111}|RentEase.API\\RentEase.API.csproj|solutionrelative:rentease.api\\migrations\\propertyleasingdb\\20260506195811_addleaselogs.designer.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{11111111-1111-1111-1111-111111111111}|RentEase.API\\RentEase.API.csproj|c:\\users\\user\\source\\repos\\rentease\\rentease.api\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{11111111-1111-1111-1111-111111111111}|RentEase.API\\RentEase.API.csproj|solutionrelative:rentease.api\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     }
   ],
   "DocumentGroupContainers": [
@@ -26,59 +34,82 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 0,
+          "SelectedChildIndex": 1,
           "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{3ae79031-e1bc-11d0-8f78-00a0c9110057}"
+            },
             {
               "$type": "Document",
               "DocumentIndex": 0,
-              "Title": "appsettings.json",
-              "DocumentMoniker": "C:\\Users\\User\\source\\repos\\RentEase\\RentEase.MVC\\appsettings.json",
-              "RelativeDocumentMoniker": "RentEase.MVC\\appsettings.json",
-              "ToolTip": "C:\\Users\\User\\source\\repos\\RentEase\\RentEase.MVC\\appsettings.json",
-              "RelativeToolTip": "RentEase.MVC\\appsettings.json",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
-              "WhenOpened": "2026-05-07T03:43:43.102Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 1,
-              "Title": "PropertyLeasingDbContextModelSnapshot.cs",
-              "DocumentMoniker": "C:\\Users\\User\\source\\repos\\RentEase\\RentEase.API\\Migrations\\PropertyLeasingDb\\PropertyLeasingDbContextModelSnapshot.cs",
-              "RelativeDocumentMoniker": "RentEase.API\\Migrations\\PropertyLeasingDb\\PropertyLeasingDbContextModelSnapshot.cs",
-              "ToolTip": "C:\\Users\\User\\source\\repos\\RentEase\\RentEase.API\\Migrations\\PropertyLeasingDb\\PropertyLeasingDbContextModelSnapshot.cs",
-              "RelativeToolTip": "RentEase.API\\Migrations\\PropertyLeasingDb\\PropertyLeasingDbContextModelSnapshot.cs",
-              "ViewState": "AgIAAAIAAAAAAAAAAAD4vwsAAAABAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-05-07T03:41:26.731Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 2,
-              "Title": "20260506195811_AddLeaseLogs.Designer.cs",
-              "DocumentMoniker": "C:\\Users\\User\\source\\repos\\RentEase\\RentEase.API\\Migrations\\PropertyLeasingDb\\20260506195811_AddLeaseLogs.Designer.cs",
-              "RelativeDocumentMoniker": "RentEase.API\\Migrations\\PropertyLeasingDb\\20260506195811_AddLeaseLogs.Designer.cs",
-              "ToolTip": "C:\\Users\\User\\source\\repos\\RentEase\\RentEase.API\\Migrations\\PropertyLeasingDb\\20260506195811_AddLeaseLogs.Designer.cs",
-              "RelativeToolTip": "RentEase.API\\Migrations\\PropertyLeasingDb\\20260506195811_AddLeaseLogs.Designer.cs",
-              "ViewState": "AgIAAAMAAAAAAAAAAAD4vw0AAAABAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-05-07T03:41:24.269Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 3,
               "Title": "Program.cs",
-              "DocumentMoniker": "C:\\Users\\User\\source\\repos\\RentEase\\RentEase.API\\Program.cs",
+              "DocumentMoniker": "C:\\Users\\murta\\Desktop\\RentEase\\RentEase.API\\Program.cs",
               "RelativeDocumentMoniker": "RentEase.API\\Program.cs",
-              "ToolTip": "C:\\Users\\User\\source\\repos\\RentEase\\RentEase.API\\Program.cs",
+              "ToolTip": "C:\\Users\\murta\\Desktop\\RentEase\\RentEase.API\\Program.cs",
               "RelativeToolTip": "RentEase.API\\Program.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-05-07T02:45:18.723Z",
               "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "02_PropertyLeasingDB_SeedData.sql",
+              "DocumentMoniker": "C:\\Users\\murta\\Desktop\\RentEase\\SQL\\02_PropertyLeasingDB_SeedData.sql",
+              "RelativeDocumentMoniker": "SQL\\02_PropertyLeasingDB_SeedData.sql",
+              "ToolTip": "C:\\Users\\murta\\Desktop\\RentEase\\SQL\\02_PropertyLeasingDB_SeedData.sql",
+              "RelativeToolTip": "SQL\\02_PropertyLeasingDB_SeedData.sql",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000826|",
+              "WhenOpened": "2026-05-07T07:41:41.704Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "01_PropertyLeasingDB_Schema.sql",
+              "DocumentMoniker": "C:\\Users\\murta\\Desktop\\RentEase\\SQL\\01_PropertyLeasingDB_Schema.sql",
+              "RelativeDocumentMoniker": "SQL\\01_PropertyLeasingDB_Schema.sql",
+              "ToolTip": "C:\\Users\\murta\\Desktop\\RentEase\\SQL\\01_PropertyLeasingDB_Schema.sql",
+              "RelativeToolTip": "SQL\\01_PropertyLeasingDB_Schema.sql",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000826|",
+              "WhenOpened": "2026-05-07T07:40:07.729Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "appsettings.json",
+              "DocumentMoniker": "C:\\Users\\murta\\Desktop\\RentEase\\RentEase.MVC\\appsettings.json",
+              "RelativeDocumentMoniker": "RentEase.MVC\\appsettings.json",
+              "ToolTip": "C:\\Users\\murta\\Desktop\\RentEase\\RentEase.MVC\\appsettings.json",
+              "RelativeToolTip": "RentEase.MVC\\appsettings.json",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAA8AAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
+              "WhenOpened": "2026-05-07T03:43:43.102Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "PropertyLeasingDbContextModelSnapshot.cs",
+              "DocumentMoniker": "C:\\Users\\murta\\Desktop\\RentEase\\RentEase.API\\Migrations\\PropertyLeasingDb\\PropertyLeasingDbContextModelSnapshot.cs",
+              "RelativeDocumentMoniker": "RentEase.API\\Migrations\\PropertyLeasingDb\\PropertyLeasingDbContextModelSnapshot.cs",
+              "ToolTip": "C:\\Users\\murta\\Desktop\\RentEase\\RentEase.API\\Migrations\\PropertyLeasingDb\\PropertyLeasingDbContextModelSnapshot.cs",
+              "RelativeToolTip": "RentEase.API\\Migrations\\PropertyLeasingDb\\PropertyLeasingDbContextModelSnapshot.cs",
+              "ViewState": "AgIAAAIAAAAAAAAAAAD4vwsAAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-05-07T03:41:26.731Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "20260506195811_AddLeaseLogs.Designer.cs",
+              "DocumentMoniker": "C:\\Users\\murta\\Desktop\\RentEase\\RentEase.API\\Migrations\\PropertyLeasingDb\\20260506195811_AddLeaseLogs.Designer.cs",
+              "RelativeDocumentMoniker": "RentEase.API\\Migrations\\PropertyLeasingDb\\20260506195811_AddLeaseLogs.Designer.cs",
+              "ToolTip": "C:\\Users\\murta\\Desktop\\RentEase\\RentEase.API\\Migrations\\PropertyLeasingDb\\20260506195811_AddLeaseLogs.Designer.cs",
+              "RelativeToolTip": "RentEase.API\\Migrations\\PropertyLeasingDb\\20260506195811_AddLeaseLogs.Designer.cs",
+              "ViewState": "AgIAAAMAAAAAAAAAAAD4vw0AAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-05-07T03:41:24.269Z"
             }
           ]
         }

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PropertyLeasing.API.Data;
 using PropertyLeasing.API.Models;
+using PropertyLeasing.MVC.Services;
 using PropertyLeasing.MVC.ViewModels;
 
 namespace PropertyLeasing.MVC.Controllers;
@@ -120,7 +121,7 @@ public class DashboardController : Controller
             OpenMaintenanceRequests = await _db.MaintenanceRequests
                 .CountAsync(r => r.Status == "Submitted" || r.Status == "Assigned" || r.Status == "InProgress"),
             OverduePayments     = await _db.PaymentRecords
-                .CountAsync(p => p.PaymentStatus == "Pending" && p.DueDate < DateTime.Now),
+                .CountAsync(p => p.PaymentStatus == "Overdue"),
 
             PropertyOccupancy = await _db.Properties
                 .Include(p => p.Units)
@@ -180,11 +181,16 @@ public class PaymentsController : Controller
 {
     private readonly PropertyLeasingDbContext _db;
     private readonly UserManager<AppUser>     _userManager;
+    private readonly NotificationService      _notifier;
 
-    public PaymentsController(PropertyLeasingDbContext db, UserManager<AppUser> userManager)
+    public PaymentsController(
+        PropertyLeasingDbContext db,
+        UserManager<AppUser> userManager,
+        NotificationService notifier)
     {
         _db          = db;
         _userManager = userManager;
+        _notifier    = notifier;
     }
 
     private async Task<User?> GetAppUserAsync()
@@ -204,13 +210,58 @@ public class PaymentsController : Controller
         return appUser;
     }
 
+    // Upcoming → Unpaid when due date arrives; Unpaid → Overdue after grace period
+    private async Task UpdatePaymentStatusesAsync()
+    {
+        var today = DateTime.Today;
+        var active = await _db.PaymentRecords
+            .Include(p => p.Lease)
+                .ThenInclude(l => l.Application)
+                .ThenInclude(a => a.Unit)
+                .ThenInclude(u => u.Property)
+            .Where(p => p.PaymentStatus == "Upcoming" || p.PaymentStatus == "Unpaid" || p.PaymentStatus == "Pending")
+            .ToListAsync();
+
+        bool changed = false;
+
+        // Migrate legacy "Pending" → "Unpaid"
+        foreach (var p in active.Where(p => p.PaymentStatus == "Pending"))
+        {
+            p.PaymentStatus = "Unpaid";
+            changed = true;
+        }
+
+        foreach (var p in active)
+        {
+            if (p.PaymentStatus == "Upcoming" && p.DueDate <= today.AddDays(2))
+            {
+                p.PaymentStatus = "Unpaid";
+                changed = true;
+            }
+            else if (p.PaymentStatus == "Unpaid")
+            {
+                int grace = p.Lease.Application.Unit.Property.GracePeriodDays;
+                if (p.DueDate.AddDays(grace) < today)
+                {
+                    p.PaymentStatus = "Overdue";
+                    p.LateFee = Math.Round(p.AmountDue * p.Lease.Application.Unit.Property.LateFeePercent / 100, 2);
+                    changed = true;
+                }
+            }
+        }
+        if (changed)
+            await _db.SaveChangesAsync();
+    }
+
     // GET /Payments
     public async Task<IActionResult> Index(string? status)
     {
+        await UpdatePaymentStatusesAsync();
+
         var appUser = await GetAppUserAsync();
         if (appUser == null) return Unauthorized();
 
-        var query = _db.PaymentRecords
+        var baseQuery = _db.PaymentRecords
             .Include(p => p.Lease)
                 .ThenInclude(l => l.Application)
                 .ThenInclude(a => a.Unit)
@@ -218,32 +269,322 @@ public class PaymentsController : Controller
             .Include(p => p.Lease.Application.User)
             .AsQueryable();
 
-        // Tenants only see their own payments
         if (appUser.Role == "Tenant")
-            query = query.Where(p => p.Lease.Application.UserId == appUser.UserId);
+            baseQuery = baseQuery.Where(p => p.Lease.Application.UserId == appUser.UserId);
 
+        // Counts from full dataset (before status filter) for tab badges
+        var allStatuses = await baseQuery.Select(p => p.PaymentStatus).ToListAsync();
+        ViewBag.TabCounts = new Dictionary<string, int>
+        {
+            ["All"]      = allStatuses.Count,
+            ["Unpaid"]   = allStatuses.Count(s => s == "Unpaid" || s == "Pending"),
+            ["Overdue"]  = allStatuses.Count(s => s == "Overdue"),
+            ["Upcoming"] = allStatuses.Count(s => s == "Upcoming"),
+            ["Paid"]     = allStatuses.Count(s => s == "Paid"),
+        };
+
+        var query = baseQuery;
         if (!string.IsNullOrWhiteSpace(status))
-            query = query.Where(p => p.PaymentStatus == status);
+            query = query.Where(p => p.PaymentStatus == status || (status == "Unpaid" && p.PaymentStatus == "Pending"));
 
-        var payments = await query
-            .OrderByDescending(p => p.DueDate)
-            .Select(p => new PaymentListViewModel
+        var rawPayments = await query.OrderByDescending(p => p.DueDate).ToListAsync();
+
+        // Group by lease to compute installment numbers
+        var grouped = rawPayments
+            .GroupBy(p => p.LeaseId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderBy(p => p.DueDate).ToList()
+            );
+
+        var payments = rawPayments.Select(p =>
+        {
+            var group = grouped[p.LeaseId];
+            var idx   = group.IndexOf(p);
+            return new PaymentListViewModel
             {
-                PaymentId     = p.PaymentId,
-                UnitNumber    = p.Lease.Application.Unit.UnitNumber,
-                PropertyName  = p.Lease.Application.Unit.Property.Name,
-                TenantName    = p.Lease.Application.User.FullName,
-                AmountDue     = p.AmountDue,
-                AmountPaid    = p.AmountPaid,
-                DueDate       = p.DueDate,
-                PaidDate      = p.PaidDate,
-                PaymentStatus = p.PaymentStatus,
-                Notes         = p.Notes
-            })
+                PaymentId         = p.PaymentId,
+                LeaseId           = p.LeaseId,
+                UnitNumber        = p.Lease.Application.Unit.UnitNumber,
+                PropertyName      = p.Lease.Application.Unit.Property.Name,
+                TenantName        = p.Lease.Application.User.FullName,
+                AmountDue         = p.AmountDue,
+                AmountPaid        = p.AmountPaid,
+                LateFee           = p.LateFee,
+                DueDate           = p.DueDate,
+                PaidDate          = p.PaidDate,
+                PaymentStatus     = p.PaymentStatus,
+                Notes             = p.Notes,
+                PaymentPlanType   = p.Lease.PaymentPlanType,
+                InstallmentNum    = idx + 1,
+                TotalInstallments = group.Count
+            };
+        }).ToList();
+
+        ViewBag.Status   = status;
+        ViewBag.IsManager = appUser.Role == "PropertyManager";
+        return View(payments);
+    }
+
+    // GET /Payments/Pay/{paymentId} — Tenant pays a single installment
+    [Authorize(Roles = "Tenant")]
+    public async Task<IActionResult> Pay(int paymentId)
+    {
+        await UpdatePaymentStatusesAsync();
+
+        var appUser = await GetAppUserAsync();
+        if (appUser == null) return Unauthorized();
+
+        var payment = await _db.PaymentRecords
+            .Include(p => p.Lease)
+                .ThenInclude(l => l.Application)
+                .ThenInclude(a => a.Unit)
+                .ThenInclude(u => u.Property)
+            .FirstOrDefaultAsync(p => p.PaymentId == paymentId);
+
+        if (payment == null) return NotFound();
+        if (payment.Lease.Application.UserId != appUser.UserId) return Forbid();
+        if (payment.PaymentStatus == "Paid")
+        {
+            TempData["Error"] = "This installment has already been paid.";
+            return RedirectToAction("Index");
+        }
+
+        var ordered = await _db.PaymentRecords
+            .Where(p => p.LeaseId == payment.LeaseId)
+            .OrderBy(p => p.DueDate)
             .ToListAsync();
 
-        ViewBag.Status = status;
-        return View(payments);
+        var vm = new TenantPayViewModel
+        {
+            PaymentId         = payment.PaymentId,
+            LeaseId           = payment.LeaseId,
+            UnitNumber        = payment.Lease.Application.Unit.UnitNumber,
+            PropertyName      = payment.Lease.Application.Unit.Property.Name,
+            InstallmentNum    = ordered.FindIndex(p => p.PaymentId == paymentId) + 1,
+            TotalInstallments = ordered.Count,
+            AmountDue         = payment.AmountDue,
+            LateFee           = payment.LateFee,
+            DueDate           = payment.DueDate
+        };
+
+        return View(vm);
+    }
+
+    // POST /Payments/TenantPay
+    [Authorize(Roles = "Tenant")]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> TenantPay(TenantPayViewModel vm)
+    {
+        if (!ModelState.IsValid)
+            return View("Pay", vm);
+
+        var appUser = await GetAppUserAsync();
+        if (appUser == null) return Unauthorized();
+
+        var payment = await _db.PaymentRecords
+            .Include(p => p.Lease)
+                .ThenInclude(l => l.Application)
+                .ThenInclude(a => a.Unit)
+            .FirstOrDefaultAsync(p => p.PaymentId == vm.PaymentId);
+
+        if (payment == null) return NotFound();
+        if (payment.Lease.Application.UserId != appUser.UserId) return Forbid();
+        if (payment.PaymentStatus == "Paid")
+        {
+            TempData["Error"] = "This installment has already been paid.";
+            return RedirectToAction("Index");
+        }
+
+        payment.AmountPaid    = vm.TotalAmount;
+        payment.PaidDate      = DateTime.Now;
+        payment.PaymentStatus = "Paid";
+        payment.LateFee       = vm.LateFee;
+        payment.Notes         = "Paid online by tenant.";
+
+        await _db.SaveChangesAsync();
+
+        var managers = await _db.Users.Where(u => u.Role == "PropertyManager").ToListAsync();
+        foreach (var mgr in managers)
+            await _notifier.SendAsync(mgr.UserId,
+                $"{appUser.FullName} paid installment {vm.InstallmentNum}/{vm.TotalInstallments} (BD {vm.TotalAmount:N2}) for unit {payment.Lease.Application.Unit.UnitNumber}.",
+                "PaymentReminder");
+
+        TempData["Success"] = $"Payment of BD {vm.TotalAmount:N2} completed successfully!";
+        return RedirectToAction("Index");
+    }
+
+    // GET /Payments/SelectPlan/{leaseId}
+    [Authorize(Roles = "Tenant")]
+    public async Task<IActionResult> SelectPlan(int leaseId)
+    {
+        var appUser = await GetAppUserAsync();
+        if (appUser == null) return Unauthorized();
+
+        var lease = await _db.Leases
+            .Include(l => l.Application).ThenInclude(a => a.Unit).ThenInclude(u => u.Property)
+            .FirstOrDefaultAsync(l => l.LeaseId == leaseId);
+
+        if (lease == null) return NotFound();
+        if (lease.Application.UserId != appUser.UserId) return Forbid();
+        if (lease.Status != "PendingPayment")
+        {
+            TempData["Error"] = "This lease does not require payment at this time.";
+            return RedirectToAction("Index", "LeaseApplications", new { tab = "leases" });
+        }
+
+        int totalMonths = (int)Math.Ceiling((lease.LeaseEndDate - lease.LeaseStartDate).TotalDays / 30.44);
+        return View(new SelectPlanViewModel
+        {
+            LeaseId         = lease.LeaseId,
+            UnitNumber      = lease.Application.Unit.UnitNumber,
+            PropertyName    = lease.Application.Unit.Property.Name,
+            LeaseStartDate  = lease.LeaseStartDate,
+            LeaseEndDate    = lease.LeaseEndDate,
+            MonthlyRent     = lease.MonthlyRent,
+            SecurityDeposit = lease.SecurityDeposit,
+            TotalMonths     = totalMonths,
+            TotalAmount     = lease.MonthlyRent * totalMonths
+        });
+    }
+
+    // POST /Payments/SelectPlan
+    [Authorize(Roles = "Tenant")]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SelectPlan(SelectPlanViewModel vm)
+    {
+        if (!ModelState.IsValid)
+        {
+            var lease = await _db.Leases
+                .Include(l => l.Application).ThenInclude(a => a.Unit).ThenInclude(u => u.Property)
+                .FirstOrDefaultAsync(l => l.LeaseId == vm.LeaseId);
+            if (lease != null)
+            {
+                int m = (int)Math.Ceiling((lease.LeaseEndDate - lease.LeaseStartDate).TotalDays / 30.44);
+                vm.TotalMonths = m; vm.TotalAmount = lease.MonthlyRent * m;
+                vm.MonthlyRent = lease.MonthlyRent; vm.SecurityDeposit = lease.SecurityDeposit;
+            }
+            return View(vm);
+        }
+        return RedirectToAction("Checkout", new { leaseId = vm.LeaseId, plan = vm.SelectedPlan });
+    }
+
+    // GET /Payments/Checkout
+    [Authorize(Roles = "Tenant")]
+    public async Task<IActionResult> Checkout(int leaseId, string plan)
+    {
+        var appUser = await GetAppUserAsync();
+        if (appUser == null) return Unauthorized();
+
+        var lease = await _db.Leases
+            .Include(l => l.Application).ThenInclude(a => a.Unit).ThenInclude(u => u.Property)
+            .FirstOrDefaultAsync(l => l.LeaseId == leaseId);
+
+        if (lease == null) return NotFound();
+        if (lease.Application.UserId != appUser.UserId) return Forbid();
+        if (lease.Status != "PendingPayment")
+            return RedirectToAction("Index", "LeaseApplications", new { tab = "leases" });
+
+        int totalMonths = (int)Math.Ceiling((lease.LeaseEndDate - lease.LeaseStartDate).TotalDays / 30.44);
+        return View(new CheckoutViewModel
+        {
+            LeaseId         = lease.LeaseId,
+            UnitNumber      = lease.Application.Unit.UnitNumber,
+            PropertyName    = lease.Application.Unit.Property.Name,
+            PlanType        = plan,
+            MonthlyRent     = lease.MonthlyRent,
+            TotalMonths     = totalMonths,
+            AmountToPay     = plan == "Full" ? lease.MonthlyRent * totalMonths : lease.MonthlyRent,
+            PlanDescription = plan == "Full"
+                ? $"Full payment for {totalMonths} months"
+                : $"Installment 1 of {totalMonths}"
+        });
+    }
+
+    // POST /Payments/ProcessPayment
+    [Authorize(Roles = "Tenant")]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ProcessPayment(CheckoutViewModel vm)
+    {
+        if (!ModelState.IsValid) return View("Checkout", vm);
+
+        var appUser = await GetAppUserAsync();
+        if (appUser == null) return Unauthorized();
+
+        var lease = await _db.Leases
+            .Include(l => l.Application).ThenInclude(a => a.Unit).ThenInclude(u => u.Property)
+            .FirstOrDefaultAsync(l => l.LeaseId == vm.LeaseId);
+
+        if (lease == null) return NotFound();
+        if (lease.Application.UserId != appUser.UserId) return Forbid();
+        if (lease.Status != "PendingPayment")
+        {
+            TempData["Error"] = "This lease has already been processed.";
+            return RedirectToAction("Index", "LeaseApplications", new { tab = "leases" });
+        }
+
+        var now = DateTime.Now;
+        int totalMonths = (int)Math.Ceiling((lease.LeaseEndDate - lease.LeaseStartDate).TotalDays / 30.44);
+
+        if (vm.PlanType == "Full")
+        {
+            _db.PaymentRecords.Add(new PaymentRecord
+            {
+                LeaseId       = lease.LeaseId,
+                AmountDue     = lease.MonthlyRent * totalMonths,
+                AmountPaid    = lease.MonthlyRent * totalMonths,
+                DueDate       = lease.LeaseStartDate,
+                PaidDate      = now,
+                PaymentStatus = "Paid",
+                Notes         = "Full payment at lease activation."
+            });
+        }
+        else
+        {
+            for (int i = 0; i < totalMonths; i++)
+            {
+                _db.PaymentRecords.Add(new PaymentRecord
+                {
+                    LeaseId       = lease.LeaseId,
+                    AmountDue     = lease.MonthlyRent,
+                    AmountPaid    = i == 0 ? lease.MonthlyRent : null,
+                    DueDate       = lease.LeaseStartDate.AddMonths(i),
+                    PaidDate      = i == 0 ? now : null,
+                    PaymentStatus = i == 0 ? "Paid" : "Upcoming",
+                    Notes         = i == 0 ? "First installment paid at activation." : null
+                });
+            }
+        }
+
+        lease.Status          = "Active";
+        lease.PaymentPlanType = vm.PlanType;
+        lease.Application.Unit.AvailabilityStatus = "Occupied";
+
+        _db.LeaseLogs.Add(new LeaseLog
+        {
+            LeaseId         = lease.LeaseId,
+            Status          = "Active",
+            ChangedByUserId = appUser.UserId,
+            Notes           = $"Lease activated after {vm.PlanType} payment.",
+            CreatedAt       = now
+        });
+
+        await _db.SaveChangesAsync();
+
+        var managers = await _db.Users.Where(u => u.Role == "PropertyManager").ToListAsync();
+        foreach (var mgr in managers)
+            await _notifier.SendAsync(mgr.UserId,
+                $"{appUser.FullName} completed {vm.PlanType.ToLower()} payment for unit {lease.Application.Unit.UnitNumber}. Lease is now Active.",
+                "PaymentReminder");
+
+        TempData["Success"] = vm.PlanType == "Full"
+            ? "Full payment completed! Your lease is now Active."
+            : "First installment paid! Your lease is now Active. Next installment will be available next month.";
+
+        return RedirectToAction("Index", "LeaseApplications", new { tab = "leases" });
     }
 
     // POST /Payments/RecordPayment — Manager only
@@ -252,15 +593,23 @@ public class PaymentsController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> RecordPayment(int paymentId, decimal amountPaid, string? notes)
     {
-        var payment = await _db.PaymentRecords.FindAsync(paymentId);
+        var payment = await _db.PaymentRecords
+            .Include(p => p.Lease).ThenInclude(l => l.Application).ThenInclude(a => a.User)
+            .FirstOrDefaultAsync(p => p.PaymentId == paymentId);
         if (payment == null) return NotFound();
 
         payment.AmountPaid    = amountPaid;
         payment.PaidDate      = DateTime.Now;
         payment.Notes         = notes;
-        payment.PaymentStatus = amountPaid >= payment.AmountDue ? "Paid" : "PartiallyPaid";
+        payment.PaymentStatus = "Paid";
+        payment.LateFee       = null;
 
         await _db.SaveChangesAsync();
+
+        await _notifier.SendAsync(payment.Lease.Application.UserId,
+            $"Your installment payment of BD {amountPaid:N2} for unit {payment.Lease.Application.Unit?.UnitNumber} has been recorded.",
+            "PaymentReminder");
+
         TempData["Success"] = "Payment recorded successfully.";
         return RedirectToAction("Index");
     }

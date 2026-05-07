@@ -98,6 +98,29 @@ public partial class Log
     public virtual User? User { get; set; }
 }
 
+[Table("PasswordResetCode")]
+public partial class PasswordResetCode
+{
+    [Key]
+    public int Id { get; set; }
+
+    [Required]
+    [StringLength(256)]
+    public string Email { get; set; } = null!;
+
+    [Required]
+    [StringLength(6)]
+    public string Code { get; set; } = null!;
+
+    [Column(TypeName = "datetime")]
+    public DateTime ExpiresAt { get; set; }
+
+    public bool IsUsed { get; set; } = false;
+
+    [Column(TypeName = "datetime")]
+    public DateTime CreatedAt { get; set; } = DateTime.Now;
+}
+
 [Table("Document")]
 public partial class Document
 {

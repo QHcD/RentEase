@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PropertyLeasing.API.Data;
 
@@ -11,9 +12,11 @@ using PropertyLeasing.API.Data;
 namespace PropertyLeasing.API.Migrations.PropertyLeasingDb
 {
     [DbContext(typeof(PropertyLeasingDbContext))]
-    partial class PropertyLeasingDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260507083057_AddPasswordResetCode")]
+    partial class AddPasswordResetCode
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -528,9 +531,6 @@ namespace PropertyLeasing.API.Migrations.PropertyLeasingDb
                     b.Property<DateTime>("DueDate")
                         .HasColumnType("datetime");
 
-                    b.Property<decimal?>("LateFee")
-                        .HasColumnType("decimal(10,2)");
-
                     b.Property<int>("LeaseId")
                         .HasColumnType("int")
                         .HasColumnName("LeaseID");
@@ -576,15 +576,9 @@ namespace PropertyLeasing.API.Migrations.PropertyLeasingDb
                         .HasMaxLength(250)
                         .HasColumnType("nvarchar(250)");
 
-                    b.Property<int>("GracePeriodDays")
-                        .HasColumnType("int");
-
                     b.Property<string>("ImgPath")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
-
-                    b.Property<decimal>("LateFeePercent")
-                        .HasColumnType("decimal(5,2)");
 
                     b.Property<string>("Name")
                         .IsRequired()

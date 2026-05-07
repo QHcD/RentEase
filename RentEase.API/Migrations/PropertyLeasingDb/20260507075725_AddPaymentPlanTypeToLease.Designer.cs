@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PropertyLeasing.API.Data;
 
@@ -11,9 +12,11 @@ using PropertyLeasing.API.Data;
 namespace PropertyLeasing.API.Migrations.PropertyLeasingDb
 {
     [DbContext(typeof(PropertyLeasingDbContext))]
-    partial class PropertyLeasingDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260507075725_AddPaymentPlanTypeToLease")]
+    partial class AddPaymentPlanTypeToLease
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -478,38 +481,6 @@ namespace PropertyLeasing.API.Migrations.PropertyLeasingDb
                     b.ToTable("Notification");
                 });
 
-            modelBuilder.Entity("PropertyLeasing.API.Models.PasswordResetCode", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Code")
-                        .IsRequired()
-                        .HasMaxLength(6)
-                        .HasColumnType("nvarchar(6)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime");
-
-                    b.Property<string>("Email")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("nvarchar(256)");
-
-                    b.Property<DateTime>("ExpiresAt")
-                        .HasColumnType("datetime");
-
-                    b.Property<bool>("IsUsed")
-                        .HasColumnType("bit");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("PasswordResetCode");
-                });
-
             modelBuilder.Entity("PropertyLeasing.API.Models.PaymentRecord", b =>
                 {
                     b.Property<int>("PaymentId")
@@ -527,9 +498,6 @@ namespace PropertyLeasing.API.Migrations.PropertyLeasingDb
 
                     b.Property<DateTime>("DueDate")
                         .HasColumnType("datetime");
-
-                    b.Property<decimal?>("LateFee")
-                        .HasColumnType("decimal(10,2)");
 
                     b.Property<int>("LeaseId")
                         .HasColumnType("int")
@@ -576,15 +544,9 @@ namespace PropertyLeasing.API.Migrations.PropertyLeasingDb
                         .HasMaxLength(250)
                         .HasColumnType("nvarchar(250)");
 
-                    b.Property<int>("GracePeriodDays")
-                        .HasColumnType("int");
-
                     b.Property<string>("ImgPath")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
-
-                    b.Property<decimal>("LateFeePercent")
-                        .HasColumnType("decimal(5,2)");
 
                     b.Property<string>("Name")
                         .IsRequired()

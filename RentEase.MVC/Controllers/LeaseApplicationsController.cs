@@ -142,11 +142,12 @@ public class LeaseApplicationsController : Controller
 
         var leaseCounts = new Dictionary<string, int>
         {
-            ["All"]        = allLeases.Count,
-            ["Active"]     = allLeases.Count(l => l.Status == "Active"),
-            ["Expired"]    = allLeases.Count(l => l.Status == "Expired"),
-            ["Terminated"] = allLeases.Count(l => l.Status == "Terminated"),
-            ["Renewed"]    = allLeases.Count(l => l.Status == "Renewed")
+            ["All"]            = allLeases.Count,
+            ["PendingPayment"] = allLeases.Count(l => l.Status == "PendingPayment"),
+            ["Active"]         = allLeases.Count(l => l.Status == "Active"),
+            ["Expired"]        = allLeases.Count(l => l.Status == "Expired"),
+            ["Terminated"]     = allLeases.Count(l => l.Status == "Terminated"),
+            ["Renewed"]        = allLeases.Count(l => l.Status == "Renewed")
         };
 
         var filteredLeases = leaseStatus == "All"
@@ -165,6 +166,7 @@ public class LeaseApplicationsController : Controller
             MonthlyRent     = l.MonthlyRent,
             SecurityDeposit = l.SecurityDeposit,
             Status          = l.Status,
+            PaymentPlanType = l.PaymentPlanType,
             CreatedAt       = l.CreatedAt,
             Logs            = l.LeaseLogs
                 .OrderBy(ll => ll.CreatedAt)
@@ -262,6 +264,9 @@ public class LeaseApplicationsController : Controller
         if (appUser.Role == "Tenant" && lease.Application.UserId != appUser.UserId)
             return Forbid();
 
+        var orderedPayments = lease.PaymentRecords.OrderBy(p => p.DueDate).ToList();
+        var total = orderedPayments.Count;
+
         var vm = new LeaseListViewModel
         {
             LeaseId         = lease.LeaseId,
@@ -275,6 +280,8 @@ public class LeaseApplicationsController : Controller
             SecurityDeposit = lease.SecurityDeposit,
             Status          = lease.Status,
             CreatedAt       = lease.CreatedAt,
+            GracePeriodDays = lease.Application.Unit.Property.GracePeriodDays,
+            LateFeePercent  = lease.Application.Unit.Property.LateFeePercent,
             Logs            = lease.LeaseLogs
                 .OrderBy(ll => ll.CreatedAt)
                 .Select(ll => new LeaseLogViewModel
@@ -283,7 +290,20 @@ public class LeaseApplicationsController : Controller
                     ChangedByUserName = ll.ChangedByUser.FullName,
                     Notes             = ll.Notes,
                     CreatedAt         = ll.CreatedAt
-                }).ToList()
+                }).ToList(),
+            Payments        = orderedPayments.Select((p, i) => new PaymentSummaryViewModel
+            {
+                PaymentId        = p.PaymentId,
+                InstallmentNum   = i + 1,
+                TotalInstallments = total,
+                AmountDue        = p.AmountDue,
+                AmountPaid       = p.AmountPaid,
+                LateFee          = p.LateFee,
+                DueDate          = p.DueDate,
+                PaidDate         = p.PaidDate,
+                Status           = p.PaymentStatus,
+                Notes            = p.Notes
+            }).ToList()
         };
 
         return View(vm);
@@ -470,39 +490,31 @@ public class LeaseApplicationsController : Controller
             CreatedAt       = DateTime.Now
         });
 
-        // Create lease and mark unit as Occupied
+        var startDate = application.RequestedStartDate ?? DateTime.Now;
+        var endDate   = application.RequestedEndDate   ?? DateTime.Now.AddYears(1);
+        var rent      = application.Unit.MonthlyRent ?? 0;
+
+        // Create lease as PendingPayment — activates after tenant completes payment
         var lease = new Lease
         {
             ApplicationId   = application.ApplicationId,
-            LeaseStartDate  = application.RequestedStartDate ?? DateTime.Now,
-            LeaseEndDate    = application.RequestedEndDate   ?? DateTime.Now.AddYears(1),
-            MonthlyRent     = application.Unit.MonthlyRent ?? 0,
-            SecurityDeposit = (application.Unit.MonthlyRent ?? 0) * 2,
-            Status          = "Active",
+            LeaseStartDate  = startDate,
+            LeaseEndDate    = endDate,
+            MonthlyRent     = rent,
+            SecurityDeposit = rent * 2,
+            Status          = "PendingPayment",
             CreatedAt       = DateTime.Now
         };
         _db.Leases.Add(lease);
-        application.Unit.AvailabilityStatus = "Occupied";
 
-        // Save here so the DB assigns lease.LeaseId before child records reference it.
         await _db.SaveChangesAsync();
 
-        // First payment record — lease.LeaseId is now the real identity value.
-        _db.PaymentRecords.Add(new PaymentRecord
-        {
-            LeaseId       = lease.LeaseId,
-            AmountDue     = lease.MonthlyRent,
-            DueDate       = lease.LeaseStartDate,
-            PaymentStatus = "Pending"
-        });
-
-        // Log the lease creation.
         _db.LeaseLogs.Add(new LeaseLog
         {
             LeaseId         = lease.LeaseId,
-            Status          = "Active",
+            Status          = "PendingPayment",
             ChangedByUserId = appUser.UserId,
-            Notes           = "Lease created upon application approval.",
+            Notes           = "Lease created upon approval. Awaiting tenant payment.",
             CreatedAt       = DateTime.Now
         });
 
@@ -536,8 +548,8 @@ public class LeaseApplicationsController : Controller
         await _db.SaveChangesAsync();
 
         await _notifier.SendAsync(application.UserId,
-            $"Congratulations! Your lease application for unit {application.Unit.UnitNumber} has been approved.",
-            "LeaseUpdate");
+            $"Congratulations! Your lease application for unit {application.Unit.UnitNumber} has been approved. Please complete your payment to activate your lease.",
+            "PaymentReminder");
 
         TempData["Success"] =
             $"Application approved. Lease created. {conflicting.Count} conflicting application(s) auto-rejected.";

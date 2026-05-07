@@ -1,0 +1,106 @@
+@model PropertyLeasing.MVC.ViewModels.PaymentConfirmationViewModel
+@{
+    ViewData["Title"] = "Payment Confirmed";
+    bool isFull = Model.PlanType == "Full";
+}
+
+<div class="container" style="max-width:700px;">
+
+    <!-- Success Banner -->
+    <div class="text-center py-4">
+        <div class="mb-3">
+            <i class="fa fa-check-circle fa-5x text-success"></i>
+        </div>
+        <h2 class="fw-bold text-success">Payment Successful!</h2>
+        <p class="text-muted">Your lease is now <strong>Active</strong>. Welcome to @Model.PropertyName!</p>
+    </div>
+
+    <!-- Receipt -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+            <span><i class="fa fa-receipt me-2"></i>Payment Receipt</span>
+            <span class="badge bg-light text-dark">Lease #@Model.LeaseId</span>
+        </div>
+        <div class="card-body">
+            <div class="row mb-3">
+                <div class="col-6">
+                    <div class="text-muted small">Property</div>
+                    <div class="fw-bold">@Model.PropertyName</div>
+                </div>
+                <div class="col-6">
+                    <div class="text-muted small">Unit</div>
+                    <div class="fw-bold">@Model.UnitNumber</div>
+                </div>
+            </div>
+            <div class="row mb-3">
+                <div class="col-6">
+                    <div class="text-muted small">Payment Plan</div>
+                    <div>
+                        <span class="badge @(isFull ? "bg-success" : "bg-primary") fs-6">
+                            @(isFull ? "Full Payment" : "Monthly Installments")
+                        </span>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="text-muted small">Paid At</div>
+                    <div class="fw-bold">@Model.PaidAt.ToString("dd MMM yyyy, hh:mm tt")</div>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-6">
+                    <div class="text-muted small">Amount Paid Now</div>
+                    <div class="fw-bold fs-5 text-success">BD @Model.TotalPaid.ToString("N2")</div>
+                </div>
+                <div class="col-6">
+                    <div class="text-muted small">Total Installments</div>
+                    <div class="fw-bold">@Model.TotalInstallments @(Model.TotalInstallments == 1 ? "payment" : "payments")</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Installments Schedule -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-light fw-bold">
+            <i class="fa fa-calendar-alt me-2"></i>Payment Schedule
+        </div>
+        <div class="card-body p-0">
+            <table class="table table-sm mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>#</th>
+                        <th>Due Date</th>
+                        <th>Amount</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var inst in Model.Installments)
+                    {
+                        var badge = inst.Status switch
+                        {
+                            "Paid"    => "success",
+                            "Overdue" => "danger",
+                            _         => "secondary"
+                        };
+                        <tr>
+                            <td>@inst.Number</td>
+                            <td>@inst.DueDate.ToString("dd MMM yyyy")</td>
+                            <td>BD @inst.Amount.ToString("N2")</td>
+                            <td><span class="badge bg-@badge">@inst.Status</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="d-flex gap-2 justify-content-center">
+        <a asp-controller="Payments" asp-action="Index" class="btn btn-outline-primary">
+            <i class="fa fa-history me-1"></i>View Payment History
+        </a>
+        <a asp-controller="LeaseApplications" asp-action="Index" asp-route-tab="leases" class="btn btn-success">
+            <i class="fa fa-key me-1"></i>View My Leases
+        </a>
+    </div>
+</div>

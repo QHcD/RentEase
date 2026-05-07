@@ -27,9 +27,13 @@ public partial class Lease
     [Column(TypeName = "decimal(10,2)")]
     public decimal SecurityDeposit { get; set; }
 
-    // Active / Expired / Terminated / Renewed
+    // PendingPayment / Active / Expired / Terminated / Renewed
     [StringLength(50)]
     public string Status { get; set; } = "Active";
+
+    // Full / Monthly
+    [StringLength(20)]
+    public string? PaymentPlanType { get; set; }
 
     [Column(TypeName = "datetime")]
     public DateTime CreatedAt { get; set; } = DateTime.Now;

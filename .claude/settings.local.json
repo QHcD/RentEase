@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs grep *)",
+      "Bash(dotnet build *)",
+      "Bash(taskkill /F /IM \"RentEase.MVC.exe\")",
+      "Bash(taskkill /F /IM \"dotnet.exe\")",
+      "PowerShell(Get-Process dotnet -ErrorAction SilentlyContinue)",
+      "Bash(dotnet ef *)",
+      "Bash(cd /tmp)",
+      "Bash(python3 -c ' *)"
+    ]
+  }
+}
