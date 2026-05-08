@@ -268,7 +268,7 @@
                             <small class="text-muted">
                                 @if (Model.TerminationId != null)                    { <span>Termination is scheduled.</span> }
                                 else if (Model.RenewLeaseApplicationId != null)      { <span>Renewal already submitted.</span> }
-                                else if (remaining > 183)                            { <span>Available when ≤6 months remain.</span> }
+                                else if (remaining > 183)                            { <span>Available when 6 months or less remain.</span> }
                                 else                                                 { <span>Less than 2 days remaining.</span> }
                             </small>
                         }
