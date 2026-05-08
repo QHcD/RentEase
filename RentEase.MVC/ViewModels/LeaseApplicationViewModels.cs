@@ -27,6 +27,50 @@ public class CreateLeaseApplicationViewModel
     public string MaxStartDate => DateTime.Today.AddMonths(2).ToString("yyyy-MM-dd");
 }
 
+// ── Renew Lease Application form ─────────────────────────────────────────────
+public class ApplyRenewViewModel
+{
+    public int      LeaseId          { get; set; }
+    public string   UnitNumber       { get; set; } = string.Empty;
+    public string   PropertyName     { get; set; } = string.Empty;
+    public decimal? MonthlyRent      { get; set; }
+
+    // Fixed start date: the day after the parent lease ends
+    public DateTime RequestedStartDate { get; set; }
+
+    [Required]
+    [DataType(DataType.Date)]
+    [Display(Name = "Requested End Date")]
+    public DateTime RequestedEndDate { get; set; }
+
+    [StringLength(500)]
+    public string? Notes { get; set; }
+
+    public string MaxEndDate => RequestedStartDate.AddYears(1).ToString("yyyy-MM-dd");
+    public string MinEndDate => RequestedStartDate.AddDays(1).ToString("yyyy-MM-dd");
+}
+
+// ── Terminate Active Lease form ───────────────────────────────────────────────
+public class TerminateLeaseViewModel
+{
+    public int     LeaseId      { get; set; }
+    public string  UnitNumber   { get; set; } = string.Empty;
+    public string  PropertyName { get; set; } = string.Empty;
+    public DateTime LeaseEndDate { get; set; }
+    public int?    TerminationId { get; set; }
+
+    [Required]
+    [DataType(DataType.Date)]
+    [Display(Name = "Termination Date")]
+    public DateTime TerminationDate { get; set; } = DateTime.Today.AddDays(2);
+
+    [StringLength(500)]
+    public string? Notes { get; set; }
+
+    public string MinTerminationDate => DateTime.Today.AddDays(2).ToString("yyyy-MM-dd");
+    public string MaxTerminationDate => LeaseEndDate.ToString("yyyy-MM-dd");
+}
+
 // ── Flat list item (tenant view & dashboard snippets) ─────────────────────────
 public class LeaseApplicationListViewModel
 {
@@ -39,6 +83,9 @@ public class LeaseApplicationListViewModel
     public string    Status             { get; set; } = string.Empty;
     public string?   Notes              { get; set; }
     public DateTime  CreatedAt          { get; set; }
+    public int?      ParentLeaseId      { get; set; }
+    public bool      IsRenewal          => ParentLeaseId.HasValue;
+    public bool      CanCancel          => Status != "Rejected" && Status != "Canceled";
 }
 
 // ── Manager's grouped-by-unit view ────────────────────────────────────────────
@@ -66,6 +113,9 @@ public class LeaseApplicationDetailViewModel
     public string    Status             { get; set; } = string.Empty;
     public string?   Notes              { get; set; }
     public DateTime  CreatedAt          { get; set; }
+    public int?      ParentLeaseId      { get; set; }
+    public bool      IsRenewal          => ParentLeaseId.HasValue;
+    public bool      CanCancel          => Status != "Rejected" && Status != "Canceled";
     public List<LeaseApplicationLogViewModel> Logs { get; set; } = new();
 }
 
@@ -80,22 +130,30 @@ public class LeaseApplicationLogViewModel
 // ── Lease flat list item ──────────────────────────────────────────────────────
 public class LeaseListViewModel
 {
-    public int      LeaseId           { get; set; }
-    public int      ApplicationId     { get; set; }
-    public string   UnitNumber        { get; set; } = string.Empty;
-    public string   PropertyName      { get; set; } = string.Empty;
-    public string   TenantName        { get; set; } = string.Empty;
-    public DateTime LeaseStartDate    { get; set; }
-    public DateTime LeaseEndDate      { get; set; }
-    public decimal  MonthlyRent       { get; set; }
-    public decimal  SecurityDeposit   { get; set; }
-    // Active / Expired / Terminated / Renewed
-    public string   Status            { get; set; } = string.Empty;
-    public string?  PaymentPlanType   { get; set; }
-    public DateTime CreatedAt         { get; set; }
-    public int      GracePeriodDays   { get; set; }
-    public decimal  LateFeePercent    { get; set; }
-    public List<LeaseLogViewModel> Logs { get; set; } = new();
+    public int      LeaseId                  { get; set; }
+    public int      ApplicationId            { get; set; }
+    public string   UnitNumber               { get; set; } = string.Empty;
+    public string   PropertyName             { get; set; } = string.Empty;
+    public string   TenantName               { get; set; } = string.Empty;
+    public DateTime LeaseStartDate           { get; set; }
+    public DateTime LeaseEndDate             { get; set; }
+    public decimal  MonthlyRent              { get; set; }
+    public decimal  SecurityDeposit          { get; set; }
+    // PendingPayment / Approved / Active / Terminated / Renewed
+    public string   Status                   { get; set; } = string.Empty;
+    public string?  PaymentPlanType          { get; set; }
+    public DateTime CreatedAt                { get; set; }
+    public int      GracePeriodDays          { get; set; }
+    public decimal  LateFeePercent           { get; set; }
+
+    // Renewal & termination FKs (for action-button logic in LeaseDetails view)
+    public int?     TerminationId            { get; set; }
+    public DateTime? TerminationDate         { get; set; }
+    public string?  TerminationNotes         { get; set; }
+    public int?     RenewLeaseApplicationId  { get; set; }
+    public string?  RenewApplicationStatus   { get; set; }
+
+    public List<LeaseLogViewModel> Logs      { get; set; } = new();
     public List<PaymentSummaryViewModel> Payments { get; set; } = new();
 }
 
@@ -133,6 +191,11 @@ public class ApplicationsAndLeasesViewModel
 
     // ── Applications tab ─────────────────────────────────────────────────
     public string AppStatusFilter { get; set; } = "All";
+
+    // All statuses shown as sub-tabs (including new Canceled)
+    public static readonly string[] AppStatuses   = { "All", "Pending", "Screening", "Approved", "Rejected", "Canceled" };
+    // All lease statuses (Approved replaces Expired)
+    public static readonly string[] LeaseStatuses = { "All", "PendingPayment", "Approved", "Active", "Terminated", "Renewed" };
 
     /// Tenant sees a flat list; manager sees this too (flat, sorted by unit)
     public List<LeaseApplicationListViewModel> Applications { get; set; } = new();

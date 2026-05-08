@@ -27,7 +27,7 @@ public partial class Lease
     [Column(TypeName = "decimal(10,2)")]
     public decimal SecurityDeposit { get; set; }
 
-    // PendingPayment / Active / Expired / Terminated / Renewed
+    // PendingPayment / Approved / Active / Terminated / Renewed
     [StringLength(50)]
     public string Status { get; set; } = "Active";
 
@@ -38,9 +38,23 @@ public partial class Lease
     [Column(TypeName = "datetime")]
     public DateTime CreatedAt { get; set; } = DateTime.Now;
 
+    // FK: renewal application for this lease (null for new leases, set when tenant requests renewal)
+    [Column("RenewLeaseApplicationID")]
+    public int? RenewLeaseApplicationId { get; set; }
+
+    // FK: scheduled termination row (null = no termination scheduled; mutually exclusive with RenewLeaseApplicationId)
+    [Column("TerminationID")]
+    public int? TerminationId { get; set; }
+
     [ForeignKey("ApplicationId")]
     [InverseProperty("Leases")]
     public virtual LeaseApplication Application { get; set; } = null!;
+
+    [ForeignKey("RenewLeaseApplicationId")]
+    public virtual LeaseApplication? RenewLeaseApplication { get; set; }
+
+    [ForeignKey("TerminationId")]
+    public virtual Termination? Termination { get; set; }
 
     [InverseProperty("Lease")]
     public virtual ICollection<PaymentRecord> PaymentRecords { get; set; } = new List<PaymentRecord>();

@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PropertyLeasing.API.Data;
 
@@ -11,9 +12,11 @@ using PropertyLeasing.API.Data;
 namespace PropertyLeasing.API.Migrations.PropertyLeasingDb
 {
     [DbContext(typeof(PropertyLeasingDbContext))]
-    partial class PropertyLeasingDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260508013848_AddLeaseTerminationAndRenewal")]
+    partial class AddLeaseTerminationAndRenewal
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

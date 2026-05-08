@@ -587,16 +587,20 @@ public class PaymentsController : Controller
             }
         }
 
-        lease.Status          = "Active";
+        // If start date is in the future → Approved; otherwise → Active
+        string leaseStatus = lease.LeaseStartDate > DateTime.Today ? "Approved" : "Active";
+        lease.Status          = leaseStatus;
         lease.PaymentPlanType = vm.PlanType;
         lease.Application.Unit.AvailabilityStatus = "Occupied";
 
         _db.LeaseLogs.Add(new LeaseLog
         {
             LeaseId         = lease.LeaseId,
-            Status          = "Active",
+            Status          = leaseStatus,
             ChangedByUserId = appUser.UserId,
-            Notes           = $"Lease activated after {vm.PlanType} payment.",
+            Notes           = leaseStatus == "Approved"
+                ? $"Lease approved after {vm.PlanType} payment. Will activate on {lease.LeaseStartDate:dd MMM yyyy}."
+                : $"Lease activated after {vm.PlanType} payment.",
             CreatedAt       = now
         });
 
@@ -605,12 +609,14 @@ public class PaymentsController : Controller
         var managers = await _db.Users.Where(u => u.Role == "PropertyManager").ToListAsync();
         foreach (var mgr in managers)
             await _notifier.SendAsync(mgr.UserId,
-                $"{appUser.FullName} completed {vm.PlanType.ToLower()} payment for unit {lease.Application.Unit.UnitNumber}. Lease is now Active.",
+                $"{appUser.FullName} completed {vm.PlanType.ToLower()} payment for unit {lease.Application.Unit.UnitNumber}. Lease is now {leaseStatus}.",
                 "PaymentReminder");
 
-        TempData["Success"] = vm.PlanType == "Full"
-            ? "Full payment completed! Your lease is now Active."
-            : "First installment paid! Your lease is now Active. Next installment will be available next month.";
+        TempData["Success"] = leaseStatus == "Approved"
+            ? $"Payment completed! Your lease is approved and will activate on {lease.LeaseStartDate:dd MMM yyyy}."
+            : (vm.PlanType == "Full"
+                ? "Full payment completed! Your lease is now Active."
+                : "First installment paid! Your lease is now Active. Next installment will be available next month.");
 
         return RedirectToAction("Index", "LeaseApplications", new { tab = "leases" });
     }

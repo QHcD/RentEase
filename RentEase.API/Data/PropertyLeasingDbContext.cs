@@ -26,6 +26,7 @@ public partial class PropertyLeasingDbContext : DbContext
     public virtual DbSet<LeaseApplicationLog> LeaseApplicationLogs { get; set; }
     public virtual DbSet<LeaseLog> LeaseLogs { get; set; }
     public virtual DbSet<MaintenanceStaff> MaintenanceStaffs { get; set; }
+    public virtual DbSet<Termination> Terminations { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) { }
 
@@ -51,6 +52,13 @@ public partial class PropertyLeasingDbContext : DbContext
                 .WithMany(p => p.LeaseApplications)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_LeaseApplication_User");
+
+            // Renewal: LeaseApplication.ParentLeaseId → Lease (circular, no cascade)
+            entity.HasOne(d => d.ParentLease)
+                .WithMany()
+                .HasForeignKey(d => d.ParentLeaseId)
+                .OnDelete(DeleteBehavior.NoAction)
+                .HasConstraintName("FK_LeaseApplication_ParentLease");
         });
 
         // LeaseApplication -> Lease
@@ -59,6 +67,20 @@ public partial class PropertyLeasingDbContext : DbContext
             entity.HasOne(d => d.Application)
                 .WithMany(p => p.Leases)
                 .HasConstraintName("FK_Lease_LeaseApplication");
+
+            // Renewal: Lease.RenewLeaseApplicationId → LeaseApplication (circular, no cascade)
+            entity.HasOne(d => d.RenewLeaseApplication)
+                .WithMany()
+                .HasForeignKey(d => d.RenewLeaseApplicationId)
+                .OnDelete(DeleteBehavior.NoAction)
+                .HasConstraintName("FK_Lease_RenewLeaseApplication");
+
+            // Termination: Lease.TerminationId → Termination
+            entity.HasOne(d => d.Termination)
+                .WithOne()
+                .HasForeignKey<Lease>(d => d.TerminationId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("FK_Lease_Termination");
         });
 
         // Lease -> PaymentRecords

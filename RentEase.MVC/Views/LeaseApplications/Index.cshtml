@@ -2,44 +2,78 @@
 @{
     ViewData["Title"] = Model.IsManager ? "Applications & Leases" : "My Applications & Leases";
 
-    string[] appStatuses   = { "All", "Pending", "Screening", "Approved", "Rejected" };
-    string[] leaseStatuses = { "All", "PendingPayment", "Active", "Expired", "Terminated", "Renewed" };
-
     string AppBadge(string s) => s switch
     {
         "Approved"  => "success",
         "Rejected"  => "danger",
         "Screening" => "info",
         "Pending"   => "warning",
+        "Canceled"  => "secondary",
         _           => "secondary"
     };
     string LeaseBadge(string s) => s switch
     {
         "Active"         => "success",
         "Renewed"        => "primary",
-        "Expired"        => "secondary",
+        "Approved"       => "info",
         "Terminated"     => "danger",
         "PendingPayment" => "warning",
         _                => "secondary"
     };
 
-    string AppUrl(string status) =>
-        $"?tab=applications&appStatus={status}&leaseStatus={Model.LeaseStatusFilter}";
-    string LeaseUrl(string status) =>
-        $"?tab=leases&appStatus={Model.AppStatusFilter}&leaseStatus={status}";
+    string AppUrl(string status)   => $"?tab=applications&appStatus={status}&leaseStatus={Model.LeaseStatusFilter}";
+    string LeaseUrl(string status) => $"?tab=leases&appStatus={Model.AppStatusFilter}&leaseStatus={status}";
 
-    // Row counts for the active filter
-    int appRowCount = Model.IsManager
+    int appRowCount   = Model.IsManager
         ? Model.ApplicationGroups.Sum(g => g.ApplicationCount)
         : Model.Applications.Count;
     int leaseRowCount = Model.Leases.Count;
 }
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h2>
-        <i class="fa fa-file-contract me-2"></i>@ViewData["Title"]
-    </h2>
+<!-- Cancel Application Modal (shared) -->
+<div class="modal fade" id="cancelAppModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-secondary text-white">
+                <h5 class="modal-title"><i class="fa fa-times-circle me-2"></i>Cancel Application</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                Are you sure you want to cancel this application? This action cannot be undone.
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Keep It</button>
+                <form id="cancelAppForm" method="post" asp-action="CancelApplication">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" id="cancelAppId" name="applicationId" value="" />
+                    <input type="hidden" name="returnTo" value="Index" />
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fa fa-times me-1"></i>Cancel Application
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
 </div>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2><i class="fa fa-file-contract me-2"></i>@ViewData["Title"]</h2>
+</div>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show">
+        @TempData["Success"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show">
+        @TempData["Error"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
 
 <!-- ══ MAIN TABS ═══════════════════════════════════════════════════════════ -->
 <ul class="nav nav-tabs" id="mainTabs">
@@ -66,9 +100,8 @@
     <!-- ══ APPLICATIONS PANEL ══════════════════════════════════════════════ -->
     <div class="@(Model.ActiveTab == "applications" ? "" : "d-none")">
 
-        <!-- Status sub-tabs (no counts — clean labels only) -->
         <ul class="nav nav-pills mb-3 flex-wrap gap-1">
-            @foreach (var s in appStatuses)
+            @foreach (var s in ApplicationsAndLeasesViewModel.AppStatuses)
             {
                 bool isActive = Model.AppStatusFilter == s;
                 <li class="nav-item">
@@ -87,7 +120,6 @@
         }
         else
         {
-            <!-- Row count summary -->
             <p class="text-muted small mb-2">
                 Showing <strong>@appRowCount</strong>
                 @(Model.AppStatusFilter == "All" ? "" : Model.AppStatusFilter.ToLower() + " ")
@@ -96,7 +128,6 @@
 
             @if (Model.IsManager)
             {
-                <!-- Manager: grouped by unit -->
                 @foreach (var group in Model.ApplicationGroups)
                 {
                     string unitBadge = group.AvailabilityStatus == "Available" ? "success" : "secondary";
@@ -128,12 +159,13 @@
                                     {
                                         <tr>
                                             <td class="ps-3 text-muted small">@a.ApplicationId</td>
-                                            <td>@a.TenantName</td>
+                                            <td>
+                                                @a.TenantName
+                                                @if (a.IsRenewal) { <span class="badge bg-info ms-1">Renewal</span> }
+                                            </td>
                                             <td>@(a.RequestedStartDate?.ToString("dd MMM yyyy") ?? "-")</td>
                                             <td>@(a.RequestedEndDate?.ToString("dd MMM yyyy") ?? "-")</td>
-                                            <td>
-                                                <span class="badge bg-@AppBadge(a.Status)">@a.Status</span>
-                                            </td>
+                                            <td><span class="badge bg-@AppBadge(a.Status)">@a.Status</span></td>
                                             <td class="text-muted small">@a.CreatedAt.ToString("dd MMM yyyy")</td>
                                             <td>
                                                 <a asp-action="Details" asp-route-id="@a.ApplicationId"
@@ -171,19 +203,28 @@
                             {
                                 <tr>
                                     <td class="text-muted small">@a.ApplicationId</td>
-                                    <td>@a.UnitNumber</td>
+                                    <td>
+                                        @a.UnitNumber
+                                        @if (a.IsRenewal) { <span class="badge bg-info ms-1">Renewal</span> }
+                                    </td>
                                     <td>@a.PropertyName</td>
                                     <td>@(a.RequestedStartDate?.ToString("dd MMM yyyy") ?? "-")</td>
                                     <td>@(a.RequestedEndDate?.ToString("dd MMM yyyy") ?? "-")</td>
-                                    <td>
-                                        <span class="badge bg-@AppBadge(a.Status)">@a.Status</span>
-                                    </td>
+                                    <td><span class="badge bg-@AppBadge(a.Status)">@a.Status</span></td>
                                     <td class="text-muted small">@a.CreatedAt.ToString("dd MMM yyyy")</td>
-                                    <td>
+                                    <td class="d-flex gap-1">
                                         <a asp-action="Details" asp-route-id="@a.ApplicationId"
                                            class="btn btn-outline-primary btn-sm">
                                             <i class="fa fa-eye me-1"></i>View
                                         </a>
+                                        @if (a.CanCancel)
+                                        {
+                                            <button type="button" class="btn btn-outline-secondary btn-sm"
+                                                    onclick="showCancelApp(@a.ApplicationId)"
+                                                    title="Cancel this application"> 
+                                                <i class="fa fa-times"></i> 
+                                            </button>
+                                        }
                                     </td>
                                 </tr>
                             }
@@ -197,9 +238,8 @@
     <!-- ══ LEASES PANEL ════════════════════════════════════════════════════ -->
     <div class="@(Model.ActiveTab == "leases" ? "" : "d-none")">
 
-        <!-- Status sub-tabs (no counts) -->
         <ul class="nav nav-pills mb-3 flex-wrap gap-1">
-            @foreach (var s in leaseStatuses)
+            @foreach (var s in ApplicationsAndLeasesViewModel.LeaseStatuses)
             {
                 bool isActive = Model.LeaseStatusFilter == s;
                 <li class="nav-item">
@@ -218,7 +258,6 @@
         }
         else
         {
-            <!-- Row count summary -->
             <p class="text-muted small mb-2">
                 Showing <strong>@leaseRowCount</strong>
                 @(Model.LeaseStatusFilter == "All" ? "" : Model.LeaseStatusFilter.ToLower() + " ")
@@ -253,16 +292,20 @@
                                 <td>@l.LeaseStartDate.ToString("dd MMM yyyy")</td>
                                 <td>
                                     @l.LeaseEndDate.ToString("dd MMM yyyy")
-                                    @if (isOverdue)
+                                    @if (l.TerminationDate.HasValue)
                                     {
-                                        <span class="badge bg-warning text-dark ms-1">Overdue</span>
+                                        <br /><small class="text-danger"><i class="fa fa-scissors me-1"></i>Terminates: @l.TerminationDate.Value.ToString("dd MMM yyyy")</small>
                                     }
                                 </td>
                                 <td>BD @l.MonthlyRent.ToString("N0")</td>
                                 <td>
                                     <span class="badge bg-@LeaseBadge(l.Status)">@l.Status</span>
+                                    @if (l.RenewLeaseApplicationId.HasValue)
+                                    {
+                                        <br /><small class="text-info"><i class="fa fa-sync me-1"></i>Renewal: @(l.RenewApplicationStatus ?? "...")</small>
+                                    }
                                 </td>
-                                <td class="d-flex gap-1">
+                                <td class="d-flex gap-1 flex-wrap">
                                     <a asp-action="LeaseDetails" asp-route-id="@l.LeaseId"
                                        class="btn btn-outline-primary btn-sm">
                                         <i class="fa fa-eye me-1"></i>View
@@ -285,3 +328,13 @@
     </div>
 
 </div>
+
+@section Scripts {
+    <script>
+        function showCancelApp(applicationId) {
+            document.getElementById('cancelAppId').value = applicationId;
+            var modal = new bootstrap.Modal(document.getElementById('cancelAppModal'));
+            modal.show();
+        }
+    </script>
+}

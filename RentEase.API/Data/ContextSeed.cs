@@ -543,9 +543,9 @@ public static class ContextSeed
         var lease3  = Lease(app3.ApplicationId,  juffairUnits[4].UnitId,  app3.RequestedStartDate!.Value,  app3.RequestedEndDate!.Value,  290m,  "Active");
         var lease4  = Lease(app4.ApplicationId,  adliyaUnits[1].UnitId,   app4.RequestedStartDate!.Value,  app4.RequestedEndDate!.Value,  230m,  "Active");
         var lease5  = Lease(app5.ApplicationId,  amwajUnits[4].UnitId,    app5.RequestedStartDate!.Value,  app5.RequestedEndDate!.Value,  380m,  "Active");
-        // Expired leases (apps 6, 11)
-        var lease6  = Lease(app6.ApplicationId,  riffaUnits[6].UnitId,    app6.RequestedStartDate!.Value,  app6.RequestedEndDate!.Value,  360m,  "Expired");
-        var lease7  = Lease(app11.ApplicationId, muharraqUnits[0].UnitId, app11.RequestedStartDate!.Value, app11.RequestedEndDate!.Value, 280m,  "Expired");
+        // Terminated leases (previously Expired - apps 6, 11)
+        var lease6  = Lease(app6.ApplicationId,  riffaUnits[6].UnitId,    app6.RequestedStartDate!.Value,  app6.RequestedEndDate!.Value,  360m,  "Terminated");
+        var lease7  = Lease(app11.ApplicationId, muharraqUnits[0].UnitId, app11.RequestedStartDate!.Value, app11.RequestedEndDate!.Value, 280m,  "Terminated");
         // Terminated lease (app7)
         var lease8  = Lease(app7.ApplicationId,  juffairUnits[8].UnitId,  app7.RequestedStartDate!.Value,  app7.RequestedEndDate!.Value,  460m,  "Terminated");
         // Renewed lease (app8)
@@ -567,9 +567,9 @@ public static class ContextSeed
         LeaseLog(lease4.LeaseId,  "Active",     "Lease created upon approval.", lease4.CreatedAt);
         LeaseLog(lease5.LeaseId,  "Active",     "Lease created upon approval.", lease5.CreatedAt);
         LeaseLog(lease6.LeaseId,  "Active",     "Lease created upon approval.", lease6.CreatedAt);
-        LeaseLog(lease6.LeaseId,  "Expired",    "Lease term ended.",            lease6.LeaseEndDate);
+        LeaseLog(lease6.LeaseId,  "Terminated", "Lease term ended.",            lease6.LeaseEndDate);
         LeaseLog(lease7.LeaseId,  "Active",     "Lease created upon approval.", lease7.CreatedAt);
-        LeaseLog(lease7.LeaseId,  "Expired",    "Lease term ended.",            lease7.LeaseEndDate);
+        LeaseLog(lease7.LeaseId,  "Terminated", "Lease term ended.",            lease7.LeaseEndDate);
         LeaseLog(lease8.LeaseId,  "Active",     "Lease created upon approval.", lease8.CreatedAt);
         LeaseLog(lease8.LeaseId,  "Terminated", "Tenant requested early exit.", lease8.CreatedAt.AddMonths(8));
         LeaseLog(lease9.LeaseId,  "Active",     "Lease created upon approval.", lease9.CreatedAt);

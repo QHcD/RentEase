@@ -3,13 +3,28 @@
     ViewData["Title"] = $"Lease #{Model.LeaseId}";
     var badgeColor = Model.Status switch
     {
-        "Active"     => "success",
-        "Renewed"    => "primary",
-        "Expired"    => "secondary",
-        "Terminated" => "danger",
-        _            => "secondary"
+        "Active"         => "success",
+        "Approved"       => "info",
+        "Renewed"        => "primary",
+        "Terminated"     => "danger",
+        "PendingPayment" => "warning",
+        _                => "secondary"
     };
-    bool isLeaseOverdue = Model.LeaseEndDate < DateTime.Today && Model.Status == "Active";
+
+    var today        = DateTime.Today;
+    var remaining    = (Model.LeaseEndDate - today).Days;
+    bool canRenew    = Model.Status == "Active"
+                       && Model.RenewLeaseApplicationId == null
+                       && Model.TerminationId == null
+                       && remaining >= 2 && remaining <= 183;
+    bool renewBlocked = Model.Status == "Active"
+                        && (Model.RenewLeaseApplicationId != null || Model.TerminationId != null
+                            || remaining < 2 || remaining > 183);
+
+    bool canTerminateActive  = Model.Status == "Active" && Model.RenewLeaseApplicationId == null;
+    bool termBlocked         = Model.Status == "Active" && Model.RenewLeaseApplicationId != null;
+
+    bool isLeaseOverdue = Model.LeaseEndDate < today && Model.Status == "Active";
 
     string PayBadge(string s) => s switch
     {
@@ -20,6 +35,59 @@
         _          => "secondary"
     };
 }
+
+<!-- Terminate Now Modal (Approved lease) -->
+<div class="modal fade" id="terminateNowModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="fa fa-exclamation-triangle me-2"></i>Terminate Lease</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to <strong>terminate this lease immediately</strong>?</p>
+                <p class="text-muted">This lease has not started yet (start date: <strong>@Model.LeaseStartDate.ToString("dd MMM yyyy")</strong>).
+                The unit will be released back to available and this action cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Keep Lease</button>
+                <form asp-action="TerminateNow" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="leaseId" value="@Model.LeaseId" />
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fa fa-times me-1"></i>Terminate Now
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Cancel Termination Modal -->
+<div class="modal fade" id="cancelTermModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-secondary text-white">
+                <h5 class="modal-title"><i class="fa fa-undo me-2"></i>Cancel Scheduled Termination</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                Cancel the scheduled termination on <strong>@(Model.TerminationDate?.ToString("dd MMM yyyy") ?? "-")</strong>?
+                Your lease will continue until its original end date of <strong>@Model.LeaseEndDate.ToString("dd MMM yyyy")</strong>.
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Keep Termination</button>
+                <form asp-action="CancelTermination" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="leaseId" value="@Model.LeaseId" />
+                    <button type="submit" class="btn btn-warning">
+                        <i class="fa fa-undo me-1"></i>Cancel Termination
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h2><i class="fa fa-key me-2"></i>Lease #@Model.LeaseId</h2>
@@ -53,12 +121,12 @@
 
 <div class="row g-4">
 
-    <!-- Lease Info -->
+    <!-- Lease Info card — always col-md-7 (Status History fills col-md-5) -->
     <div class="col-md-7">
-        <div class="card shadow-sm h-100">
-            <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+        <div class="card shadow-sm">
+            <div class="card-header bg-@badgeColor text-white d-flex justify-content-between align-items-center">
                 <span><i class="fa fa-file-contract me-2"></i>Lease Details</span>
-                <span class="badge bg-light text-dark fs-6">@Model.Status</span>
+                <span class="badge bg-white text-dark fs-6">@Model.Status</span>
             </div>
             <div class="card-body">
                 <dl class="row mb-0">
@@ -80,6 +148,20 @@
                         }
                     </dd>
 
+                    @if (Model.TerminationDate.HasValue)
+                    {
+                        <dt class="col-sm-4 text-danger">Termination Date</dt>
+                        <dd class="col-sm-8">
+                            <span class="text-danger fw-semibold">
+                                <i class="fa fa-scissors me-1"></i>@Model.TerminationDate.Value.ToString("dd MMM yyyy")
+                            </span>
+                            @if (!string.IsNullOrWhiteSpace(Model.TerminationNotes))
+                            {
+                                <br /><small class="text-muted fst-italic">@Model.TerminationNotes</small>
+                            }
+                        </dd>
+                    }
+
                     <dt class="col-sm-4">Monthly Rent</dt>
                     <dd class="col-sm-8">
                         <strong class="text-success fs-5">BD @Model.MonthlyRent.ToString("N2")</strong>
@@ -93,19 +175,168 @@
                         <span class="badge bg-@badgeColor fs-6">@Model.Status</span>
                     </dd>
 
+                    @if (Model.RenewLeaseApplicationId.HasValue)
+                    {
+                        <dt class="col-sm-4">Renewal App.</dt>
+                        <dd class="col-sm-8">
+                            <a asp-action="Details" asp-route-id="@Model.RenewLeaseApplicationId" class="text-info">
+                                <i class="fa fa-sync me-1"></i>Application #@Model.RenewLeaseApplicationId
+                            </a>
+                            <span class="badge bg-secondary ms-1">@(Model.RenewApplicationStatus ?? "Pending")</span>
+                        </dd>
+                    }
+
                     <dt class="col-sm-4">Created</dt>
                     <dd class="col-sm-8">@Model.CreatedAt.ToString("dd MMM yyyy, HH:mm")</dd>
                 </dl>
             </div>
+
+            @* Tenant-only action buttons in the card footer *@
+            @if (!User.IsInRole("PropertyManager"))
+            {
+                <div class="card-footer bg-light d-flex flex-wrap gap-2 align-items-center">
+
+                    @if (Model.Status == "PendingPayment")
+                    {
+                        <a asp-controller="Payments" asp-action="SelectPlan"
+                           asp-route-leaseId="@Model.LeaseId"
+                           class="btn btn-warning btn-sm">
+                            <i class="fa fa-credit-card me-2"></i>Pay Now
+                        </a>
+                    }
+
+                    @if (Model.Status == "Approved")
+                    {
+                        <span class="text-muted small me-2">
+                            Activates on <strong>@Model.LeaseStartDate.ToString("dd MMM yyyy")</strong>
+                        </span>
+                        <button type="button" class="btn btn-danger btn-sm"
+                                data-bs-toggle="modal" data-bs-target="#terminateNowModal">
+                            <i class="fa fa-times-circle me-2"></i>Terminate Lease Now
+                        </button>
+                    }
+
+                    @if (Model.Status == "Active")
+                    {
+                        @if (canTerminateActive)
+                        {
+                            @if (Model.TerminationId.HasValue)
+                            {
+                                <a asp-action="TerminateLease" asp-route-leaseId="@Model.LeaseId"
+                                   class="btn btn-outline-danger btn-sm">
+                                    <i class="fa fa-scissors me-2"></i>Edit Termination
+                                    <small class="d-inline ms-1 text-muted">(@Model.TerminationDate?.ToString("dd MMM yyyy"))</small>
+                                </a>
+                                <button type="button" class="btn btn-outline-secondary btn-sm"
+                                        data-bs-toggle="modal" data-bs-target="#cancelTermModal">
+                                    <i class="fa fa-undo me-1"></i>Cancel Termination
+                                </button>
+                            }
+                            else
+                            {
+                                <a asp-action="TerminateLease" asp-route-leaseId="@Model.LeaseId"
+                                   class="btn btn-outline-danger btn-sm">
+                                    <i class="fa fa-scissors me-2"></i>Terminate Lease
+                                </a>
+                            }
+                        }
+                        else if (termBlocked)
+                        {
+                            <button class="btn btn-outline-danger btn-sm" disabled
+                                    title="Cannot terminate while a renewal application is active">
+                                <i class="fa fa-scissors me-2"></i>Terminate Lease
+                            </button>
+                        }
+
+                        @if (canRenew)
+                        {
+                            <a asp-action="ApplyRenew" asp-route-leaseId="@Model.LeaseId"
+                               class="btn btn-info btn-sm">
+                                <i class="fa fa-sync me-2"></i>Apply Renew
+                                <small class="d-inline ms-1">(@remaining days left)</small>
+                            </a>
+                        }
+                        else if (renewBlocked)
+                        {
+                            <button class="btn btn-info btn-sm" disabled
+                                    title="@(Model.TerminationId != null ? "Termination is scheduled." :
+                                             Model.RenewLeaseApplicationId != null ? "Renewal already applied." :
+                                             remaining > 183 ? $"Available when ≤6 months remain ({remaining} days left)." :
+                                             "Less than 2 days remaining on lease.")">
+                                <i class="fa fa-sync me-2"></i>Apply Renew
+                            </button>
+                            <small class="text-muted">
+                                @if (Model.TerminationId != null)                    { <span>Termination is scheduled.</span> }
+                                else if (Model.RenewLeaseApplicationId != null)      { <span>Renewal already submitted.</span> }
+                                else if (remaining > 183)                            { <span>Available when ≤6 months remain.</span> }
+                                else                                                 { <span>Less than 2 days remaining.</span> }
+                            </small>
+                        }
+                    }
+
+                    @if (Model.Status == "Terminated" || Model.Status == "Renewed")
+                    {
+                        <span class="text-muted small">
+                            <i class="fa fa-info-circle me-1"></i>
+                            This lease is <strong>@Model.Status</strong>. No further actions available.
+                        </span>
+                    }
+                </div>
+            }
         </div>
     </div>
 
-    <!-- Tenant Info (manager only) -->
+    <!-- Status History — col-md-5 beside Lease Details -->
+    <div class="col-md-5">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-light">
+                <i class="fa fa-history me-2"></i>Status History
+            </div>
+            @if (Model.Logs.Any())
+            {
+                <div class="card-body p-0">
+                    <ul class="list-group list-group-flush">
+                        @foreach (var log in Model.Logs)
+                        {
+                            var logBadge = log.Status switch
+                            {
+                                "Active"         => "success",
+                                "Approved"       => "info",
+                                "Renewed"        => "primary",
+                                "Terminated"     => "danger",
+                                "PendingPayment" => "warning",
+                                _                => "secondary"
+                            };
+                            <li class="list-group-item d-flex justify-content-between align-items-start">
+                                <div>
+                                    <span class="badge bg-@logBadge me-2">@log.Status</span>
+                                    <small class="text-muted">by @log.ChangedByUserName</small>
+                                    @if (!string.IsNullOrWhiteSpace(log.Notes))
+                                    {
+                                        <p class="mb-0 mt-1 small text-muted fst-italic">@log.Notes</p>
+                                    }
+                                </div>
+                                <small class="text-muted text-nowrap ms-3">
+                                    @log.CreatedAt.ToString("dd MMM yyyy, HH:mm")
+                                </small>
+                            </li>
+                        }
+                    </ul>
+                </div>
+            }
+            else
+            {
+                <div class="card-body text-muted">No status history recorded.</div>
+            }
+        </div>
+    </div>
+
+    <!-- Manager-only: Tenant Info (own row below the two-column block) -->
     @if (User.IsInRole("PropertyManager"))
     {
         <div class="col-md-5">
-            <div class="card shadow-sm h-100">
-                <div class="card-header bg-secondary text-white">
+            <div class="card shadow-sm">
+                <div class="card-header bg-dark text-white">
                     <i class="fa fa-user me-2"></i>Tenant
                 </div>
                 <div class="card-body d-flex align-items-center">
@@ -181,46 +412,36 @@
                                         {
                                             <span class="text-danger fw-semibold">BD @p.LateFee.Value.ToString("N2")</span>
                                         }
-                                        else
-                                        {
-                                            <span class="text-muted">—</span>
-                                        }
+                                        else { <span class="text-muted">—</span> }
                                     </td>
                                     <td class="fw-semibold">BD @total.ToString("N2")</td>
                                     <td>
-                                        @if (p.AmountPaid.HasValue)
-                                        {
-                                            <span>BD @p.AmountPaid.Value.ToString("N2")</span>
-                                        }
+                                        @if (p.AmountPaid.HasValue) { <span>BD @p.AmountPaid.Value.ToString("N2")</span> }
                                         else { <span class="text-muted">—</span> }
                                     </td>
-                                    <td class="text-muted small">
-                                        @(p.PaidDate?.ToString("dd MMM yyyy") ?? "—")
-                                    </td>
-                                    <td>
-                                        <span class="badge bg-@PayBadge(p.Status)">@p.Status</span>
-                                    </td>
+                                    <td class="text-muted small">@(p.PaidDate?.ToString("dd MMM yyyy") ?? "—")</td>
+                                    <td><span class="badge bg-@PayBadge(p.Status)">@p.Status</span></td>
                                     <td class="text-muted small">@(p.Notes ?? "—")</td>
                                     <td>
-                                    @if (!User.IsInRole("PropertyManager"))
-                                    {
-                                        @if (p.Status == "Paid")
+                                        @if (!User.IsInRole("PropertyManager"))
                                         {
-                                            <span class="text-success small"><i class="fa fa-check-circle me-1"></i>Paid</span>
+                                            @if (p.Status == "Paid")
+                                            {
+                                                <span class="text-success small"><i class="fa fa-check-circle me-1"></i>Paid</span>
+                                            }
+                                            else if (p.Status == "Upcoming")
+                                            {
+                                                <span class="text-muted small"><i class="fa fa-clock me-1"></i>@p.DueDate.ToString("dd MMM yyyy")</span>
+                                            }
+                                            else if (p.Status == "Unpaid" || p.Status == "Overdue")
+                                            {
+                                                <a asp-controller="Payments" asp-action="Pay"
+                                                   asp-route-paymentId="@p.PaymentId"
+                                                   class="btn btn-sm @(p.Status == "Overdue" ? "btn-danger" : "btn-warning")">
+                                                    <i class="fa fa-credit-card me-1"></i>Pay
+                                                </a>
+                                            }
                                         }
-                                        else if (p.Status == "Upcoming")
-                                        {
-                                            <span class="text-muted small"><i class="fa fa-clock me-1"></i>@p.DueDate.ToString("dd MMM yyyy")</span>
-                                        }
-                                        else if (p.Status == "Unpaid" || p.Status == "Overdue")
-                                        {
-                                            <a asp-controller="Payments" asp-action="Pay"
-                                               asp-route-paymentId="@p.PaymentId"
-                                               class="btn btn-sm @(p.Status == "Overdue" ? "btn-danger" : "btn-warning")">
-                                                <i class="fa fa-credit-card me-1"></i>Pay
-                                            </a>
-                                        }
-                                    }
                                     </td>
                                 </tr>
                             }
@@ -231,48 +452,5 @@
         </div>
     </div>
 
-    <!-- Status History -->
-    <div class="col-12">
-        <div class="card shadow-sm">
-            <div class="card-header bg-light">
-                <i class="fa fa-history me-2"></i>Status History
-            </div>
-            @if (Model.Logs.Any())
-            {
-                <div class="card-body p-0">
-                    <ul class="list-group list-group-flush">
-                        @foreach (var log in Model.Logs)
-                        {
-                            var logBadge = log.Status switch
-                            {
-                                "Active"     => "success",
-                                "Renewed"    => "primary",
-                                "Expired"    => "secondary",
-                                "Terminated" => "danger",
-                                _            => "secondary"
-                            };
-                            <li class="list-group-item d-flex justify-content-between align-items-start">
-                                <div>
-                                    <span class="badge bg-@logBadge me-2">@log.Status</span>
-                                    <small class="text-muted">by @log.ChangedByUserName</small>
-                                    @if (!string.IsNullOrWhiteSpace(log.Notes))
-                                    {
-                                        <p class="mb-0 mt-1 small text-muted fst-italic">@log.Notes</p>
-                                    }
-                                </div>
-                                <small class="text-muted text-nowrap ms-3">
-                                    @log.CreatedAt.ToString("dd MMM yyyy, HH:mm")
-                                </small>
-                            </li>
-                        }
-                    </ul>
-                </div>
-            }
-            else
-            {
-                <div class="card-body text-muted">No status history recorded.</div>
-            }
-        </div>
-    </div>
 
 </div>

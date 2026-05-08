@@ -6,13 +6,107 @@
         "Approved"  => "success",
         "Rejected"  => "danger",
         "Screening" => "info",
+        "Canceled"  => "secondary",
         _           => "warning"
     };
+    // For warning background use dark text, everything else white
+    string headerText = badgeColor == "warning" ? "text-dark" : "text-white";
 }
 
+<!-- Approve Confirm Modal -->
+<div class="modal fade" id="approveModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="fa fa-check-circle me-2"></i>Approve Application</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                Approve this application? The tenant will be required to pay, then the unit will be marked
+                as <strong>Occupied</strong> and conflicting applications will be auto-rejected.
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form asp-action="Approve" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="applicationId" value="@Model.ApplicationId" />
+                    <button type="submit" class="btn btn-success">
+                        <i class="fa fa-check me-1"></i>Approve
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Reject Confirm Modal -->
+<div class="modal fade" id="rejectModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="fa fa-times-circle me-2"></i>Reject Application</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                Are you sure you want to reject this application? The tenant will be notified.
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Go Back</button>
+                <form asp-action="Reject" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="applicationId" value="@Model.ApplicationId" />
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fa fa-times me-1"></i>Reject
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Cancel Application Modal (Tenant) -->
+<div class="modal fade" id="cancelModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-secondary text-white">
+                <h5 class="modal-title"><i class="fa fa-ban me-2"></i>Cancel Application</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                Are you sure you want to cancel this application? This action cannot be undone.
+                @if (Model.Status == "Approved")
+                {
+                    <div class="alert alert-warning mt-2 mb-0">
+                        <i class="fa fa-exclamation-triangle me-1"></i>
+                        This application is <strong>Approved</strong>. Canceling it will also terminate the
+                        associated pending lease.
+                    </div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Keep It</button>
+                <form asp-action="CancelApplication" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="applicationId" value="@Model.ApplicationId" />
+                    <input type="hidden" name="returnTo" value="Details" />
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fa fa-ban me-1"></i>Cancel Application
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h2><i class="fa fa-file-alt me-2"></i>Application #@Model.ApplicationId</h2>
-    <a asp-action="Index" class="btn btn-outline-secondary btn-sm">
+    <h2>
+        <i class="fa fa-file-alt me-2"></i>Application #@Model.ApplicationId
+        @if (Model.IsRenewal)
+        {
+            <span class="badge bg-info fs-6 ms-2">Renewal</span>
+        }
+    </h2>
+    <a asp-action="Index" class="btn btn-outline-dark btn-sm">
         <i class="fa fa-arrow-left me-1"></i>Back to List
     </a>
 </div>
@@ -37,9 +131,9 @@
     <!-- Application Info -->
     <div class="col-md-7">
         <div class="card shadow-sm h-100">
-            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <div class="card-header bg-@badgeColor @headerText d-flex justify-content-between align-items-center">
                 <span><i class="fa fa-info-circle me-2"></i>Application Details</span>
-                <span class="badge bg-light text-dark fs-6">@Model.Status</span>
+                <span class="badge bg-white text-dark fs-6">@Model.Status</span>
             </div>
             <div class="card-body">
                 <dl class="row mb-0">
@@ -55,6 +149,19 @@
                     <dt class="col-sm-4">Requested End</dt>
                     <dd class="col-sm-8">@(Model.RequestedEndDate?.ToString("dd MMM yyyy") ?? "-")</dd>
 
+                    <dt class="col-sm-4">Type</dt>
+                    <dd class="col-sm-8">
+                        @if (Model.IsRenewal)
+                        {
+                            <span class="badge bg-info">Renewal Application</span>
+                            <small class="text-muted ms-1">(linked to Lease #@Model.ParentLeaseId)</small>
+                        }
+                        else
+                        {
+                            <span class="text-muted">New Application</span>
+                        }
+                    </dd>
+
                     <dt class="col-sm-4">Status</dt>
                     <dd class="col-sm-8"><span class="badge bg-@badgeColor fs-6">@Model.Status</span></dd>
 
@@ -68,13 +175,22 @@
                     }
                 </dl>
             </div>
+            @if (!User.IsInRole("PropertyManager") && Model.CanCancel)
+            {
+                <div class="card-footer bg-light d-flex flex-wrap gap-2 align-items-center">
+                    <button type="button" class="btn btn-outline-danger btn-sm"
+                            data-bs-toggle="modal" data-bs-target="#cancelModal">
+                        <i class="fa fa-ban me-1"></i>Cancel Application
+                    </button>
+                </div>
+            }
         </div>
     </div>
 
     <!-- Tenant Info -->
     <div class="col-md-5">
         <div class="card shadow-sm h-100">
-            <div class="card-header bg-secondary text-white">
+            <div class="card-header bg-dark text-white">
                 <i class="fa fa-user me-2"></i>Tenant Information
             </div>
             <div class="card-body">
@@ -116,22 +232,14 @@
                     {
                         <p class="text-muted mb-3">Screening is in progress. Approve or reject this application.</p>
                         <div class="d-flex gap-2">
-                            <form asp-action="Approve" method="post">
-                                @Html.AntiForgeryToken()
-                                <input type="hidden" name="applicationId" value="@Model.ApplicationId" />
-                                <button type="submit" class="btn btn-success"
-                                        onclick="return confirm('Approve this application? The unit will be marked as Occupied and conflicting applications will be auto-rejected.')">
-                                    <i class="fa fa-check me-1"></i>Approve
-                                </button>
-                            </form>
-                            <form asp-action="Reject" method="post">
-                                @Html.AntiForgeryToken()
-                                <input type="hidden" name="applicationId" value="@Model.ApplicationId" />
-                                <button type="submit" class="btn btn-danger"
-                                        onclick="return confirm('Reject this application?')">
-                                    <i class="fa fa-times me-1"></i>Reject
-                                </button>
-                            </form>
+                            <button type="button" class="btn btn-success"
+                                    data-bs-toggle="modal" data-bs-target="#approveModal">
+                                <i class="fa fa-check me-1"></i>Approve
+                            </button>
+                            <button type="button" class="btn btn-danger"
+                                    data-bs-toggle="modal" data-bs-target="#rejectModal">
+                                <i class="fa fa-times me-1"></i>Reject
+                            </button>
                         </div>
                     }
                     else
@@ -162,6 +270,7 @@
                                 "Approved"  => "success",
                                 "Rejected"  => "danger",
                                 "Screening" => "info",
+                                "Canceled"  => "secondary",
                                 _           => "warning"
                             };
                             <li class="list-group-item d-flex justify-content-between align-items-center">

@@ -31,8 +31,6 @@ public class LeaseApplicationsController : Controller
         var identity = await _userManager.GetUserAsync(User);
         if (identity == null) return null;
 
-        // Primary lookup by IdentityUserId; fall back to email for rows that were
-        // seeded via SQL scripts and may have a null IdentityUserId.
         var appUser = await _db.Users.FirstOrDefaultAsync(u => u.IdentityUserId == identity.Id)
                    ?? await _db.Users.FirstOrDefaultAsync(u => u.Email == identity.Email);
 
@@ -45,15 +43,130 @@ public class LeaseApplicationsController : Controller
         return appUser;
     }
 
+    // ── Auto-transition lease statuses based on date ──────────────────────────
+    private async Task UpdateLeaseStatusesAsync()
+    {
+        var today = DateTime.Today;
+        bool changed = false;
+
+        // 1. Approved leases whose start date has arrived → Active
+        var nowActive = await _db.Leases
+            .Include(l => l.Application).ThenInclude(a => a.Unit)
+            .Where(l => l.Status == "Approved" && l.LeaseStartDate <= today)
+            .ToListAsync();
+
+        foreach (var lease in nowActive)
+        {
+            lease.Status = "Active";
+            _db.LeaseLogs.Add(new LeaseLog
+            {
+                LeaseId         = lease.LeaseId,
+                Status          = "Active",
+                ChangedByUserId = lease.Application.UserId,
+                Notes           = "Lease automatically activated — start date reached.",
+                CreatedAt       = DateTime.Now
+            });
+            changed = true;
+        }
+
+        // 2. Active leases with a scheduled termination date that has arrived → Terminated
+        var scheduledTerminated = await _db.Leases
+            .Include(l => l.Application).ThenInclude(a => a.Unit)
+            .Include(l => l.Termination)
+            .Where(l => l.Status == "Active" && l.TerminationId != null)
+            .ToListAsync();
+
+        foreach (var lease in scheduledTerminated)
+        {
+            if (lease.Termination != null && lease.Termination.TerminationDate <= today)
+            {
+                lease.Status = "Terminated";
+                if (lease.Application.Unit != null)
+                    lease.Application.Unit.AvailabilityStatus = "Available";
+
+                _db.LeaseLogs.Add(new LeaseLog
+                {
+                    LeaseId         = lease.LeaseId,
+                    Status          = "Terminated",
+                    ChangedByUserId = lease.Application.UserId,
+                    Notes           = $"Lease terminated as per scheduled termination date " +
+                                      $"{lease.Termination.TerminationDate:dd MMM yyyy}.",
+                    CreatedAt       = DateTime.Now
+                });
+                changed = true;
+            }
+        }
+
+        // 3. Active leases whose end date has passed (no scheduled termination) → Renewed or Terminated
+        var expired = await _db.Leases
+            .Include(l => l.Application).ThenInclude(a => a.Unit)
+            .Include(l => l.RenewLeaseApplication)
+            .Where(l => l.Status == "Active" && l.LeaseEndDate < today && l.TerminationId == null)
+            .ToListAsync();
+
+        foreach (var lease in expired)
+        {
+            bool hasApprovedRenewal = lease.RenewLeaseApplication?.Status == "Approved";
+
+            if (hasApprovedRenewal)
+            {
+                lease.Status = "Renewed";
+                _db.LeaseLogs.Add(new LeaseLog
+                {
+                    LeaseId         = lease.LeaseId,
+                    Status          = "Renewed",
+                    ChangedByUserId = lease.Application.UserId,
+                    Notes           = "Lease marked Renewed — renewal application is approved.",
+                    CreatedAt       = DateTime.Now
+                });
+            }
+            else
+            {
+                lease.Status = "Terminated";
+                if (lease.Application.Unit != null)
+                    lease.Application.Unit.AvailabilityStatus = "Available";
+
+                _db.LeaseLogs.Add(new LeaseLog
+                {
+                    LeaseId         = lease.LeaseId,
+                    Status          = "Terminated",
+                    ChangedByUserId = lease.Application.UserId,
+                    Notes           = "Lease terminated — end date passed without an approved renewal.",
+                    CreatedAt       = DateTime.Now
+                });
+
+                // Reject any non-approved renewal application
+                if (lease.RenewLeaseApplication != null &&
+                    lease.RenewLeaseApplication.Status != "Rejected" &&
+                    lease.RenewLeaseApplication.Status != "Canceled")
+                {
+                    lease.RenewLeaseApplication.Status = "Rejected";
+                    _db.LeaseApplicationLogs.Add(new LeaseApplicationLog
+                    {
+                        ApplicationId   = lease.RenewLeaseApplication.ApplicationId,
+                        Status          = "Rejected",
+                        ChangedByUserId = lease.Application.UserId,
+                        CreatedAt       = DateTime.Now
+                    });
+                }
+            }
+            changed = true;
+        }
+
+        if (changed)
+            await _db.SaveChangesAsync();
+    }
+
     // ── Unified Index: Applications & Leases ─────────────────────────────────
-    // GET /LeaseApplications?tab=applications&appStatus=Pending&leaseStatus=All
     public async Task<IActionResult> Index(
-        string tab          = "applications",
-        string appStatus    = "All",
-        string leaseStatus  = "All")
+        string tab         = "applications",
+        string appStatus   = "All",
+        string leaseStatus = "All")
     {
         var appUser = await GetAppUserAsync();
         if (appUser == null) return Unauthorized();
+
+        await UpdateLeaseStatusesAsync();
 
         bool isManager = appUser.Role == "PropertyManager";
 
@@ -68,17 +181,16 @@ public class LeaseApplicationsController : Controller
 
         var allApps = await appQuery.OrderByDescending(a => a.CreatedAt).ToListAsync();
 
-        // Status counts for badge labels (full unfiltered set)
         var appCounts = new Dictionary<string, int>
         {
             ["All"]       = allApps.Count,
             ["Pending"]   = allApps.Count(a => a.Status == "Pending"),
             ["Screening"] = allApps.Count(a => a.Status == "Screening"),
             ["Approved"]  = allApps.Count(a => a.Status == "Approved"),
-            ["Rejected"]  = allApps.Count(a => a.Status == "Rejected")
+            ["Rejected"]  = allApps.Count(a => a.Status == "Rejected"),
+            ["Canceled"]  = allApps.Count(a => a.Status == "Canceled")
         };
 
-        // Apply status filter
         var filteredApps = appStatus == "All"
             ? allApps
             : allApps.Where(a => a.Status == appStatus).ToList();
@@ -93,10 +205,10 @@ public class LeaseApplicationsController : Controller
             RequestedEndDate   = a.RequestedEndDate,
             Status             = a.Status,
             Notes              = a.Notes,
-            CreatedAt          = a.CreatedAt
+            CreatedAt          = a.CreatedAt,
+            ParentLeaseId      = a.ParentLeaseId
         }).ToList();
 
-        // Manager: also build grouped-by-unit view
         var appGroups = new List<UnitApplicationGroupViewModel>();
         if (isManager)
         {
@@ -119,10 +231,10 @@ public class LeaseApplicationsController : Controller
                         RequestedEndDate   = a.RequestedEndDate,
                         Status             = a.Status,
                         Notes              = a.Notes,
-                        CreatedAt          = a.CreatedAt
+                        CreatedAt          = a.CreatedAt,
+                        ParentLeaseId      = a.ParentLeaseId
                     }).ToList()
-                })
-                .ToList();
+                }).ToList();
         }
 
         // ── Load leases ───────────────────────────────────────────────────
@@ -133,6 +245,8 @@ public class LeaseApplicationsController : Controller
             .Include(l => l.Application.User)
             .Include(l => l.LeaseLogs)
                 .ThenInclude(ll => ll.ChangedByUser)
+            .Include(l => l.Termination)
+            .Include(l => l.RenewLeaseApplication)
             .AsQueryable();
 
         if (!isManager)
@@ -144,8 +258,8 @@ public class LeaseApplicationsController : Controller
         {
             ["All"]            = allLeases.Count,
             ["PendingPayment"] = allLeases.Count(l => l.Status == "PendingPayment"),
+            ["Approved"]       = allLeases.Count(l => l.Status == "Approved"),
             ["Active"]         = allLeases.Count(l => l.Status == "Active"),
-            ["Expired"]        = allLeases.Count(l => l.Status == "Expired"),
             ["Terminated"]     = allLeases.Count(l => l.Status == "Terminated"),
             ["Renewed"]        = allLeases.Count(l => l.Status == "Renewed")
         };
@@ -156,19 +270,24 @@ public class LeaseApplicationsController : Controller
 
         var leaseVms = filteredLeases.Select(l => new LeaseListViewModel
         {
-            LeaseId         = l.LeaseId,
-            ApplicationId   = l.ApplicationId,
-            UnitNumber      = l.Application.Unit.UnitNumber,
-            PropertyName    = l.Application.Unit.Property.Name,
-            TenantName      = l.Application.User.FullName,
-            LeaseStartDate  = l.LeaseStartDate,
-            LeaseEndDate    = l.LeaseEndDate,
-            MonthlyRent     = l.MonthlyRent,
-            SecurityDeposit = l.SecurityDeposit,
-            Status          = l.Status,
-            PaymentPlanType = l.PaymentPlanType,
-            CreatedAt       = l.CreatedAt,
-            Logs            = l.LeaseLogs
+            LeaseId                 = l.LeaseId,
+            ApplicationId           = l.ApplicationId,
+            UnitNumber              = l.Application.Unit.UnitNumber,
+            PropertyName            = l.Application.Unit.Property.Name,
+            TenantName              = l.Application.User.FullName,
+            LeaseStartDate          = l.LeaseStartDate,
+            LeaseEndDate            = l.LeaseEndDate,
+            MonthlyRent             = l.MonthlyRent,
+            SecurityDeposit         = l.SecurityDeposit,
+            Status                  = l.Status,
+            PaymentPlanType         = l.PaymentPlanType,
+            CreatedAt               = l.CreatedAt,
+            TerminationId           = l.TerminationId,
+            TerminationDate         = l.Termination?.TerminationDate,
+            TerminationNotes        = l.Termination?.Notes,
+            RenewLeaseApplicationId = l.RenewLeaseApplicationId,
+            RenewApplicationStatus  = l.RenewLeaseApplication?.Status,
+            Logs                    = l.LeaseLogs
                 .OrderBy(ll => ll.CreatedAt)
                 .Select(ll => new LeaseLogViewModel
                 {
@@ -179,7 +298,6 @@ public class LeaseApplicationsController : Controller
                 }).ToList()
         }).ToList();
 
-        // ── Assemble unified view model ───────────────────────────────────
         var vm = new ApplicationsAndLeasesViewModel
         {
             IsManager         = isManager,
@@ -196,8 +314,7 @@ public class LeaseApplicationsController : Controller
         return View(vm);
     }
 
-    // ── Details ──────────────────────────────────────────────────────────────
-    // GET /LeaseApplications/Details/{id}
+    // ── Application Details ───────────────────────────────────────────────────
     public async Task<IActionResult> Details(int id)
     {
         var appUser = await GetAppUserAsync();
@@ -211,7 +328,6 @@ public class LeaseApplicationsController : Controller
 
         if (application == null) return NotFound();
 
-        // Tenants can only see their own applications
         if (appUser.Role == "Tenant" && application.UserId != appUser.UserId)
             return Forbid();
 
@@ -228,6 +344,7 @@ public class LeaseApplicationsController : Controller
             Status             = application.Status,
             Notes              = application.Notes,
             CreatedAt          = application.CreatedAt,
+            ParentLeaseId      = application.ParentLeaseId,
             Logs               = application.ApplicationLogs
                 .OrderBy(l => l.CreatedAt)
                 .Select(l => new LeaseApplicationLogViewModel
@@ -235,19 +352,19 @@ public class LeaseApplicationsController : Controller
                     Status            = l.Status,
                     ChangedByUserName = l.ChangedByUser.FullName,
                     CreatedAt         = l.CreatedAt
-                })
-                .ToList()
+                }).ToList()
         };
 
         return View("LeaseApplicationDetails", vm);
     }
 
     // ── Lease Details ─────────────────────────────────────────────────────────
-    // GET /LeaseApplications/LeaseDetails/{id}
     public async Task<IActionResult> LeaseDetails(int id)
     {
         var appUser = await GetAppUserAsync();
         if (appUser == null) return Unauthorized();
+
+        await UpdateLeaseStatusesAsync();
 
         var lease = await _db.Leases
             .Include(l => l.Application)
@@ -257,6 +374,8 @@ public class LeaseApplicationsController : Controller
             .Include(l => l.LeaseLogs)
                 .ThenInclude(ll => ll.ChangedByUser)
             .Include(l => l.PaymentRecords)
+            .Include(l => l.Termination)
+            .Include(l => l.RenewLeaseApplication)
             .FirstOrDefaultAsync(l => l.LeaseId == id);
 
         if (lease == null) return NotFound();
@@ -265,24 +384,29 @@ public class LeaseApplicationsController : Controller
             return Forbid();
 
         var orderedPayments = lease.PaymentRecords.OrderBy(p => p.DueDate).ToList();
-        var total = orderedPayments.Count;
+        var total           = orderedPayments.Count;
 
         var vm = new LeaseListViewModel
         {
-            LeaseId         = lease.LeaseId,
-            ApplicationId   = lease.ApplicationId,
-            UnitNumber      = lease.Application.Unit.UnitNumber,
-            PropertyName    = lease.Application.Unit.Property.Name,
-            TenantName      = lease.Application.User.FullName,
-            LeaseStartDate  = lease.LeaseStartDate,
-            LeaseEndDate    = lease.LeaseEndDate,
-            MonthlyRent     = lease.MonthlyRent,
-            SecurityDeposit = lease.SecurityDeposit,
-            Status          = lease.Status,
-            CreatedAt       = lease.CreatedAt,
-            GracePeriodDays = lease.Application.Unit.Property.GracePeriodDays,
-            LateFeePercent  = lease.Application.Unit.Property.LateFeePercent,
-            Logs            = lease.LeaseLogs
+            LeaseId                 = lease.LeaseId,
+            ApplicationId           = lease.ApplicationId,
+            UnitNumber              = lease.Application.Unit.UnitNumber,
+            PropertyName            = lease.Application.Unit.Property.Name,
+            TenantName              = lease.Application.User.FullName,
+            LeaseStartDate          = lease.LeaseStartDate,
+            LeaseEndDate            = lease.LeaseEndDate,
+            MonthlyRent             = lease.MonthlyRent,
+            SecurityDeposit         = lease.SecurityDeposit,
+            Status                  = lease.Status,
+            CreatedAt               = lease.CreatedAt,
+            GracePeriodDays         = lease.Application.Unit.Property.GracePeriodDays,
+            LateFeePercent          = lease.Application.Unit.Property.LateFeePercent,
+            TerminationId           = lease.TerminationId,
+            TerminationDate         = lease.Termination?.TerminationDate,
+            TerminationNotes        = lease.Termination?.Notes,
+            RenewLeaseApplicationId = lease.RenewLeaseApplicationId,
+            RenewApplicationStatus  = lease.RenewLeaseApplication?.Status,
+            Logs                    = lease.LeaseLogs
                 .OrderBy(ll => ll.CreatedAt)
                 .Select(ll => new LeaseLogViewModel
                 {
@@ -291,26 +415,25 @@ public class LeaseApplicationsController : Controller
                     Notes             = ll.Notes,
                     CreatedAt         = ll.CreatedAt
                 }).ToList(),
-            Payments        = orderedPayments.Select((p, i) => new PaymentSummaryViewModel
+            Payments                = orderedPayments.Select((p, i) => new PaymentSummaryViewModel
             {
-                PaymentId        = p.PaymentId,
-                InstallmentNum   = i + 1,
+                PaymentId         = p.PaymentId,
+                InstallmentNum    = i + 1,
                 TotalInstallments = total,
-                AmountDue        = p.AmountDue,
-                AmountPaid       = p.AmountPaid,
-                LateFee          = p.LateFee,
-                DueDate          = p.DueDate,
-                PaidDate         = p.PaidDate,
-                Status           = p.PaymentStatus,
-                Notes            = p.Notes
+                AmountDue         = p.AmountDue,
+                AmountPaid        = p.AmountPaid,
+                LateFee           = p.LateFee,
+                DueDate           = p.DueDate,
+                PaidDate          = p.PaidDate,
+                Status            = p.PaymentStatus,
+                Notes             = p.Notes
             }).ToList()
         };
 
         return View(vm);
     }
 
-    // ── Apply ─────────────────────────────────────────────────────────────────
-    // GET /LeaseApplications/Apply/{unitId}
+    // ── Apply (new regular application) ──────────────────────────────────────
     [Authorize(Roles = "Tenant")]
     public async Task<IActionResult> Apply(int unitId)
     {
@@ -335,7 +458,6 @@ public class LeaseApplicationsController : Controller
         });
     }
 
-    // POST /LeaseApplications/Apply
     [Authorize(Roles = "Tenant")]
     [HttpPost]
     [ValidateAntiForgeryToken]
@@ -366,10 +488,9 @@ public class LeaseApplicationsController : Controller
         var appUser = await GetAppUserAsync();
         if (appUser == null) return Unauthorized();
 
-        // No duplicate active application for the same unit by the same tenant
         var existing = await _db.LeaseApplications.AnyAsync(a =>
-            a.UnitId  == model.UnitId &&
-            a.UserId  == appUser.UserId &&
+            a.UnitId == model.UnitId &&
+            a.UserId == appUser.UserId &&
             (a.Status == "Pending" || a.Status == "Screening" || a.Status == "Approved"));
 
         if (existing)
@@ -386,13 +507,13 @@ public class LeaseApplicationsController : Controller
             RequestedEndDate   = model.RequestedEndDate,
             Notes              = model.Notes,
             Status             = "Pending",
+            ParentLeaseId      = null,
             CreatedAt          = DateTime.Now
         };
 
         _db.LeaseApplications.Add(application);
         await _db.SaveChangesAsync();
 
-        // Log initial Pending status
         _db.LeaseApplicationLogs.Add(new LeaseApplicationLog
         {
             ApplicationId   = application.ApplicationId,
@@ -403,8 +524,7 @@ public class LeaseApplicationsController : Controller
         await _db.SaveChangesAsync();
 
         await _notifier.SendAsync(appUser.UserId,
-            "Your lease application has been submitted and is under review.",
-            "LeaseUpdate");
+            "Your lease application has been submitted and is under review.", "LeaseUpdate");
 
         var managers = await _db.Users.Where(u => u.Role == "PropertyManager").ToListAsync();
         foreach (var mgr in managers)
@@ -414,6 +534,369 @@ public class LeaseApplicationsController : Controller
 
         TempData["Success"] = "Application submitted successfully. Status: Pending.";
         return RedirectToAction("Index");
+    }
+
+    // ── Apply Renew (renewal application from an active lease) ───────────────
+    [Authorize(Roles = "Tenant")]
+    public async Task<IActionResult> ApplyRenew(int leaseId)
+    {
+        var appUser = await GetAppUserAsync();
+        if (appUser == null) return Unauthorized();
+
+        var lease = await _db.Leases
+            .Include(l => l.Application).ThenInclude(a => a.Unit).ThenInclude(u => u.Property)
+            .FirstOrDefaultAsync(l => l.LeaseId == leaseId);
+
+        if (lease == null) return NotFound();
+        if (lease.Application.UserId != appUser.UserId) return Forbid();
+        if (lease.Status != "Active")
+        {
+            TempData["Error"] = "You can only apply for renewal on an active lease.";
+            return RedirectToAction("LeaseDetails", new { id = leaseId });
+        }
+        if (lease.RenewLeaseApplicationId != null)
+        {
+            TempData["Error"] = "A renewal application already exists for this lease.";
+            return RedirectToAction("LeaseDetails", new { id = leaseId });
+        }
+        if (lease.TerminationId != null)
+        {
+            TempData["Error"] = "Cannot apply for renewal when a termination is scheduled.";
+            return RedirectToAction("LeaseDetails", new { id = leaseId });
+        }
+
+        var remaining = (lease.LeaseEndDate - DateTime.Today).Days;
+        if (remaining > 183 || remaining < 2)
+        {
+            TempData["Error"] = "Renewal is only available when 2 days to 6 months remain on your lease.";
+            return RedirectToAction("LeaseDetails", new { id = leaseId });
+        }
+
+        var renewStart = lease.LeaseEndDate.AddDays(1);
+
+        return View(new ApplyRenewViewModel
+        {
+            LeaseId            = lease.LeaseId,
+            UnitNumber         = lease.Application.Unit.UnitNumber,
+            PropertyName       = lease.Application.Unit.Property.Name,
+            MonthlyRent        = lease.Application.Unit.MonthlyRent,
+            RequestedStartDate = renewStart,
+            RequestedEndDate   = renewStart.AddMonths(6)
+        });
+    }
+
+    [Authorize(Roles = "Tenant")]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ApplyRenew(ApplyRenewViewModel model)
+    {
+        var appUser = await GetAppUserAsync();
+        if (appUser == null) return Unauthorized();
+
+        if (model.RequestedEndDate <= model.RequestedStartDate)
+            ModelState.AddModelError(nameof(model.RequestedEndDate),
+                "End date must be after the start date.");
+
+        if (model.RequestedEndDate > model.RequestedStartDate.AddYears(1))
+            ModelState.AddModelError(nameof(model.RequestedEndDate),
+                "Lease period cannot exceed one year from the start date.");
+
+        if (!ModelState.IsValid) return View(model);
+
+        var lease = await _db.Leases
+            .Include(l => l.Application).ThenInclude(a => a.Unit)
+            .FirstOrDefaultAsync(l => l.LeaseId == model.LeaseId);
+
+        if (lease == null) return NotFound();
+        if (lease.Application.UserId != appUser.UserId) return Forbid();
+        if (lease.Status != "Active" || lease.RenewLeaseApplicationId != null || lease.TerminationId != null)
+        {
+            TempData["Error"] = "Cannot create renewal application at this time.";
+            return RedirectToAction("LeaseDetails", new { id = model.LeaseId });
+        }
+
+        var application = new LeaseApplication
+        {
+            UserId             = appUser.UserId,
+            UnitId             = lease.Application.UnitId,
+            RequestedStartDate = model.RequestedStartDate,
+            RequestedEndDate   = model.RequestedEndDate,
+            Notes              = model.Notes,
+            Status             = "Pending",
+            ParentLeaseId      = lease.LeaseId,
+            CreatedAt          = DateTime.Now
+        };
+
+        _db.LeaseApplications.Add(application);
+        await _db.SaveChangesAsync();
+
+        _db.LeaseApplicationLogs.Add(new LeaseApplicationLog
+        {
+            ApplicationId   = application.ApplicationId,
+            Status          = "Pending",
+            ChangedByUserId = appUser.UserId,
+            CreatedAt       = DateTime.Now
+        });
+
+        lease.RenewLeaseApplicationId = application.ApplicationId;
+        await _db.SaveChangesAsync();
+
+        await _notifier.SendAsync(appUser.UserId,
+            $"Your renewal application for unit {lease.Application.Unit.UnitNumber} has been submitted.",
+            "LeaseUpdate");
+
+        var managers = await _db.Users.Where(u => u.Role == "PropertyManager").ToListAsync();
+        foreach (var mgr in managers)
+            await _notifier.SendAsync(mgr.UserId,
+                $"Renewal application submitted by {appUser.FullName} for unit {lease.Application.Unit.UnitNumber}.",
+                "LeaseUpdate");
+
+        TempData["Success"] = "Renewal application submitted successfully. Status: Pending.";
+        return RedirectToAction("LeaseDetails", new { id = model.LeaseId });
+    }
+
+    // ── Cancel Application (tenant) ───────────────────────────────────────────
+    [Authorize(Roles = "Tenant")]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CancelApplication(int applicationId, string returnTo = "Index")
+    {
+        var appUser = await GetAppUserAsync();
+        if (appUser == null) return Unauthorized();
+
+        var application = await _db.LeaseApplications
+            .Include(a => a.Unit)
+            .FirstOrDefaultAsync(a => a.ApplicationId == applicationId);
+
+        if (application == null) return NotFound();
+        if (application.UserId != appUser.UserId) return Forbid();
+
+        if (application.Status == "Rejected" || application.Status == "Canceled")
+        {
+            TempData["Error"] = "This application cannot be canceled.";
+            return returnTo == "Details"
+                ? RedirectToAction("Details", new { id = applicationId })
+                : RedirectToAction("Index", new { tab = "applications" });
+        }
+
+        // If application was Approved, also terminate the PendingPayment lease
+        if (application.Status == "Approved")
+        {
+            var pendingLease = await _db.Leases
+                .FirstOrDefaultAsync(l => l.ApplicationId == applicationId && l.Status == "PendingPayment");
+
+            if (pendingLease != null)
+            {
+                pendingLease.Status = "Terminated";
+                _db.LeaseLogs.Add(new LeaseLog
+                {
+                    LeaseId         = pendingLease.LeaseId,
+                    Status          = "Terminated",
+                    ChangedByUserId = appUser.UserId,
+                    Notes           = "Lease terminated — application canceled by tenant before payment.",
+                    CreatedAt       = DateTime.Now
+                });
+            }
+        }
+
+        // If this was a renewal application, clear the parent lease's RenewLeaseApplicationId
+        if (application.ParentLeaseId.HasValue)
+        {
+            var parentLease = await _db.Leases
+                .FirstOrDefaultAsync(l => l.LeaseId == application.ParentLeaseId &&
+                                          l.RenewLeaseApplicationId == application.ApplicationId);
+            if (parentLease != null)
+                parentLease.RenewLeaseApplicationId = null;
+        }
+
+        application.Status = "Canceled";
+
+        _db.LeaseApplicationLogs.Add(new LeaseApplicationLog
+        {
+            ApplicationId   = application.ApplicationId,
+            Status          = "Canceled",
+            ChangedByUserId = appUser.UserId,
+            CreatedAt       = DateTime.Now
+        });
+
+        await _db.SaveChangesAsync();
+
+        TempData["Success"] = "Application canceled successfully.";
+        return returnTo == "Details"
+            ? RedirectToAction("Details", new { id = applicationId })
+            : RedirectToAction("Index", new { tab = "applications" });
+    }
+
+    // ── Terminate Lease Now (Approved lease → Terminated immediately) ─────────
+    [Authorize(Roles = "Tenant")]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> TerminateNow(int leaseId)
+    {
+        var appUser = await GetAppUserAsync();
+        if (appUser == null) return Unauthorized();
+
+        var lease = await _db.Leases
+            .Include(l => l.Application).ThenInclude(a => a.Unit)
+            .FirstOrDefaultAsync(l => l.LeaseId == leaseId);
+
+        if (lease == null) return NotFound();
+        if (lease.Application.UserId != appUser.UserId) return Forbid();
+
+        if (lease.Status != "Approved")
+        {
+            TempData["Error"] = "Only approved (not-yet-started) leases can be immediately terminated.";
+            return RedirectToAction("LeaseDetails", new { id = leaseId });
+        }
+
+        lease.Status = "Terminated";
+        if (lease.Application.Unit != null)
+            lease.Application.Unit.AvailabilityStatus = "Available";
+
+        _db.LeaseLogs.Add(new LeaseLog
+        {
+            LeaseId         = lease.LeaseId,
+            Status          = "Terminated",
+            ChangedByUserId = appUser.UserId,
+            Notes           = "Lease terminated by tenant before start date.",
+            CreatedAt       = DateTime.Now
+        });
+
+        await _db.SaveChangesAsync();
+
+        TempData["Success"] = "Lease has been terminated.";
+        return RedirectToAction("LeaseDetails", new { id = leaseId });
+    }
+
+    // ── Terminate Active Lease (schedule termination date) ────────────────────
+    [Authorize(Roles = "Tenant")]
+    public async Task<IActionResult> TerminateLease(int leaseId)
+    {
+        var appUser = await GetAppUserAsync();
+        if (appUser == null) return Unauthorized();
+
+        var lease = await _db.Leases
+            .Include(l => l.Application).ThenInclude(a => a.Unit).ThenInclude(u => u.Property)
+            .Include(l => l.Termination)
+            .FirstOrDefaultAsync(l => l.LeaseId == leaseId);
+
+        if (lease == null) return NotFound();
+        if (lease.Application.UserId != appUser.UserId) return Forbid();
+
+        if (lease.Status != "Active")
+        {
+            TempData["Error"] = "Only active leases can schedule a termination.";
+            return RedirectToAction("LeaseDetails", new { id = leaseId });
+        }
+
+        var vm = new TerminateLeaseViewModel
+        {
+            LeaseId        = lease.LeaseId,
+            UnitNumber     = lease.Application.Unit.UnitNumber,
+            PropertyName   = lease.Application.Unit.Property.Name,
+            LeaseEndDate   = lease.LeaseEndDate,
+            TerminationId  = lease.TerminationId,
+            TerminationDate = lease.Termination?.TerminationDate ?? DateTime.Today.AddDays(2),
+            Notes          = lease.Termination?.Notes
+        };
+
+        return View(vm);
+    }
+
+    [Authorize(Roles = "Tenant")]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> TerminateLease(TerminateLeaseViewModel model)
+    {
+        var minDate = DateTime.Today.AddDays(2);
+
+        if (model.TerminationDate < minDate)
+            ModelState.AddModelError(nameof(model.TerminationDate),
+                $"Termination date must be at least {minDate:dd MMM yyyy} (2 days from today).");
+
+        if (model.TerminationDate > model.LeaseEndDate)
+            ModelState.AddModelError(nameof(model.TerminationDate),
+                $"Termination date cannot be after the lease end date ({model.LeaseEndDate:dd MMM yyyy}).");
+
+        if (!ModelState.IsValid) return View(model);
+
+        var appUser = await GetAppUserAsync();
+        if (appUser == null) return Unauthorized();
+
+        var lease = await _db.Leases
+            .Include(l => l.Application)
+            .Include(l => l.Termination)
+            .FirstOrDefaultAsync(l => l.LeaseId == model.LeaseId);
+
+        if (lease == null) return NotFound();
+        if (lease.Application.UserId != appUser.UserId) return Forbid();
+        if (lease.Status != "Active")
+        {
+            TempData["Error"] = "Only active leases can schedule a termination.";
+            return RedirectToAction("LeaseDetails", new { id = model.LeaseId });
+        }
+
+        if (lease.TerminationId.HasValue && lease.Termination != null)
+        {
+            // Edit existing termination
+            lease.Termination.TerminationDate = model.TerminationDate;
+            lease.Termination.Notes           = model.Notes;
+            TempData["Success"] = "Termination schedule updated.";
+        }
+        else
+        {
+            // Create new termination
+            var termination = new Termination
+            {
+                TerminationDate = model.TerminationDate,
+                Notes           = model.Notes,
+                CreatedAt       = DateTime.Now
+            };
+            _db.Terminations.Add(termination);
+            await _db.SaveChangesAsync();
+
+            lease.TerminationId = termination.TerminationId;
+            TempData["Success"] = $"Termination scheduled for {model.TerminationDate:dd MMM yyyy}.";
+        }
+
+        await _db.SaveChangesAsync();
+        return RedirectToAction("LeaseDetails", new { id = model.LeaseId });
+    }
+
+    // ── Cancel Scheduled Termination ──────────────────────────────────────────
+    [Authorize(Roles = "Tenant")]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CancelTermination(int leaseId)
+    {
+        var appUser = await GetAppUserAsync();
+        if (appUser == null) return Unauthorized();
+
+        var lease = await _db.Leases
+            .Include(l => l.Application)
+            .Include(l => l.Termination)
+            .FirstOrDefaultAsync(l => l.LeaseId == leaseId);
+
+        if (lease == null) return NotFound();
+        if (lease.Application.UserId != appUser.UserId) return Forbid();
+
+        if (lease.TerminationId.HasValue && lease.Termination != null)
+        {
+            var termination = lease.Termination;
+            lease.TerminationId = null;
+            await _db.SaveChangesAsync();
+
+            _db.Terminations.Remove(termination);
+            await _db.SaveChangesAsync();
+
+            TempData["Success"] = "Termination canceled. Your lease will continue until its original end date.";
+        }
+        else
+        {
+            TempData["Error"] = "No scheduled termination found.";
+        }
+
+        return RedirectToAction("LeaseDetails", new { id = leaseId });
     }
 
     // ── Start Screening ───────────────────────────────────────────────────────
@@ -494,7 +977,6 @@ public class LeaseApplicationsController : Controller
         var endDate   = application.RequestedEndDate   ?? DateTime.Now.AddYears(1);
         var rent      = application.Unit.MonthlyRent ?? 0;
 
-        // Create lease as PendingPayment — activates after tenant completes payment
         var lease = new Lease
         {
             ApplicationId   = application.ApplicationId,
@@ -506,7 +988,6 @@ public class LeaseApplicationsController : Controller
             CreatedAt       = DateTime.Now
         };
         _db.Leases.Add(lease);
-
         await _db.SaveChangesAsync();
 
         _db.LeaseLogs.Add(new LeaseLog
@@ -518,12 +999,11 @@ public class LeaseApplicationsController : Controller
             CreatedAt       = DateTime.Now
         });
 
-        // Auto-reject conflicting applications for the same unit
         var conflicting = await _db.LeaseApplications
             .Include(a => a.User)
             .Where(a =>
-                a.UnitId          == application.UnitId &&
-                a.ApplicationId   != application.ApplicationId &&
+                a.UnitId         == application.UnitId &&
+                a.ApplicationId  != application.ApplicationId &&
                 (a.Status == "Pending" || a.Status == "Screening") &&
                 a.RequestedStartDate < application.RequestedEndDate &&
                 a.RequestedEndDate   > application.RequestedStartDate)
@@ -548,7 +1028,8 @@ public class LeaseApplicationsController : Controller
         await _db.SaveChangesAsync();
 
         await _notifier.SendAsync(application.UserId,
-            $"Congratulations! Your lease application for unit {application.Unit.UnitNumber} has been approved. Please complete your payment to activate your lease.",
+            $"Congratulations! Your lease application for unit {application.Unit.UnitNumber} has been approved. " +
+            "Please complete your payment to activate your lease.",
             "PaymentReminder");
 
         TempData["Success"] =

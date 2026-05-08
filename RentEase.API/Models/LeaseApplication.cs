@@ -27,12 +27,16 @@ public partial class LeaseApplication
     [StringLength(500)]
     public string? Notes { get; set; }
 
-    // Pending / Screening / Approved / Rejected
+    // Pending / Screening / Approved / Rejected / Canceled
     [StringLength(50)]
     public string Status { get; set; } = "Pending";
 
     [Column(TypeName = "datetime")]
     public DateTime CreatedAt { get; set; } = DateTime.Now;
+
+    // FK: parent lease for renewal applications (null = regular application)
+    [Column("ParentLeaseID")]
+    public int? ParentLeaseId { get; set; }
 
     [ForeignKey("UnitId")]
     [InverseProperty("LeaseApplications")]
@@ -41,6 +45,9 @@ public partial class LeaseApplication
     [ForeignKey("UserId")]
     [InverseProperty("LeaseApplications")]
     public virtual User User { get; set; } = null!;
+
+    [ForeignKey("ParentLeaseId")]
+    public virtual Lease? ParentLease { get; set; }
 
     [InverseProperty("Application")]
     public virtual ICollection<Lease> Leases { get; set; } = new List<Lease>();
