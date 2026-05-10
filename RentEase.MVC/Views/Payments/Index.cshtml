@@ -187,12 +187,15 @@ else
                                             </td>
                                             <td>
                                                 <div class="d-flex flex-wrap gap-1">
-                                                    @* View Bill — available to everyone *@
-                                                    <a asp-action="Bill" asp-route-paymentId="@p.PaymentId"
-                                                       class="btn btn-sm btn-outline-primary"
-                                                       title="View Bill / Invoice">
-                                                        <i class="fa fa-file-invoice me-1"></i>Bill
-                                                    </a>
+                                                    @* View Bill — only for paid installments *@
+                                                    @if (p.PaymentStatus == "Paid")
+                                                    {
+                                                        <a asp-action="Bill" asp-route-paymentId="@p.PaymentId"
+                                                           class="btn btn-sm btn-outline-primary"
+                                                           title="View Bill / Invoice">
+                                                            <i class="fa fa-file-invoice me-1"></i>Bill
+                                                        </a>
+                                                    }
 
                                                     @if (isManager && p.PaymentStatus != "Paid")
                                                     {
