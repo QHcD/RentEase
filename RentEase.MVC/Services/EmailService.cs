@@ -20,6 +20,168 @@ public class EmailService
         await SendAsync(toEmail, subject, body);
     }
 
+    // ── Maintenance Submitted ──────────────────────────────────────────────
+    public async Task SendMaintenanceSubmittedAsync(string toEmail, string toName,
+        string ticketNumber, string title, string requestType,
+        string priority, string unitNumber, string propertyName)
+    {
+        string subject = $"RentEase — Maintenance Request Received ({ticketNumber})";
+        string body    = BuildMaintenanceEmail(toName, ticketNumber, title, requestType,
+            priority, unitNumber, propertyName,
+            status: "Submitted", statusColor: "#1a73e8",
+            message: "Your maintenance request has been successfully received and is now in our queue. Our team will review it shortly and assign the appropriate technician.");
+        await SendAsync(toEmail, subject, body);
+    }
+
+    // ── Maintenance Status Changed ─────────────────────────────────────────
+    public async Task SendMaintenanceStatusChangedAsync(string toEmail, string toName,
+        string ticketNumber, string title, string unitNumber,
+        string newStatus, string? notes)
+    {
+        string subject = $"RentEase — Maintenance Update ({ticketNumber})";
+
+        var (color, msg) = newStatus switch
+        {
+            "Assigned"   => ("#0288d1", "Your request has been assigned to our maintenance team. A technician will be visiting your unit soon."),
+            "InProgress" => ("#e65100", "Our technician is currently working on your maintenance request. You will be notified once it is resolved."),
+            "Resolved"   => ("#2e7d32", "Great news! Your maintenance request has been resolved. Please let us know if the issue persists."),
+            "Closed"     => ("#546e7a", "Your maintenance request has been closed. Thank you for your patience."),
+            _            => ("#555555", $"Your maintenance request status has been updated to: {newStatus}.")
+        };
+
+        string icon = newStatus switch
+        {
+            "Assigned"   => "🔧",
+            "InProgress" => "⚙️",
+            "Resolved"   => "✅",
+            "Closed"     => "🔒",
+            _            => "📋"
+        };
+
+        string noteSection = !string.IsNullOrWhiteSpace(notes)
+            ? $"<tr><td style='color:#888;'>Notes</td><td><em>{notes}</em></td></tr>"
+            : "";
+
+        string body = $"""
+        <!DOCTYPE html>
+        <html lang="en">
+        <head><meta charset="UTF-8"/></head>
+        <body style="margin:0;padding:0;background:#f4f6f9;font-family:'Segoe UI',Arial,sans-serif;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f9;padding:40px 0;">
+            <tr><td align="center">
+              <table width="600" cellpadding="0" cellspacing="0"
+                     style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.08);">
+                <tr><td style="background:linear-gradient(135deg,#1a73e8,#0d47a1);padding:36px 40px;text-align:center;">
+                  <h1 style="margin:0;color:#fff;font-size:28px;font-weight:700;">🏠 RentEase</h1>
+                  <p style="margin:6px 0 0;color:#bbdefb;font-size:14px;">Property Leasing & Management Platform</p>
+                </td></tr>
+                <tr><td style="background:{color};padding:16px 40px;text-align:center;">
+                  <p style="margin:0;color:#fff;font-size:20px;font-weight:700;">{icon} Maintenance {newStatus}</p>
+                </td></tr>
+                <tr><td style="padding:40px;">
+                  <p style="margin:0 0 8px;color:#555;font-size:15px;">Hello, <strong>{toName}</strong></p>
+                  <p style="margin:0 0 28px;color:#555;font-size:15px;line-height:1.7;">{msg}</p>
+                  <table width="100%" cellpadding="4" cellspacing="0"
+                         style="background:#f8f9fa;border-radius:10px;padding:20px;margin-bottom:24px;font-size:14px;color:#555;line-height:2;">
+                    <tr><td style="color:#888;width:40%;">Ticket Number</td><td><strong style="color:{color};">{ticketNumber}</strong></td></tr>
+                    <tr><td style="color:#888;">Issue</td><td><strong>{title}</strong></td></tr>
+                    <tr><td style="color:#888;">Unit</td><td><strong>{unitNumber}</strong></td></tr>
+                    <tr><td style="color:#888;">Status</td><td><strong style="color:{color};">{newStatus}</strong></td></tr>
+                    {noteSection}
+                  </table>
+                  <p style="margin:0 0 28px;color:#555;font-size:14px;">Track your request anytime using ticket number <strong>{ticketNumber}</strong> on the RentEase portal.</p>
+                  <p style="margin:0;color:#999;font-size:13px;">Best regards,<br/><strong style="color:#333;">The RentEase Team</strong></p>
+                </td></tr>
+                <tr><td style="background:#f8f9fa;padding:20px 40px;text-align:center;border-top:1px solid #e9ecef;">
+                  <p style="margin:0;color:#aaa;font-size:12px;">© 2026 RentEase — Property Leasing & Management Platform<br/>This is an automated message, please do not reply.</p>
+                </td></tr>
+              </table>
+            </td></tr>
+          </table>
+        </body>
+        </html>
+        """;
+        await SendAsync(toEmail, subject, body);
+    }
+
+    // ── Maintenance Email Template ─────────────────────────────────────────
+    private static string BuildMaintenanceEmail(string name, string ticketNumber,
+        string title, string requestType, string priority,
+        string unitNumber, string propertyName,
+        string status, string statusColor, string message)
+    {
+        string priorityColor = priority switch
+        {
+            "Urgent" => "#c62828",
+            "High"   => "#e65100",
+            "Medium" => "#1565c0",
+            _        => "#555"
+        };
+
+        string typeIcon = requestType switch
+        {
+            "Electrical"  => "⚡",
+            "AC / HVAC"   => "❄️",
+            "Plumbing"    => "🔧",
+            "Lock / Door" => "🚪",
+            "Lighting"    => "💡",
+            "Windows"     => "🪟",
+            "Cleaning"    => "🧹",
+            _             => "🔨"
+        };
+
+        return $"""
+        <!DOCTYPE html>
+        <html lang="en">
+        <head><meta charset="UTF-8"/></head>
+        <body style="margin:0;padding:0;background:#f4f6f9;font-family:'Segoe UI',Arial,sans-serif;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f9;padding:40px 0;">
+            <tr><td align="center">
+              <table width="600" cellpadding="0" cellspacing="0"
+                     style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.08);">
+                <tr><td style="background:linear-gradient(135deg,#1a73e8,#0d47a1);padding:36px 40px;text-align:center;">
+                  <h1 style="margin:0;color:#fff;font-size:28px;font-weight:700;">🏠 RentEase</h1>
+                  <p style="margin:6px 0 0;color:#bbdefb;font-size:14px;">Property Leasing & Management Platform</p>
+                </td></tr>
+                <tr><td style="background:{statusColor};padding:16px 40px;text-align:center;">
+                  <p style="margin:0;color:#fff;font-size:20px;font-weight:700;">🔧 Maintenance Request Received</p>
+                </td></tr>
+                <tr><td style="padding:40px;">
+                  <p style="margin:0 0 8px;color:#555;font-size:15px;">Hello, <strong>{name}</strong></p>
+                  <p style="margin:0 0 28px;color:#555;font-size:15px;line-height:1.7;">{message}</p>
+
+                  <table width="100%" cellpadding="0" cellspacing="0"
+                         style="background:#e8f5e9;border:1px solid #c8e6c9;border-radius:10px;padding:20px;margin-bottom:20px;">
+                    <tr><td style="font-size:14px;color:#2e7d32;">
+                      <strong>🎫 Your Ticket Number</strong><br/>
+                      <span style="font-size:28px;font-weight:800;letter-spacing:4px;font-family:'Courier New',monospace;color:#1b5e20;">{ticketNumber}</span><br/>
+                      <small style="color:#555;">Keep this number to track your request</small>
+                    </td></tr>
+                  </table>
+
+                  <table width="100%" cellpadding="4" cellspacing="0"
+                         style="background:#f8f9fa;border-radius:10px;padding:20px;margin-bottom:24px;font-size:14px;color:#555;line-height:2;">
+                    <tr><td style="color:#888;width:40%;">Issue</td><td><strong>{title}</strong></td></tr>
+                    <tr><td style="color:#888;">Type</td><td>{typeIcon} <strong>{requestType}</strong></td></tr>
+                    <tr><td style="color:#888;">Priority</td><td><strong style="color:{priorityColor};">{priority}</strong></td></tr>
+                    <tr><td style="color:#888;">Unit</td><td><strong>{unitNumber}</strong></td></tr>
+                    <tr><td style="color:#888;">Property</td><td><strong>{propertyName}</strong></td></tr>
+                    <tr><td style="color:#888;">Status</td><td><strong style="color:{statusColor};">{status}</strong></td></tr>
+                  </table>
+
+                  <p style="margin:0;color:#999;font-size:13px;">Best regards,<br/><strong style="color:#333;">The RentEase Team</strong></p>
+                </td></tr>
+                <tr><td style="background:#f8f9fa;padding:20px 40px;text-align:center;border-top:1px solid #e9ecef;">
+                  <p style="margin:0;color:#aaa;font-size:12px;">© 2026 RentEase — Property Leasing & Management Platform<br/>This is an automated message, please do not reply.</p>
+                </td></tr>
+              </table>
+            </td></tr>
+          </table>
+        </body>
+        </html>
+        """;
+    }
+
     // ── Application Submitted ──────────────────────────────────────────────
     public async Task SendApplicationSubmittedAsync(string toEmail, string toName,
         string unitNumber, string propertyName, int applicationId)
@@ -103,6 +265,152 @@ public class EmailService
         message.To.Add(new MailAddress(toEmail));
 
         await client.SendMailAsync(message);
+    }
+
+    // ── Payment Confirmation ───────────────────────────────────────────────
+    public async Task SendPaymentConfirmationAsync(string toEmail, string toName,
+        string unitNumber, string propertyName,
+        string planType, decimal amountPaid, DateTime paidOn,
+        string leaseStatus, DateTime leaseStart, DateTime leaseEnd)
+    {
+        string subject = "RentEase — Payment Confirmed ✅";
+        string body    = BuildPaymentEmail(toName, unitNumber, propertyName,
+            planType, amountPaid, paidOn, leaseStatus, leaseStart, leaseEnd);
+        await SendAsync(toEmail, subject, body);
+    }
+
+    // ── Payment Email Template ─────────────────────────────────────────────
+    private static string BuildPaymentEmail(string name, string unitNumber, string propertyName,
+        string planType, decimal amountPaid, DateTime paidOn,
+        string leaseStatus, DateTime leaseStart, DateTime leaseEnd)
+    {
+        string statusColor = leaseStatus == "Active" ? "#2e7d32" : "#1a73e8";
+        string planDesc    = planType == "Full"
+            ? "Full Payment (entire lease period)"
+            : "Monthly Installment Plan (first installment)";
+
+        return $"""
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="UTF-8"/>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+          <title>Payment Confirmed</title>
+        </head>
+        <body style="margin:0;padding:0;background:#f4f6f9;font-family:'Segoe UI',Arial,sans-serif;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f9;padding:40px 0;">
+            <tr><td align="center">
+              <table width="600" cellpadding="0" cellspacing="0"
+                     style="background:#ffffff;border-radius:12px;overflow:hidden;
+                            box-shadow:0 4px 20px rgba(0,0,0,0.08);">
+
+                <!-- Header -->
+                <tr>
+                  <td style="background:linear-gradient(135deg,#1a73e8,#0d47a1);
+                             padding:36px 40px;text-align:center;">
+                    <h1 style="margin:0;color:#ffffff;font-size:28px;font-weight:700;">
+                      🏠 RentEase
+                    </h1>
+                    <p style="margin:6px 0 0;color:#bbdefb;font-size:14px;">
+                      Property Leasing & Management Platform
+                    </p>
+                  </td>
+                </tr>
+
+                <!-- Status Banner -->
+                <tr>
+                  <td style="background:#2e7d32;padding:16px 40px;text-align:center;">
+                    <p style="margin:0;color:#ffffff;font-size:20px;font-weight:700;">
+                      ✅ Payment Confirmed
+                    </p>
+                  </td>
+                </tr>
+
+                <!-- Body -->
+                <tr>
+                  <td style="padding:40px;">
+                    <p style="margin:0 0 8px;color:#555;font-size:15px;">
+                      Hello, <strong>{name}</strong>
+                    </p>
+                    <p style="margin:0 0 28px;color:#555;font-size:15px;line-height:1.7;">
+                      Your payment has been successfully processed and your lease is now
+                      <strong style="color:{statusColor};">{leaseStatus}</strong>.
+                      Thank you for choosing RentEase!
+                    </p>
+
+                    <!-- Receipt Box -->
+                    <table width="100%" cellpadding="0" cellspacing="0"
+                           style="background:#f0f7f0;border:1px solid #c8e6c9;
+                                  border-radius:10px;padding:24px;margin-bottom:24px;">
+                      <tr>
+                        <td>
+                          <p style="margin:0 0 14px;color:#2e7d32;font-size:16px;font-weight:700;">
+                            🧾 Payment Receipt
+                          </p>
+                          <table width="100%" cellpadding="4" cellspacing="0"
+                                 style="font-size:14px;color:#555;">
+                            <tr>
+                              <td style="width:45%;color:#888;">Amount Paid</td>
+                              <td><strong style="color:#2e7d32;font-size:18px;">BD {amountPaid:N2}</strong></td>
+                            </tr>
+                            <tr>
+                              <td style="color:#888;">Payment Plan</td>
+                              <td><strong>{planDesc}</strong></td>
+                            </tr>
+                            <tr>
+                              <td style="color:#888;">Paid On</td>
+                              <td><strong>{paidOn:dd MMM yyyy, HH:mm}</strong></td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <!-- Lease Details -->
+                    <table width="100%" cellpadding="0" cellspacing="0"
+                           style="background:#f8f9fa;border-radius:10px;
+                                  padding:20px;margin-bottom:28px;">
+                      <tr>
+                        <td style="color:#555;font-size:14px;line-height:2;">
+                          <strong style="color:#333;">Lease Details</strong><br/>
+                          🏠 Unit: <strong>{unitNumber}</strong><br/>
+                          🏢 Property: <strong>{propertyName}</strong><br/>
+                          📅 Start Date: <strong>{leaseStart:dd MMM yyyy}</strong><br/>
+                          📅 End Date: <strong>{leaseEnd:dd MMM yyyy}</strong><br/>
+                          📌 Lease Status: <strong style="color:{statusColor};">{leaseStatus}</strong>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <p style="margin:0 0 28px;color:#555;font-size:14px;line-height:1.6;">
+                      You can view your lease details and payment schedule anytime by logging
+                      into <strong>RentEase</strong> and visiting <em>My Applications & Leases</em>.
+                    </p>
+
+                    <p style="margin:0;color:#999;font-size:13px;">
+                      Best regards,<br/>
+                      <strong style="color:#333;">The RentEase Team</strong>
+                    </p>
+                  </td>
+                </tr>
+
+                <!-- Footer -->
+                <tr>
+                  <td style="background:#f8f9fa;padding:20px 40px;text-align:center;
+                             border-top:1px solid #e9ecef;">
+                    <p style="margin:0;color:#aaa;font-size:12px;">
+                      © 2026 RentEase — Property Leasing & Management Platform<br/>
+                      This is an automated message, please do not reply.
+                    </p>
+                  </td>
+                </tr>
+
+              </table>
+            </td></tr>
+          </table>
+        </body>
+        </html>
+        """;
     }
 
     // ── Application Email Template ─────────────────────────────────────────

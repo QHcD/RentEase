@@ -153,7 +153,11 @@ public class LeaseListViewModel
     public int?     RenewLeaseApplicationId  { get; set; }
     public string?  RenewApplicationStatus   { get; set; }
 
-    public List<LeaseLogViewModel> Logs      { get; set; } = new();
+    // Tenant contact (populated for manager view)
+    public string?  TenantEmail  { get; set; }
+    public string?  TenantPhone  { get; set; }
+
+    public List<LeaseLogViewModel>      Logs     { get; set; } = new();
     public List<PaymentSummaryViewModel> Payments { get; set; } = new();
 }
 

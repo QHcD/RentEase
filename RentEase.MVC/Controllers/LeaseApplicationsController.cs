@@ -409,6 +409,8 @@ public class LeaseApplicationsController : Controller
             TerminationNotes        = lease.Termination?.Notes,
             RenewLeaseApplicationId = lease.RenewLeaseApplicationId,
             RenewApplicationStatus  = lease.RenewLeaseApplication?.Status,
+            TenantEmail             = lease.Application.User.Email,
+            TenantPhone             = lease.Application.User.Phone,
             Logs                    = lease.LeaseLogs
                 .OrderBy(ll => ll.CreatedAt)
                 .Select(ll => new LeaseLogViewModel

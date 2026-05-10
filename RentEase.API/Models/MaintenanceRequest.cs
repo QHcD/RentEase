@@ -53,6 +53,14 @@ public partial class MaintenanceRequest
     [StringLength(500)]
     public string? ResolutionNotes { get; set; }
 
+    // Optional photo uploaded by tenant when submitting
+    [StringLength(300)]
+    public string? ImagePath { get; set; }
+
+    // Resolution proof photo uploaded by staff when resolving
+    [StringLength(300)]
+    public string? ResolutionImagePath { get; set; }
+
     [ForeignKey("UnitId")]
     [InverseProperty("MaintenanceRequests")]
     public virtual Unit Unit { get; set; } = null!;

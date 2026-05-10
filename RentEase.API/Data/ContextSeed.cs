@@ -27,11 +27,12 @@ public static class ContextSeed
             await SeedUser(userManager, db, "manager@propleasing.com",  "Ahmed Al-Mansoori", "Manager@123", "PropertyManager", "+97317171001", logger);
 
             // ── Tenants ──
-            await SeedUser(userManager, db, "tenant1@example.com", "Sara Al-Khalifa",    "Tenant@123", "Tenant", "+97333112233", logger);
-            await SeedUser(userManager, db, "tenant2@example.com", "Mohammed Al-Baker",  "Tenant@123", "Tenant", "+97333224455", logger);
-            await SeedUser(userManager, db, "tenant3@example.com", "Noor Ibrahim",       "Tenant@123", "Tenant", "+97333667788", logger);
-            await SeedUser(userManager, db, "tenant4@example.com", "Fatima Al-Zayani",  "Tenant@123", "Tenant", "+97333991122", logger);
-            await SeedUser(userManager, db, "tenant5@example.com", "Omar Al-Rumaihi",   "Tenant@123", "Tenant", "+97333556677", logger);
+            await SeedUser(userManager, db, "tenant1@example.com",        "Sara Al-Khalifa",    "Tenant@123",  "Tenant", "+97333112233", logger);
+            await SeedUser(userManager, db, "tenant2@example.com",        "Mohammed Al-Baker",  "Tenant@123",  "Tenant", "+97333224455", logger);
+            await SeedUser(userManager, db, "tenant3@example.com",        "Noor Ibrahim",       "Tenant@123",  "Tenant", "+97333667788", logger);
+            await SeedUser(userManager, db, "tenant4@example.com",        "Fatima Al-Zayani",   "Tenant@123",  "Tenant", "+97333991122", logger);
+            await SeedUser(userManager, db, "tenant5@example.com",        "Omar Al-Rumaihi",    "Tenant@123",  "Tenant", "+97333556677", logger);
+            await SeedUser(userManager, db, "murtadhaahss05@gmail.com",   "Murtadha",           "12345678aA@", "Tenant", "+97333000001", logger);
 
             // ── Maintenance Staff ──
             await SeedUser(userManager, db, "staff1@propleasing.com", "Ali Hassan",        "Staff@123", "MaintenanceStaff", "+97333445566", logger);

@@ -1,8 +1,27 @@
 @model PropertyLeasing.MVC.ViewModels.LeaseListViewModel
 @{
     ViewData["Title"] = $"Lease #{Model.LeaseId}";
-    var badgeColor = Model.Status switch
-    {
+
+    var today      = DateTime.Today;
+    var remaining  = (Model.LeaseEndDate - today).Days;
+    var totalDays  = (Model.LeaseEndDate - Model.LeaseStartDate).Days;
+    var elapsed    = (today - Model.LeaseStartDate).Days;
+    var progress   = totalDays > 0 ? Math.Clamp((int)(elapsed * 100.0 / totalDays), 0, 100) : 100;
+
+    bool canRenew     = Model.Status == "Active"
+                        && Model.RenewLeaseApplicationId == null
+                        && Model.TerminationId == null
+                        && remaining >= 2 && remaining <= 183;
+
+    bool renewBlocked = Model.Status == "Active"
+                        && (Model.RenewLeaseApplicationId != null || Model.TerminationId != null
+                            || remaining < 2 || remaining > 183);
+
+    bool canTerminateActive = Model.Status == "Active" && Model.RenewLeaseApplicationId == null;
+    bool termBlocked        = Model.Status == "Active" && Model.RenewLeaseApplicationId != null;
+    bool isLeaseOverdue     = Model.LeaseEndDate < today && Model.Status == "Active";
+
+    string BadgeColor(string s) => s switch {
         "Active"         => "success",
         "Approved"       => "info",
         "Renewed"        => "primary",
@@ -10,33 +29,27 @@
         "PendingPayment" => "warning",
         _                => "secondary"
     };
-
-    var today        = DateTime.Today;
-    var remaining    = (Model.LeaseEndDate - today).Days;
-    bool canRenew    = Model.Status == "Active"
-                       && Model.RenewLeaseApplicationId == null
-                       && Model.TerminationId == null
-                       && remaining >= 2 && remaining <= 183;
-    bool renewBlocked = Model.Status == "Active"
-                        && (Model.RenewLeaseApplicationId != null || Model.TerminationId != null
-                            || remaining < 2 || remaining > 183);
-
-    bool canTerminateActive  = Model.Status == "Active" && Model.RenewLeaseApplicationId == null;
-    bool termBlocked         = Model.Status == "Active" && Model.RenewLeaseApplicationId != null;
-
-    bool isLeaseOverdue = Model.LeaseEndDate < today && Model.Status == "Active";
-
-    string PayBadge(string s) => s switch
-    {
+    string PayBadge(string s) => s switch {
         "Paid"     => "success",
         "Overdue"  => "danger",
         "Unpaid"   => "warning",
         "Upcoming" => "info",
         _          => "secondary"
     };
+
+    var badgeColor   = BadgeColor(Model.Status);
+
+    // Payment summary counts
+    var paidCount     = Model.Payments.Count(p => p.Status == "Paid");
+    var overdueCount  = Model.Payments.Count(p => p.Status == "Overdue");
+    var unpaidCount   = Model.Payments.Count(p => p.Status == "Unpaid");
+    var upcomingCount = Model.Payments.Count(p => p.Status == "Upcoming");
+    var totalAmt      = Model.Payments.Sum(p => p.AmountDue + (p.LateFee ?? 0));
+    var paidAmt       = Model.Payments.Where(p => p.Status == "Paid").Sum(p => p.AmountPaid ?? p.AmountDue);
+    var remaining_amt = totalAmt - paidAmt;
 }
 
-<!-- Terminate Now Modal (Approved lease) -->
+<!-- Modals -->
 <div class="modal fade" id="terminateNowModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -46,51 +59,47 @@
             </div>
             <div class="modal-body">
                 <p>Are you sure you want to <strong>terminate this lease immediately</strong>?</p>
-                <p class="text-muted">This lease has not started yet (start date: <strong>@Model.LeaseStartDate.ToString("dd MMM yyyy")</strong>).
-                The unit will be released back to available and this action cannot be undone.</p>
+                <p class="text-muted small">Start date: <strong>@Model.LeaseStartDate.ToString("dd MMM yyyy")</strong>.
+                   The unit will be released and this action cannot be undone.</p>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Keep Lease</button>
+                <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Keep Lease</button>
                 <form asp-action="TerminateNow" method="post">
                     @Html.AntiForgeryToken()
                     <input type="hidden" name="leaseId" value="@Model.LeaseId" />
-                    <button type="submit" class="btn btn-danger">
-                        <i class="fa fa-times me-1"></i>Terminate Now
-                    </button>
+                    <button type="submit" class="btn btn-danger"><i class="fa fa-times me-1"></i>Terminate Now</button>
                 </form>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Cancel Termination Modal -->
 <div class="modal fade" id="cancelTermModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header bg-secondary text-white">
-                <h5 class="modal-title"><i class="fa fa-undo me-2"></i>Cancel Scheduled Termination</h5>
+                <h5 class="modal-title"><i class="fa fa-undo me-2"></i>Cancel Termination</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 Cancel the scheduled termination on <strong>@(Model.TerminationDate?.ToString("dd MMM yyyy") ?? "-")</strong>?
-                Your lease will continue until its original end date of <strong>@Model.LeaseEndDate.ToString("dd MMM yyyy")</strong>.
+                Lease continues until <strong>@Model.LeaseEndDate.ToString("dd MMM yyyy")</strong>.
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Keep Termination</button>
+                <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Keep Termination</button>
                 <form asp-action="CancelTermination" method="post">
                     @Html.AntiForgeryToken()
                     <input type="hidden" name="leaseId" value="@Model.LeaseId" />
-                    <button type="submit" class="btn btn-warning">
-                        <i class="fa fa-undo me-1"></i>Cancel Termination
-                    </button>
+                    <button type="submit" class="btn btn-warning"><i class="fa fa-undo me-1"></i>Cancel Termination</button>
                 </form>
             </div>
         </div>
     </div>
 </div>
 
+<!-- Page header -->
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h2><i class="fa fa-key me-2"></i>Lease #@Model.LeaseId</h2>
+    <h2 class="mb-0"><i class="fa fa-key me-2 text-@badgeColor"></i>Lease #@Model.LeaseId</h2>
     <a asp-action="Index" asp-route-tab="leases" class="btn btn-outline-secondary btn-sm">
         <i class="fa fa-arrow-left me-1"></i>Back to List
     </a>
@@ -99,7 +108,7 @@
 @if (TempData["Success"] != null)
 {
     <div class="alert alert-success alert-dismissible fade show">
-        @TempData["Success"]
+        <i class="fa fa-check-circle me-2"></i>@Html.Raw(TempData["Success"])
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
 }
@@ -110,112 +119,135 @@
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
 }
-
 @if (isLeaseOverdue)
 {
     <div class="alert alert-warning">
         <i class="fa fa-exclamation-triangle me-2"></i>
-        This lease passed its end date and is still marked <strong>Active</strong>.
+        This lease passed its end date (<strong>@Model.LeaseEndDate.ToString("dd MMM yyyy")</strong>) and is still marked Active.
     </div>
 }
 
 <div class="row g-4">
 
-    <!-- Lease Info card — always col-md-7 (Status History fills col-md-5) -->
+    <!-- ══ Lease Details card ══════════════════════════════════════════════ -->
     <div class="col-md-7">
-        <div class="card shadow-sm">
+        <div class="card shadow-sm h-100">
             <div class="card-header bg-@badgeColor text-white d-flex justify-content-between align-items-center">
                 <span><i class="fa fa-file-contract me-2"></i>Lease Details</span>
-                <span class="badge bg-white text-dark fs-6">@Model.Status</span>
+                <span class="badge bg-white text-@badgeColor fs-6 fw-bold">@Model.Status</span>
             </div>
             <div class="card-body">
+
+                <!-- Duration progress bar -->
+                @if (Model.Status == "Active" || Model.Status == "Approved")
+                {
+                    <div class="mb-4">
+                        <div class="d-flex justify-content-between small text-muted mb-1">
+                            <span><i class="fa fa-calendar-day me-1"></i>@Model.LeaseStartDate.ToString("dd MMM yyyy")</span>
+                            @if (remaining > 0)
+                            {
+                                <span class="fw-semibold text-@(remaining <= 60 ? "danger" : remaining <= 183 ? "warning" : "success")">
+                                    @remaining days remaining
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="text-danger fw-semibold">Expired</span>
+                            }
+                            <span><i class="fa fa-calendar-check me-1"></i>@Model.LeaseEndDate.ToString("dd MMM yyyy")</span>
+                        </div>
+                        <div class="progress" style="height:8px;">
+                            <div class="progress-bar bg-@(remaining <= 60 ? "danger" : remaining <= 183 ? "warning" : "success")"
+                                 style="width:@progress%"></div>
+                        </div>
+                    </div>
+                }
+
                 <dl class="row mb-0">
-                    <dt class="col-sm-4">Property</dt>
-                    <dd class="col-sm-8">@Model.PropertyName</dd>
+                    <dt class="col-sm-5">Property</dt>
+                    <dd class="col-sm-7">@Model.PropertyName</dd>
 
-                    <dt class="col-sm-4">Unit</dt>
-                    <dd class="col-sm-8">@Model.UnitNumber</dd>
+                    <dt class="col-sm-5">Unit</dt>
+                    <dd class="col-sm-7 text-primary fw-semibold">@Model.UnitNumber</dd>
 
-                    <dt class="col-sm-4">Start Date</dt>
-                    <dd class="col-sm-8">@Model.LeaseStartDate.ToString("dd MMM yyyy")</dd>
+                    <dt class="col-sm-5">Start Date</dt>
+                    <dd class="col-sm-7">@Model.LeaseStartDate.ToString("dd MMM yyyy")</dd>
 
-                    <dt class="col-sm-4">End Date</dt>
-                    <dd class="col-sm-8">
+                    <dt class="col-sm-5">End Date</dt>
+                    <dd class="col-sm-7">
                         @Model.LeaseEndDate.ToString("dd MMM yyyy")
                         @if (isLeaseOverdue)
-                        {
-                            <span class="badge bg-warning text-dark ms-1">Overdue</span>
-                        }
+                        { <span class="badge bg-warning text-dark ms-1">Overdue</span> }
                     </dd>
 
                     @if (Model.TerminationDate.HasValue)
                     {
-                        <dt class="col-sm-4 text-danger">Termination Date</dt>
-                        <dd class="col-sm-8">
+                        <dt class="col-sm-5 text-danger">Termination Date</dt>
+                        <dd class="col-sm-7">
                             <span class="text-danger fw-semibold">
                                 <i class="fa fa-scissors me-1"></i>@Model.TerminationDate.Value.ToString("dd MMM yyyy")
                             </span>
                             @if (!string.IsNullOrWhiteSpace(Model.TerminationNotes))
-                            {
-                                <br /><small class="text-muted fst-italic">@Model.TerminationNotes</small>
-                            }
+                            { <br /><small class="text-muted fst-italic">@Model.TerminationNotes</small> }
                         </dd>
                     }
 
-                    <dt class="col-sm-4">Monthly Rent</dt>
-                    <dd class="col-sm-8">
+                    <dt class="col-sm-5">Monthly Rent</dt>
+                    <dd class="col-sm-7">
                         <strong class="text-success fs-5">BD @Model.MonthlyRent.ToString("N2")</strong>
                     </dd>
 
-                    <dt class="col-sm-4">Security Deposit</dt>
-                    <dd class="col-sm-8">BD @Model.SecurityDeposit.ToString("N2")</dd>
+                    <dt class="col-sm-5">Security Deposit</dt>
+                    <dd class="col-sm-7">BD @Model.SecurityDeposit.ToString("N2")</dd>
 
-                    <dt class="col-sm-4">Status</dt>
-                    <dd class="col-sm-8">
+                    @if (!string.IsNullOrEmpty(Model.PaymentPlanType))
+                    {
+                        <dt class="col-sm-5">Payment Plan</dt>
+                        <dd class="col-sm-7">
+                            <span class="badge bg-secondary">@Model.PaymentPlanType</span>
+                        </dd>
+                    }
+
+                    <dt class="col-sm-5">Status</dt>
+                    <dd class="col-sm-7">
                         <span class="badge bg-@badgeColor fs-6">@Model.Status</span>
                     </dd>
 
                     @if (Model.RenewLeaseApplicationId.HasValue)
                     {
-                        <dt class="col-sm-4">Renewal App.</dt>
-                        <dd class="col-sm-8">
+                        <dt class="col-sm-5">Renewal App.</dt>
+                        <dd class="col-sm-7">
                             <a asp-action="Details" asp-route-id="@Model.RenewLeaseApplicationId" class="text-info">
-                                <i class="fa fa-sync me-1"></i>Application #@Model.RenewLeaseApplicationId
+                                <i class="fa fa-sync me-1"></i>App #@Model.RenewLeaseApplicationId
                             </a>
                             <span class="badge bg-secondary ms-1">@(Model.RenewApplicationStatus ?? "Pending")</span>
                         </dd>
                     }
 
-                    <dt class="col-sm-4">Created</dt>
-                    <dd class="col-sm-8">@Model.CreatedAt.ToString("dd MMM yyyy, HH:mm")</dd>
+                    <dt class="col-sm-5">Created</dt>
+                    <dd class="col-sm-7 text-muted small">@Model.CreatedAt.ToString("dd MMM yyyy, HH:mm")</dd>
                 </dl>
             </div>
 
-            @* Tenant-only action buttons in the card footer *@
             @if (!User.IsInRole("PropertyManager"))
             {
                 <div class="card-footer bg-light d-flex flex-wrap gap-2 align-items-center">
-
                     @if (Model.Status == "PendingPayment")
                     {
                         <a asp-controller="Payments" asp-action="SelectPlan"
-                           asp-route-leaseId="@Model.LeaseId"
-                           class="btn btn-warning btn-sm">
+                           asp-route-leaseId="@Model.LeaseId" class="btn btn-warning btn-sm">
                             <i class="fa fa-credit-card me-2"></i>Pay Now
                         </a>
                     }
-
                     @if (Model.Status == "Approved")
                     {
                         <span class="text-muted small me-2">
                             Activates on <strong>@Model.LeaseStartDate.ToString("dd MMM yyyy")</strong>
                         </span>
-                        <button type="button" class="btn btn-danger btn-sm"
-                                data-bs-toggle="modal" data-bs-target="#terminateNowModal">
+                        <button class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#terminateNowModal">
                             <i class="fa fa-times-circle me-2"></i>Terminate Lease Now
                         </button>
                     }
-
                     @if (Model.Status == "Active")
                     {
                         @if (canTerminateActive)
@@ -225,9 +257,9 @@
                                 <a asp-action="TerminateLease" asp-route-leaseId="@Model.LeaseId"
                                    class="btn btn-outline-danger btn-sm">
                                     <i class="fa fa-scissors me-2"></i>Edit Termination
-                                    <small class="d-inline ms-1 text-muted">(@Model.TerminationDate?.ToString("dd MMM yyyy"))</small>
+                                    <small class="ms-1 text-muted">(@Model.TerminationDate?.ToString("dd MMM yyyy"))</small>
                                 </a>
-                                <button type="button" class="btn btn-outline-secondary btn-sm"
+                                <button class="btn btn-outline-secondary btn-sm"
                                         data-bs-toggle="modal" data-bs-target="#cancelTermModal">
                                     <i class="fa fa-undo me-1"></i>Cancel Termination
                                 </button>
@@ -253,7 +285,7 @@
                             <a asp-action="ApplyRenew" asp-route-leaseId="@Model.LeaseId"
                                class="btn btn-info btn-sm">
                                 <i class="fa fa-sync me-2"></i>Apply Renew
-                                <small class="d-inline ms-1">(@remaining days left)</small>
+                                <small class="ms-1">(@remaining days left)</small>
                             </a>
                         }
                         else if (renewBlocked)
@@ -266,14 +298,13 @@
                                 <i class="fa fa-sync me-2"></i>Apply Renew
                             </button>
                             <small class="text-muted">
-                                @if (Model.TerminationId != null)                    { <span>Termination is scheduled.</span> }
-                                else if (Model.RenewLeaseApplicationId != null)      { <span>Renewal already submitted.</span> }
-                                else if (remaining > 183)                            { <span>Available when 6 months or less remain.</span> }
-                                else                                                 { <span>Less than 2 days remaining.</span> }
+                                @if (Model.TerminationId != null)               { <span>Termination is scheduled.</span> }
+                                else if (Model.RenewLeaseApplicationId != null) { <span>Renewal already submitted.</span> }
+                                else if (remaining > 183)                       { <span>Available when 6 months or less remain.</span> }
+                                else                                            { <span>Less than 2 days remaining.</span> }
                             </small>
                         }
                     }
-
                     @if (Model.Status == "Terminated" || Model.Status == "Renewed")
                     {
                         <span class="text-muted small">
@@ -286,100 +317,142 @@
         </div>
     </div>
 
-    <!-- Status History — col-md-5 beside Lease Details -->
-    <div class="col-md-5">
-        <div class="card shadow-sm h-100">
-            <div class="card-header bg-light">
-                <i class="fa fa-history me-2"></i>Status History
-            </div>
-            @if (Model.Logs.Any())
-            {
-                <div class="card-body p-0">
-                    <ul class="list-group list-group-flush">
-                        @foreach (var log in Model.Logs)
-                        {
-                            var logBadge = log.Status switch
-                            {
-                                "Active"         => "success",
-                                "Approved"       => "info",
-                                "Renewed"        => "primary",
-                                "Terminated"     => "danger",
-                                "PendingPayment" => "warning",
-                                _                => "secondary"
-                            };
-                            <li class="list-group-item d-flex justify-content-between align-items-start">
-                                <div>
-                                    <span class="badge bg-@logBadge me-2">@log.Status</span>
-                                    <small class="text-muted">by @log.ChangedByUserName</small>
-                                    @if (!string.IsNullOrWhiteSpace(log.Notes))
-                                    {
-                                        <p class="mb-0 mt-1 small text-muted fst-italic">@log.Notes</p>
-                                    }
-                                </div>
-                                <small class="text-muted text-nowrap ms-3">
-                                    @log.CreatedAt.ToString("dd MMM yyyy, HH:mm")
-                                </small>
-                            </li>
-                        }
-                    </ul>
+    <!-- ══ Right column: Tenant info (manager) + Status History ═══════════ -->
+    <div class="col-md-5 d-flex flex-column gap-4">
+
+        @if (User.IsInRole("PropertyManager"))
+        {
+            <!-- Tenant Info Card -->
+            <div class="card shadow-sm">
+                <div class="card-header bg-dark text-white">
+                    <i class="fa fa-user me-2"></i>Tenant Information
                 </div>
-            }
-            else
-            {
-                <div class="card-body text-muted">No status history recorded.</div>
-            }
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-3 mb-3">
+                        <div class="bg-secondary text-white rounded-circle d-flex align-items-center justify-content-center"
+                             style="width:48px;height:48px;font-size:1.4rem;flex-shrink:0;">
+                            @(Model.TenantName.Length > 0 ? Model.TenantName[0].ToString().ToUpper() : "?")
+                        </div>
+                        <div>
+                            <div class="fw-bold fs-6">@Model.TenantName</div>
+                            @if (!string.IsNullOrEmpty(Model.TenantEmail))
+                            {
+                                <div class="small text-muted">
+                                    <i class="fa fa-envelope me-1"></i>
+                                    <a href="mailto:@Model.TenantEmail" class="text-muted">@Model.TenantEmail</a>
+                                </div>
+                            }
+                            @if (!string.IsNullOrEmpty(Model.TenantPhone))
+                            {
+                                <div class="small text-muted">
+                                    <i class="fa fa-phone me-1"></i>@Model.TenantPhone
+                                </div>
+                            }
+                        </div>
+                    </div>
+                    <a asp-action="Index" asp-route-tab="applications" asp-route-appStatus="Approved"
+                       class="btn btn-outline-primary btn-sm w-100">
+                        <i class="fa fa-file-alt me-1"></i>View Applications
+                    </a>
+                </div>
+            </div>
+        }
+
+        <!-- Status History -->
+        <div class="card shadow-sm flex-grow-1">
+            <div class="card-header bg-light">
+                <i class="fa fa-history me-2 text-secondary"></i>Status History
+            </div>
+            <div class="card-body p-0">
+                <ul class="list-group list-group-flush">
+                    @{
+                        // Synthetic "Lease Created" entry if no logs
+                        bool hasLogs = Model.Logs.Any();
+                    }
+                    @if (!hasLogs)
+                    {
+                        <li class="list-group-item d-flex justify-content-between align-items-start">
+                            <div>
+                                <span class="badge bg-secondary me-2">Created</span>
+                                <small class="text-muted">Lease record created</small>
+                            </div>
+                            <small class="text-muted text-nowrap ms-3">
+                                @Model.CreatedAt.ToString("dd MMM yyyy, HH:mm")
+                            </small>
+                        </li>
+                    }
+                    @foreach (var log in Model.Logs)
+                    {
+                        var logBadge = BadgeColor(log.Status);
+                        <li class="list-group-item d-flex justify-content-between align-items-start">
+                            <div>
+                                <span class="badge bg-@logBadge me-2">@log.Status</span>
+                                <small class="text-muted">by @log.ChangedByUserName</small>
+                                @if (!string.IsNullOrWhiteSpace(log.Notes))
+                                {
+                                    <p class="mb-0 mt-1 small text-muted fst-italic">@log.Notes</p>
+                                }
+                            </div>
+                            <small class="text-muted text-nowrap ms-3">
+                                @log.CreatedAt.ToString("dd MMM yyyy, HH:mm")
+                            </small>
+                        </li>
+                    }
+                </ul>
+            </div>
         </div>
     </div>
 
-    <!-- Manager-only: Tenant Info (own row below the two-column block) -->
-    @if (User.IsInRole("PropertyManager"))
-    {
-        <div class="col-md-5">
-            <div class="card shadow-sm">
-                <div class="card-header bg-dark text-white">
-                    <i class="fa fa-user me-2"></i>Tenant
-                </div>
-                <div class="card-body d-flex align-items-center">
-                    <div>
-                        <p class="mb-0 fs-5 fw-semibold">@Model.TenantName</p>
-                        <a asp-action="Index"
-                           asp-route-tab="applications"
-                           asp-route-appStatus="Approved"
-                           class="btn btn-outline-primary btn-sm mt-2">
-                            <i class="fa fa-file-alt me-1"></i>View Applications
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-    }
-
-    <!-- Payment Records -->
+    <!-- ══ Payment Schedule (full width) ══════════════════════════════════ -->
     <div class="col-12">
         <div class="card shadow-sm">
-            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center flex-wrap gap-2">
                 <span><i class="fa fa-money-bill-wave me-2"></i>Payment Schedule</span>
-                <small class="text-muted">
-                    Grace Period: <strong>@Model.GracePeriodDays days</strong>
-                    &nbsp;|&nbsp; Late Fee: <strong>@Model.LateFeePercent%</strong> of installment
-                </small>
+                <div class="d-flex gap-3 small text-muted">
+                    <span>Grace Period: <strong>@Model.GracePeriodDays days</strong></span>
+                    <span>Late Fee: <strong>@Model.LateFeePercent%</strong> of installment</span>
+                    @if (!string.IsNullOrEmpty(Model.PaymentPlanType))
+                    {
+                        <span>Plan: <strong>@Model.PaymentPlanType</strong></span>
+                    }
+                </div>
             </div>
+
             @if (!Model.Payments.Any())
             {
                 <div class="card-body text-muted">No payment records found.</div>
             }
             else
             {
-                var paidCount    = Model.Payments.Count(p => p.Status == "Paid");
-                var overdueCount = Model.Payments.Count(p => p.Status == "Overdue");
-                var unpaidCount  = Model.Payments.Count(p => p.Status == "Unpaid");
-                <div class="card-body pb-0">
-                    <div class="d-flex gap-3 mb-3 flex-wrap">
-                        <span class="badge bg-success fs-6">Paid: @paidCount</span>
-                        <span class="badge bg-warning text-dark fs-6">Unpaid: @unpaidCount</span>
-                        <span class="badge bg-danger fs-6">Overdue: @overdueCount</span>
+                <!-- Summary pills + totals -->
+                <div class="card-body pb-2">
+                    <div class="row g-3 align-items-center">
+                        <div class="col-auto">
+                            <div class="d-flex gap-2 flex-wrap">
+                                @if (paidCount > 0)
+                                { <span class="badge bg-success fs-6">Paid: @paidCount</span> }
+                                @if (unpaidCount > 0)
+                                { <span class="badge bg-warning text-dark fs-6">Unpaid: @unpaidCount</span> }
+                                @if (overdueCount > 0)
+                                { <span class="badge bg-danger fs-6">Overdue: @overdueCount</span> }
+                                @if (upcomingCount > 0)
+                                { <span class="badge bg-info fs-6">Upcoming: @upcomingCount</span> }
+                            </div>
+                        </div>
+                        <div class="col-auto ms-auto text-end small">
+                            <span class="text-muted">Total: </span>
+                            <strong>BD @totalAmt.ToString("N2")</strong>
+                            &nbsp;·&nbsp;
+                            <span class="text-success">Paid: BD @paidAmt.ToString("N2")</span>
+                            @if (remaining_amt > 0)
+                            {
+                                @: &nbsp;·&nbsp;
+                                <span class="text-danger">Remaining: BD @remaining_amt.ToString("N2")</span>
+                            }
+                        </div>
                     </div>
                 </div>
+
                 <div class="table-responsive">
                     <table class="table table-hover align-middle mb-0">
                         <thead class="table-light">
@@ -401,6 +474,7 @@
                             {
                                 var rowCls = p.Status == "Overdue" ? "table-danger"
                                            : p.Status == "Paid"    ? "table-success"
+                                           : p.Status == "Upcoming" ? "table-light"
                                            : "";
                                 decimal total = p.AmountDue + (p.LateFee ?? 0);
                                 <tr class="@rowCls">
@@ -409,14 +483,13 @@
                                     <td>BD @p.AmountDue.ToString("N2")</td>
                                     <td>
                                         @if (p.LateFee.HasValue && p.LateFee > 0)
-                                        {
-                                            <span class="text-danger fw-semibold">BD @p.LateFee.Value.ToString("N2")</span>
-                                        }
+                                        { <span class="text-danger fw-semibold">BD @p.LateFee.Value.ToString("N2")</span> }
                                         else { <span class="text-muted">—</span> }
                                     </td>
                                     <td class="fw-semibold">BD @total.ToString("N2")</td>
                                     <td>
-                                        @if (p.AmountPaid.HasValue) { <span>BD @p.AmountPaid.Value.ToString("N2")</span> }
+                                        @if (p.AmountPaid.HasValue)
+                                        { <span class="text-success">BD @p.AmountPaid.Value.ToString("N2")</span> }
                                         else { <span class="text-muted">—</span> }
                                     </td>
                                     <td class="text-muted small">@(p.PaidDate?.ToString("dd MMM yyyy") ?? "—")</td>
@@ -425,13 +498,17 @@
                                     <td>
                                         @if (!User.IsInRole("PropertyManager"))
                                         {
-                                            @if (p.Status == "Paid")
+                                            if (p.Status == "Paid")
                                             {
-                                                <span class="text-success small"><i class="fa fa-check-circle me-1"></i>Paid</span>
+                                                <span class="text-success small">
+                                                    <i class="fa fa-check-circle me-1"></i>Paid
+                                                </span>
                                             }
                                             else if (p.Status == "Upcoming")
                                             {
-                                                <span class="text-muted small"><i class="fa fa-clock me-1"></i>@p.DueDate.ToString("dd MMM yyyy")</span>
+                                                <span class="text-muted small">
+                                                    <i class="fa fa-clock me-1"></i>Due @p.DueDate.ToString("dd MMM")
+                                                </span>
                                             }
                                             else if (p.Status == "Unpaid" || p.Status == "Overdue")
                                             {
@@ -440,6 +517,16 @@
                                                    class="btn btn-sm @(p.Status == "Overdue" ? "btn-danger" : "btn-warning")">
                                                     <i class="fa fa-credit-card me-1"></i>Pay
                                                 </a>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <!-- Manager: show pay status label only -->
+                                            @if (p.Status == "Paid")
+                                            {
+                                                <span class="text-success small">
+                                                    <i class="fa fa-check-circle me-1"></i>Paid
+                                                </span>
                                             }
                                         }
                                     </td>
@@ -451,6 +538,5 @@
             }
         </div>
     </div>
-
 
 </div>

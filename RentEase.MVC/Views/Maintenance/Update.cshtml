@@ -1,58 +1,386 @@
 @model PropertyLeasing.MVC.ViewModels.UpdateMaintenanceViewModel
 @{
     ViewData["Title"] = "Update Request";
+
+    var isStaff = User.IsInRole("MaintenanceStaff");
+
+    // Closed is available for managers only (to dismiss irrelevant requests)
+    var statusOptions = isStaff
+        ? new[] { "InProgress", "Resolved" }
+        : new[] { "Submitted", "Assigned", "InProgress", "Resolved", "Closed" };
+
+    var statusConfig = new Dictionary<string, (string Label, string Icon, string Color)> {
+        ["Submitted"]  = ("Submitted",   "fa-circle-dot",        "secondary"),
+        ["Assigned"]   = ("Assigned",    "fa-user-check",        "info"),
+        ["InProgress"] = ("In Progress", "fa-screwdriver-wrench","primary"),
+        ["Resolved"]   = ("Resolved",    "fa-circle-check",      "success"),
+        ["Closed"]     = ("Closed",      "fa-lock",              "dark"),
+    };
+
+    string CatIcon(string? t) => t switch {
+        "Electrical" => "⚡", "HVAC" => "❄️", "Plumbing" => "🔧",
+        "Lock"       => "🚪", "Lighting" => "💡", "Windows" => "🪟",
+        "Cleaning"   => "🧹", _ => "🔨"
+    };
+    string BadgeColor(string s) => s switch {
+        "Submitted"  => "secondary", "Assigned" => "info",
+        "InProgress" => "primary",   "Resolved" => "success",
+        "Closed"     => "dark",      _ => "secondary"
+    };
 }
 
-<div class="row justify-content-center">
-    <div class="col-md-7">
-        <div class="card shadow-sm">
-            <div class="card-header bg-dark text-white">
-                <h5 class="mb-0"><i class="fa fa-edit me-2"></i>Update — @Model.Title</h5>
-                <small>Current status: <span class="badge bg-info">@Model.CurrentStatus</span></small>
+<style>
+    /* Status pill buttons */
+    .status-pill {
+        border-radius: 50px;
+        padding: .35rem .9rem;
+        font-size: .82rem;
+        font-weight: 600;
+        border: 2px solid #dee2e6;
+        background: #f8f9fa;
+        color: #555;
+        transition: all .15s ease;
+    }
+    .status-pill:hover { border-color: #adb5bd; background: #e9ecef; color: #222; }
+    .btn-status-Submitted.active   { background:#6c757d; border-color:#6c757d; color:#fff; }
+    .btn-status-Assigned.active    { background:#0dcaf0; border-color:#0dcaf0; color:#000; }
+    .btn-status-InProgress.active  { background:#0d6efd; border-color:#0d6efd; color:#fff; }
+    .btn-status-Resolved.active    { background:#198754; border-color:#198754; color:#fff; }
+    .btn-status-Submitted:hover:not(.active)  { border-color:#6c757d; color:#6c757d; }
+    .btn-status-Assigned:hover:not(.active)   { border-color:#0dcaf0; color:#0a9bba; }
+    .btn-status-InProgress:hover:not(.active) { border-color:#0d6efd; color:#0d6efd; }
+    .btn-status-Resolved:hover:not(.active)   { border-color:#198754; color:#198754; }
+    .btn-status-Closed.active                 { background:#212529; border-color:#212529; color:#fff; }
+    .btn-status-Closed:hover:not(.active)     { border-color:#212529; color:#212529; }
+
+    /* Staff cards */
+    .staff-upd-card {
+        border: 2px solid #dee2e6; border-radius: 10px;
+        padding: .55rem .85rem; cursor: pointer;
+        transition: all .15s; background: #fff;
+        margin-bottom: .4rem;
+    }
+    .staff-upd-card:hover { border-color: #ffc107; background: #fffbf0; }
+    .staff-upd-card.sel   { border-color: #fd7e14; background: #fff3cd;
+                            box-shadow: 0 0 0 3px rgba(253,126,20,.2); }
+    .s-av { width:32px; height:32px; border-radius:50%;
+            display:flex; align-items:center; justify-content:center;
+            font-weight:700; font-size:.9rem; flex-shrink:0; }
+
+    /* Resolution proof upload */
+    .res-upload-area {
+        border: 2px dashed #198754; border-radius: 10px;
+        padding: 1.2rem; text-align: center; cursor: pointer;
+        transition: all .2s; background: #f0fff4;
+        min-height: 90px; display: flex;
+        align-items: center; justify-content: center;
+    }
+    .res-upload-area:hover, .res-upload-area.dragover { background: #d1fae5; border-color: #0f6a35; }
+    .res-upload-area.has-image { padding: .5rem; }
+</style>
+
+<div class="d-flex align-items-center gap-2 mb-4">
+    <a asp-action="Details" asp-route-id="@Model.RequestId" class="btn btn-outline-secondary btn-sm">
+        <i class="fa fa-arrow-left me-1"></i> Back to Details
+    </a>
+    <h5 class="mb-0 ms-2"><i class="fa fa-edit me-2 text-warning"></i>Update Request</h5>
+</div>
+
+<div class="row justify-content-center g-4">
+
+    @* ── LEFT: Complaint Preview ── *@
+    <div class="col-lg-5">
+        <div class="card shadow-sm h-100">
+            <div class="card-header d-flex align-items-center gap-2"
+                 style="background: linear-gradient(135deg,#fd7e14,#ffc107);">
+                <span class="fs-3">@CatIcon(Model.RequestType)</span>
+                <div>
+                    <div class="fw-bold text-white">@Model.Title</div>
+                    <div class="mt-1">
+                        <span id="headerStatusBadge"
+                              class="badge bg-@BadgeColor(Model.CurrentStatus)">@Model.CurrentStatus</span>
+                        @if (!string.IsNullOrEmpty(Model.RequestType))
+                        {
+                            <span class="badge bg-light text-dark ms-1">@Model.RequestType</span>
+                        }
+                    </div>
+                </div>
             </div>
             <div class="card-body">
-                <form asp-action="Update" method="post">
-                    @Html.AntiForgeryToken()
-                    <input asp-for="RequestId" type="hidden" />
-                    <input asp-for="Title" type="hidden" />
-                    <input asp-for="CurrentStatus" type="hidden" />
+                @if (!string.IsNullOrEmpty(Model.Description))
+                {
+                    <div class="alert alert-light border mb-3">
+                        <i class="fa fa-quote-left me-2 text-warning"></i>@Model.Description
+                    </div>
+                }
 
-                    <div class="mb-3">
-                        <label asp-for="NewStatus" class="form-label">New Status</label>
-                        <select asp-for="NewStatus" class="form-select">
-                            <option value="Submitted">Submitted</option>
-                            <option value="Assigned">Assigned</option>
-                            <option value="InProgress">In Progress</option>
-                            <option value="Resolved">Resolved</option>
-                            <option value="Closed">Closed</option>
-                        </select>
+                @if (!string.IsNullOrEmpty(Model.ImagePath))
+                {
+                    <div class="mb-2">
+                        <div class="fw-semibold small text-muted mb-2">
+                            <i class="fa fa-camera me-1"></i>Attached Complaint Photo
+                        </div>
+                        <a href="@Model.ImagePath" target="_blank">
+                            <img src="@Model.ImagePath" alt="Complaint photo"
+                                 class="img-fluid rounded border"
+                                 style="max-height:280px; width:100%; object-fit:cover; cursor:zoom-in;" />
+                        </a>
+                        <div class="small text-muted mt-1">
+                            <i class="fa fa-magnifying-glass me-1"></i>Click to view full size
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="text-center text-muted py-4">
+                        <i class="fa fa-image fa-3x mb-2 opacity-25"></i>
+                        <div class="small">No photo attached to this request</div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    @* ── RIGHT: Update Form ── *@
+    <div class="col-lg-7">
+        <div class="card shadow-sm">
+            <div class="card-header bg-dark text-white">
+                <h6 class="mb-0"><i class="fa fa-edit me-2"></i>Update Request</h6>
+            </div>
+            <div class="card-body p-4">
+                <form asp-action="Update" method="post" enctype="multipart/form-data">
+                    @Html.AntiForgeryToken()
+                    <input asp-for="RequestId"     type="hidden" />
+                    <input asp-for="Title"         type="hidden" />
+                    <input asp-for="CurrentStatus" type="hidden" />
+                    <input type="hidden" name="NewStatus" id="newStatusInput" value="@Model.CurrentStatus" />
+
+                    @* ── Status Pills ── *@
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold">New Status</label>
+                        <div class="d-flex flex-wrap gap-2 mt-1">
+                            @foreach (var s in statusOptions)
+                            {
+                                var cfg      = statusConfig[s];
+                                var isActive = s == Model.CurrentStatus;
+                                <button type="button"
+                                        class="btn status-pill @(isActive ? "active" : "") btn-status-@s"
+                                        data-status="@s"
+                                        onclick="pickStatus(this)">
+                                    <i class="fa @cfg.Icon me-1"></i>@cfg.Label
+                                </button>
+                            }
+                        </div>
                     </div>
 
+                    @* ── Staff Assignment (Manager only) ── *@
                     @if (User.IsInRole("PropertyManager"))
                     {
-                        <div class="mb-3">
-                            <label asp-for="AssignedStaffId" class="form-label">Assign to Staff</label>
-                            <select asp-for="AssignedStaffId" class="form-select"
-                                    asp-items="@(new SelectList(Model.StaffList, "UserId", "FullName"))">
-                                <option value="">-- Not assigned --</option>
-                            </select>
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold">
+                                <i class="fa fa-user-gear me-1 text-warning"></i>Assign to Staff
+                            </label>
+                            <input type="hidden" name="AssignedStaffId" id="assignedStaffIdUpd"
+                                   value="@(Model.AssignedStaffId?.ToString() ?? "")" />
+
+                            @{
+                                var skillIcons2 = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                                {
+                                    ["Electrical"]="⚡",["HVAC"]="❄️",["Plumbing"]="🔧",
+                                    ["Carpentry"]="🪚",["General"]="🔨",["Painting"]="🎨",
+                                    ["Cleaning"]="🧹",["Locks"]="🔐"
+                                };
+                            }
+                            @foreach (var s in Model.StaffList)
+                            {
+                                var avail  = s.AvailabilityStatus ?? "Available";
+                                var aColor = avail == "Available" ? "success" : avail == "Busy" ? "warning" : "secondary";
+                                var isSel  = s.UserId == Model.AssignedStaffId;
+                                var badges = string.IsNullOrEmpty(s.SkillProfile) ? "" :
+                                    string.Join(" ", s.SkillProfile.Split(',').Select(x => {
+                                        var t = x.Trim();
+                                        return (skillIcons2.TryGetValue(t, out var ic) ? ic : "🔧") + " " + t;
+                                    }));
+                                <div class="staff-upd-card @(isSel ? "sel" : "")"
+                                     onclick="selStaff(this,'@s.UserId')">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <div class="s-av bg-@aColor text-white">
+                                            @(s.FullName.Length > 0 ? s.FullName[0].ToString().ToUpper() : "?")
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <div class="fw-semibold small">@s.FullName</div>
+                                            @if (!string.IsNullOrEmpty(badges))
+                                            {
+                                                <div style="font-size:.72rem;" class="text-muted">@badges</div>
+                                            }
+                                        </div>
+                                        <span class="badge bg-@aColor">@avail</span>
+                                    </div>
+                                </div>
+                            }
                         </div>
                     }
 
-                    <div class="mb-4">
-                        <label asp-for="Notes" class="form-label">Notes / Resolution</label>
-                        <textarea asp-for="Notes" class="form-control" rows="3"
-                                  placeholder="Add notes about this update..."></textarea>
+                    @* ── Notes ── *@
+                    <div class="mb-3">
+                        <label asp-for="Notes" class="form-label fw-semibold">
+                            <i class="fa fa-note-sticky me-1 text-warning"></i>Notes / Resolution
+                        </label>
+                        <textarea asp-for="Notes" class="form-control" rows="4"
+                                  placeholder="Describe the action taken or reason for this status change..."></textarea>
                     </div>
 
-                    <div class="d-flex gap-2">
-                        <button type="submit" class="btn btn-primary flex-fill">
-                            <i class="fa fa-save me-1"></i> Save Update
+                    @* ── Resolution Proof Photo (shown when Resolved selected) ── *@
+                    <div id="resolutionProofSection" class="mb-3 d-none">
+                        <label class="form-label fw-semibold">
+                            <i class="fa fa-camera me-1 text-success"></i>
+                            Proof of Resolution Photo
+                            <span class="badge bg-success ms-1 small">Recommended</span>
+                        </label>
+                        <div id="resUploadArea" class="res-upload-area"
+                             onclick="document.getElementById('resImageInput').click()"
+                             ondragover="event.preventDefault(); this.classList.add('dragover')"
+                             ondragleave="this.classList.remove('dragover')"
+                             ondrop="handleResDrop(event)">
+                            <div id="resUploadPlaceholder">
+                                <i class="fa fa-cloud-upload-alt fa-2x text-muted mb-1"></i>
+                                <div class="text-muted small">Upload photo as proof the issue is fixed</div>
+                                <div class="text-muted" style="font-size:.72rem;">JPG, PNG, WEBP — max 5 MB</div>
+                            </div>
+                            <img id="resImagePreview" src="#" alt="Resolution proof"
+                                 class="d-none rounded"
+                                 style="max-height:160px; max-width:100%; object-fit:cover;" />
+                        </div>
+                        <input type="file" id="resImageInput" name="ResolutionImageFile"
+                               accept="image/jpeg,image/png,image/webp,image/gif"
+                               class="d-none" onchange="previewResImage(this)" />
+                        <div id="resFileName" class="small text-muted mt-1"></div>
+                        <button type="button" id="removeResBtn"
+                                class="btn btn-outline-danger btn-sm mt-1 d-none"
+                                onclick="removeResImage()">
+                            <i class="fa fa-times me-1"></i>Remove
                         </button>
-                        <a asp-action="Index" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+
+                    <div class="d-flex gap-3 mt-4">
+                        <button type="submit" class="btn btn-dark btn-lg flex-fill">
+                            <i class="fa fa-save me-2"></i>Save Update
+                        </button>
+                        <a asp-action="Details" asp-route-id="@Model.RequestId"
+                           class="btn btn-outline-secondary btn-lg px-4">Cancel</a>
                     </div>
                 </form>
             </div>
         </div>
     </div>
+
 </div>
+
+@section Scripts {
+<script>
+    // Badge color map (matches Bootstrap bg-* classes)
+    const statusBadgeMap = {
+        'Submitted':  { label: 'Submitted',   bg: 'secondary' },
+        'Assigned':   { label: 'Assigned',    bg: 'info'      },
+        'InProgress': { label: 'In Progress', bg: 'primary'   },
+        'Resolved':   { label: 'Resolved',    bg: 'success'   },
+        'Closed':     { label: 'Closed',      bg: 'dark'      },
+    };
+
+    function updateHeaderBadge(status) {
+        const badge = document.getElementById('headerStatusBadge');
+        if (!badge) return;
+        const cfg = statusBadgeMap[status] || { label: status, bg: 'secondary' };
+        // Remove all bg-* classes
+        badge.className = badge.className.replace(/\bbg-\S+/g, '').trim();
+        badge.classList.add('badge', 'bg-' + cfg.bg);
+        badge.textContent = cfg.label;
+    }
+
+    function pickStatus(btn) {
+        document.querySelectorAll('.status-pill').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const val = btn.dataset.status;
+        document.getElementById('newStatusInput').value = val;
+        updateHeaderBadge(val);
+
+        const section = document.getElementById('resolutionProofSection');
+        if (section) {
+            if (val === 'Resolved') {
+                section.classList.remove('d-none');
+            } else {
+                section.classList.add('d-none');
+                removeResImage();
+            }
+        }
+    }
+
+    function selStaff(el, userId) {
+        document.querySelectorAll('.staff-upd-card').forEach(c => c.classList.remove('sel'));
+        el.classList.add('sel');
+        document.getElementById('assignedStaffIdUpd').value = userId;
+
+        // Auto-switch status to Assigned when a staff member is selected
+        if (userId !== '') {
+            const assignedPill = document.querySelector('.status-pill[data-status="Assigned"]');
+            if (assignedPill) pickStatus(assignedPill);
+        }
+    }
+
+    function previewResImage(input) {
+        if (input.files && input.files[0]) {
+            const file = input.files[0];
+            if (file.size > 5 * 1024 * 1024) { alert('Image too large. Max 5 MB.'); input.value = ''; return; }
+            const reader = new FileReader();
+            reader.onload = e => {
+                document.getElementById('resUploadPlaceholder').classList.add('d-none');
+                const preview = document.getElementById('resImagePreview');
+                preview.src = e.target.result;
+                preview.classList.remove('d-none');
+                document.getElementById('resUploadArea').classList.add('has-image');
+                document.getElementById('resFileName').textContent = '📎 ' + file.name;
+                document.getElementById('removeResBtn').classList.remove('d-none');
+            };
+            reader.readAsDataURL(file);
+        }
+    }
+
+    function handleResDrop(e) {
+        e.preventDefault();
+        document.getElementById('resUploadArea').classList.remove('dragover');
+        const dt = e.dataTransfer;
+        if (dt.files && dt.files.length > 0) {
+            const input = document.getElementById('resImageInput');
+            const transfer = new DataTransfer();
+            transfer.items.add(dt.files[0]);
+            input.files = transfer.files;
+            previewResImage(input);
+        }
+    }
+
+    function removeResImage() {
+        const input = document.getElementById('resImageInput');
+        if (!input) return;
+        input.value = '';
+        const preview = document.getElementById('resImagePreview');
+        if (preview) { preview.classList.add('d-none'); preview.src = '#'; }
+        const ph = document.getElementById('resUploadPlaceholder');
+        if (ph) ph.classList.remove('d-none');
+        const area = document.getElementById('resUploadArea');
+        if (area) area.classList.remove('has-image');
+        const fn = document.getElementById('resFileName');
+        if (fn) fn.textContent = '';
+        const btn = document.getElementById('removeResBtn');
+        if (btn) btn.classList.add('d-none');
+    }
+
+    // On load: if current status is Resolved, show proof section
+    document.addEventListener('DOMContentLoaded', () => {
+        const active = document.querySelector('.status-pill.active');
+        if (active && active.dataset.status === 'Resolved') {
+            const section = document.getElementById('resolutionProofSection');
+            if (section) section.classList.remove('d-none');
+        }
+    });
+</script>
+}

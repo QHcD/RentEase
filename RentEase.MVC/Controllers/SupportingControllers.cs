@@ -182,15 +182,18 @@ public class PaymentsController : Controller
     private readonly PropertyLeasingDbContext _db;
     private readonly UserManager<AppUser>     _userManager;
     private readonly NotificationService      _notifier;
+    private readonly EmailService             _emailService;
 
     public PaymentsController(
         PropertyLeasingDbContext db,
-        UserManager<AppUser> userManager,
-        NotificationService notifier)
+        UserManager<AppUser>     userManager,
+        NotificationService      notifier,
+        EmailService             emailService)
     {
-        _db          = db;
-        _userManager = userManager;
-        _notifier    = notifier;
+        _db           = db;
+        _userManager  = userManager;
+        _notifier     = notifier;
+        _emailService = emailService;
     }
 
     private async Task<User?> GetAppUserAsync()
@@ -611,6 +614,20 @@ public class PaymentsController : Controller
             await _notifier.SendAsync(mgr.UserId,
                 $"{appUser.FullName} completed {vm.PlanType.ToLower()} payment for unit {lease.Application.Unit.UnitNumber}. Lease is now {leaseStatus}.",
                 "PaymentReminder");
+
+        // Send payment confirmation email to tenant
+        try { await _emailService.SendPaymentConfirmationAsync(
+            toEmail:      appUser.Email,
+            toName:       appUser.FullName,
+            unitNumber:   lease.Application.Unit.UnitNumber,
+            propertyName: lease.Application.Unit.Property.Name,
+            planType:     vm.PlanType,
+            amountPaid:   vm.AmountToPay,
+            paidOn:       now,
+            leaseStatus:  leaseStatus,
+            leaseStart:   lease.LeaseStartDate,
+            leaseEnd:     lease.LeaseEndDate); }
+        catch { /* email failure should not block the flow */ }
 
         TempData["Success"] = leaseStatus == "Approved"
             ? $"Payment completed! Your lease is approved and will activate on {lease.LeaseStartDate:dd MMM yyyy}."

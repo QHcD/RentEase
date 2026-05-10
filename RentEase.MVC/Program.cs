@@ -81,6 +81,27 @@ using (var scope = app.Services.CreateScope())
 
     try
     {
+        // Auto-add ImagePath column to MaintenanceRequest if it doesn't exist yet
+        var db = scope.ServiceProvider.GetRequiredService<PropertyLeasingDbContext>();
+        await db.Database.ExecuteSqlRawAsync(@"
+            IF NOT EXISTS (
+                SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_NAME = 'MaintenanceRequest' AND COLUMN_NAME = 'ImagePath'
+            )
+            ALTER TABLE MaintenanceRequest ADD ImagePath NVARCHAR(300) NULL;
+
+            IF NOT EXISTS (
+                SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_NAME = 'MaintenanceRequest' AND COLUMN_NAME = 'ResolutionImagePath'
+            )
+            ALTER TABLE MaintenanceRequest ADD ResolutionImagePath NVARCHAR(300) NULL;
+        ");
+        logger.LogInformation("MaintenanceRequest image columns ensured.");
+    }
+    catch (Exception ex) { logger.LogWarning(ex, "Could not auto-add ImagePath column (non-fatal)."); }
+
+    try
+    {
         // Identity database: no migrations exist, so EnsureCreated creates
         // the schema on first run (no-op on an existing database).
         var identityDb = scope.ServiceProvider.GetRequiredService<AppIdentityDbContext>();

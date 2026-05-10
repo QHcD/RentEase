@@ -3,6 +3,10 @@
   "WorkspaceRootPath": "C:\\Users\\murta\\Desktop\\RentEase\\",
   "Documents": [
     {
+      "AbsoluteMoniker": "D:0:0:{22222222-2222-2222-2222-222222222222}|RentEase.MVC\\RentEase.MVC.csproj|c:\\users\\murta\\desktop\\rentease\\rentease.mvc\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{22222222-2222-2222-2222-222222222222}|RentEase.MVC\\RentEase.MVC.csproj|solutionrelative:rentease.mvc\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
       "AbsoluteMoniker": "D:0:0:{22222222-2222-2222-2222-222222222222}|RentEase.MVC\\RentEase.MVC.csproj|c:\\users\\murta\\desktop\\rentease\\rentease.mvc\\views\\leaseapplications\\leasedetails.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}",
       "RelativeMoniker": "D:0:0:{22222222-2222-2222-2222-222222222222}|RentEase.MVC\\RentEase.MVC.csproj|solutionrelative:rentease.mvc\\views\\leaseapplications\\leasedetails.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}"
     },
@@ -55,19 +59,32 @@
             {
               "$type": "Document",
               "DocumentIndex": 0,
+              "Title": "Program.cs",
+              "DocumentMoniker": "C:\\Users\\murta\\Desktop\\RentEase\\RentEase.MVC\\Program.cs",
+              "RelativeDocumentMoniker": "RentEase.MVC\\Program.cs",
+              "ToolTip": "C:\\Users\\murta\\Desktop\\RentEase\\RentEase.MVC\\Program.cs",
+              "RelativeToolTip": "RentEase.MVC\\Program.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAgAAAAHAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-05-10T12:26:38.156Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
               "Title": "LeaseDetails.cshtml",
               "DocumentMoniker": "C:\\Users\\murta\\Desktop\\RentEase\\RentEase.MVC\\Views\\LeaseApplications\\LeaseDetails.cshtml",
               "RelativeDocumentMoniker": "RentEase.MVC\\Views\\LeaseApplications\\LeaseDetails.cshtml",
               "ToolTip": "C:\\Users\\murta\\Desktop\\RentEase\\RentEase.MVC\\Views\\LeaseApplications\\LeaseDetails.cshtml",
               "RelativeToolTip": "RentEase.MVC\\Views\\LeaseApplications\\LeaseDetails.cshtml",
-              "ViewState": "AgIAAAQBAAAAAAAAAAAkwAYBAABCAAAAAAAAAA==",
+              "ViewState": "AgIAACMBAAAAAAAAAAAkwCYBAAA6AAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
               "WhenOpened": "2026-05-08T03:11:06.638Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 2,
               "Title": "Index.cshtml",
               "DocumentMoniker": "C:\\Users\\murta\\Desktop\\RentEase\\RentEase.MVC\\Views\\LeaseApplications\\Index.cshtml",
               "RelativeDocumentMoniker": "RentEase.MVC\\Views\\LeaseApplications\\Index.cshtml",
@@ -79,7 +96,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 2,
+              "DocumentIndex": 3,
               "Title": "LeaseApplicationDetails.cshtml",
               "DocumentMoniker": "C:\\Users\\murta\\Desktop\\RentEase\\RentEase.MVC\\Views\\LeaseApplications\\LeaseApplicationDetails.cshtml",
               "RelativeDocumentMoniker": "RentEase.MVC\\Views\\LeaseApplications\\LeaseApplicationDetails.cshtml",
@@ -91,7 +108,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 3,
+              "DocumentIndex": 4,
               "Title": "TerminateLease.cshtml",
               "DocumentMoniker": "C:\\Users\\murta\\Desktop\\RentEase\\RentEase.MVC\\Views\\LeaseApplications\\TerminateLease.cshtml",
               "RelativeDocumentMoniker": "RentEase.MVC\\Views\\LeaseApplications\\TerminateLease.cshtml",
@@ -103,7 +120,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 4,
+              "DocumentIndex": 5,
               "Title": "HomeController.cs",
               "DocumentMoniker": "C:\\Users\\murta\\Desktop\\RentEase\\RentEase.MVC\\Controllers\\HomeController.cs",
               "RelativeDocumentMoniker": "RentEase.MVC\\Controllers\\HomeController.cs",
@@ -115,7 +132,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 5,
+              "DocumentIndex": 6,
               "Title": "appsettings.json",
               "DocumentMoniker": "C:\\Users\\murta\\Desktop\\RentEase\\RentEase.MVC\\appsettings.json",
               "RelativeDocumentMoniker": "RentEase.MVC\\appsettings.json",
@@ -127,7 +144,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 6,
+              "DocumentIndex": 7,
               "Title": "PropertyLeasingDbContextModelSnapshot.cs",
               "DocumentMoniker": "C:\\Users\\murta\\Desktop\\RentEase\\RentEase.API\\Migrations\\PropertyLeasingDb\\PropertyLeasingDbContextModelSnapshot.cs",
               "RelativeDocumentMoniker": "RentEase.API\\Migrations\\PropertyLeasingDb\\PropertyLeasingDbContextModelSnapshot.cs",
@@ -139,7 +156,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 7,
+              "DocumentIndex": 8,
               "Title": "20260506195811_AddLeaseLogs.Designer.cs",
               "DocumentMoniker": "C:\\Users\\murta\\Desktop\\RentEase\\RentEase.API\\Migrations\\PropertyLeasingDb\\20260506195811_AddLeaseLogs.Designer.cs",
               "RelativeDocumentMoniker": "RentEase.API\\Migrations\\PropertyLeasingDb\\20260506195811_AddLeaseLogs.Designer.cs",
@@ -151,7 +168,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 8,
+              "DocumentIndex": 9,
               "Title": "Program.cs",
               "DocumentMoniker": "C:\\Users\\murta\\Desktop\\RentEase\\RentEase.API\\Program.cs",
               "RelativeDocumentMoniker": "RentEase.API\\Program.cs",

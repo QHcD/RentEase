@@ -1,105 +1,164 @@
 @model List<PropertyLeasing.MVC.ViewModels.MaintenanceListViewModel>
 @{
     ViewData["Title"] = "Maintenance Requests";
+    var currentStatus = ViewBag.CurrentStatus as string;
+    var role          = ViewBag.Role as string;
+    var counts        = ViewBag.TabCounts as Dictionary<string, int> ?? new Dictionary<string, int>();
+
+    int Count(string key) => counts.TryGetValue(key, out var v) ? v : 0;
+
+    var statusTabs = new[]
+    {
+        ("",           "All",         "secondary"),
+        ("Submitted",  "Submitted",   "secondary"),
+        ("Assigned",   "Assigned",    "info"),
+        ("InProgress", "In Progress", "primary"),
+        ("Resolved",   "Resolved",    "success"),
+    };
+
+    string BadgeColor(string s) => s switch {
+        "Submitted"  => "secondary",
+        "Assigned"   => "info",
+        "InProgress" => "primary",
+        "Resolved"   => "success",
+        "Closed"     => "dark",
+        _            => "secondary"
+    };
+    string PriorityColor(string p) => p switch {
+        "Urgent" => "danger",
+        "High"   => "warning",
+        "Medium" => "info",
+        _        => "secondary"
+    };
+    string CatIcon(string? t) => t switch {
+        "Electrical" => "⚡",
+        "HVAC"       => "❄️",
+        "Plumbing"   => "🔧",
+        "Lock"       => "🚪",
+        "Lighting"   => "💡",
+        "Windows"    => "🪟",
+        "Cleaning"   => "🧹",
+        _            => "🔨"
+    };
 }
 
+<style>
+    .nav-tabs .nav-link { border-radius: 0; font-size: .9rem; padding: .55rem 1rem; }
+    .nav-tabs .nav-link.active { font-weight: 600; }
+    .maint-card { border: 1px solid #dee2e6; border-radius: 10px; transition: box-shadow .15s; }
+    .maint-card:hover { box-shadow: 0 4px 14px rgba(0,0,0,.1); }
+    .maint-card .ticket-num { font-family: monospace; font-size: .78rem; color: #888; }
+    .priority-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+</style>
+
+<!-- Header row -->
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h2><i class="fa fa-wrench me-2"></i>Maintenance Requests</h2>
+    <h2 class="mb-0"><i class="fa fa-wrench me-2 text-warning"></i>Maintenance Requests</h2>
     @if (User.IsInRole("Tenant"))
     {
-        <a asp-action="Submit" class="btn btn-success">
+        <a asp-action="Submit" class="btn btn-warning">
             <i class="fa fa-plus me-1"></i> New Request
         </a>
     }
 </div>
 
-<!-- Filters -->
-<form method="get" class="row g-2 mb-3">
-    <div class="col-md-3">
-        <select name="status" class="form-select">
-            <option value="">All Statuses</option>
-            @foreach (var s in new[] { "Submitted", "Assigned", "InProgress", "Resolved", "Closed" })
-            {
-                <option value="@s" selected="@(ViewBag.Status == s)">@s</option>
-            }
-        </select>
-    </div>
-    <div class="col-md-3">
-        <select name="priority" class="form-select">
-            <option value="">All Priorities</option>
-            @foreach (var p in new[] { "Low", "Medium", "High", "Urgent" })
-            {
-                <option value="@p" selected="@(ViewBag.Priority == p)">@p</option>
-            }
-        </select>
-    </div>
-    <div class="col-md-2">
-        <button type="submit" class="btn btn-primary w-100">Filter</button>
-    </div>
-    <div class="col-md-2">
-        <a asp-action="Index" class="btn btn-outline-secondary w-100">Clear</a>
-    </div>
-</form>
+<!-- Status tabs -->
+<ul class="nav nav-tabs border-bottom mb-3">
+    @foreach (var (val, label, color) in statusTabs)
+    {
+        var isActive   = (string.IsNullOrEmpty(val) && string.IsNullOrEmpty(currentStatus))
+                      || val == currentStatus;
+        var tabCount   = string.IsNullOrEmpty(val) ? Count("All") : Count(val);
+        var tabVal     = string.IsNullOrEmpty(val) ? "InProgress" : val; // for count-key lookup
+        <li class="nav-item">
+            <a class="nav-link @(isActive ? "active" : "")"
+               asp-action="Index" asp-route-status="@val">
+                @label
+                <span class="badge bg-@(isActive ? color : "light text-dark") ms-1">@tabCount</span>
+            </a>
+        </li>
+    }
+</ul>
 
 @if (!Model.Any())
 {
-    <div class="alert alert-info">No maintenance requests found.</div>
+    <div class="text-center py-5 text-muted">
+        <i class="fa fa-inbox fa-3x mb-3 opacity-25"></i>
+        <div class="fs-5">No requests found</div>
+        @if (User.IsInRole("Tenant"))
+        {
+            <a asp-action="Submit" class="btn btn-warning mt-3">Submit your first request</a>
+        }
+    </div>
 }
 else
 {
-    <div class="table-responsive">
-        <table class="table table-hover">
-            <thead class="table-dark">
-                <tr>
-                    <th>Ticket</th>
-                    <th>Title</th>
-                    <th>Unit</th>
-                    @if (!User.IsInRole("Tenant")) { <th>Tenant</th> }
-                    <th>Priority</th>
-                    <th>Status</th>
-                    <th>Submitted</th>
-                    @if (!User.IsInRole("Tenant")) { <th>Actions</th> }
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var r in Model)
-                {
-                    var statusColor = r.Status switch
-                    {
-                        "Submitted"  => "secondary",
-                        "Assigned"   => "info",
-                        "InProgress" => "primary",
-                        "Resolved"   => "success",
-                        "Closed"     => "dark",
-                        _            => "secondary"
-                    };
-                    var priorityColor = r.Priority switch
-                    {
-                        "Urgent" => "danger",
-                        "High"   => "warning",
-                        "Medium" => "info",
-                        _        => "secondary"
-                    };
-                    <tr>
-                        <td><small class="text-muted">@r.TicketNumber</small></td>
-                        <td>@r.Title</td>
-                        <td>@r.UnitNumber <small class="text-muted">@r.PropertyName</small></td>
-                        @if (!User.IsInRole("Tenant")) { <td>@r.TenantName</td> }
-                        <td><span class="badge bg-@priorityColor">@r.Priority</span></td>
-                        <td><span class="badge bg-@statusColor">@r.Status</span></td>
-                        <td>@r.SubmittedAt.ToString("dd MMM yyyy")</td>
-                        @if (!User.IsInRole("Tenant"))
+    <div class="row g-3">
+        @foreach (var r in Model)
+        {
+            <div class="col-12">
+                <div class="maint-card p-3 bg-white d-flex align-items-start gap-3">
+
+                    <!-- Category icon -->
+                    <div class="fs-2 pt-1" style="min-width:2.5rem; text-align:center;">
+                        @CatIcon(r.RequestType)
+                    </div>
+
+                    <!-- Main info -->
+                    <div class="flex-grow-1 min-width-0">
+                        <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                            <span class="fw-semibold fs-6">@r.Title</span>
+                            <span class="badge bg-@BadgeColor(r.Status)">@r.Status</span>
+                            <span class="badge bg-@PriorityColor(r.Priority) bg-opacity-75">@r.Priority</span>
+                        </div>
+
+                        <div class="small text-muted mb-1">
+                            <span class="ticket-num me-2">@r.TicketNumber</span>
+                            <i class="fa fa-building me-1"></i>Unit @r.UnitNumber · @r.PropertyName
+                            @if (role != "Tenant")
+                            {
+                                <span class="ms-2"><i class="fa fa-user me-1"></i>@r.TenantName</span>
+                            }
+                            @if (!string.IsNullOrEmpty(r.AssignedStaff))
+                            {
+                                <span class="ms-2"><i class="fa fa-user-gear me-1"></i>@r.AssignedStaff</span>
+                            }
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(r.Description))
                         {
-                            <td>
-                                <a asp-action="Update" asp-route-id="@r.RequestId"
-                                   class="btn btn-warning btn-sm">
-                                    <i class="fa fa-edit"></i> Update
-                                </a>
-                            </td>
+                            <div class="small text-secondary text-truncate" style="max-width:600px;">
+                                @r.Description
+                            </div>
                         }
-                    </tr>
-                }
-            </tbody>
-        </table>
+                    </div>
+
+                    <!-- Date + actions -->
+                    <div class="text-end text-nowrap">
+                        <div class="small text-muted mb-2">
+                            <i class="fa fa-calendar me-1"></i>@r.SubmittedAt.ToString("dd MMM yyyy")
+                        </div>
+                        <a asp-action="Details" asp-route-id="@r.RequestId"
+                           class="btn btn-sm btn-outline-primary">
+                            <i class="fa fa-eye me-1"></i> Details
+                        </a>
+                        @if (role == "PropertyManager")
+                        {
+                            <a asp-action="Update" asp-route-id="@r.RequestId"
+                               class="btn btn-sm btn-warning ms-1">
+                                <i class="fa fa-edit"></i>
+                            </a>
+                        }
+                        @if (role == "MaintenanceStaff")
+                        {
+                            <a asp-action="Update" asp-route-id="@r.RequestId"
+                               class="btn btn-sm btn-outline-warning ms-1">
+                                <i class="fa fa-edit"></i>
+                            </a>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
     </div>
 }
