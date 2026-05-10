@@ -446,6 +446,76 @@ public class PaymentsController : Controller
         return RedirectToAction("Index");
     }
 
+    // GET /Payments/Bill/{paymentId}
+    public async Task<IActionResult> Bill(int paymentId)
+    {
+        var appUser = await GetAppUserAsync();
+        if (appUser == null) return Unauthorized();
+
+        var payment = await _db.PaymentRecords
+            .Include(p => p.Lease)
+                .ThenInclude(l => l.Application)
+                .ThenInclude(a => a.Unit)
+                .ThenInclude(u => u.Property)
+            .Include(p => p.Lease.Application.User)
+            .FirstOrDefaultAsync(p => p.PaymentId == paymentId);
+
+        if (payment == null) return NotFound();
+
+        // Tenants can only see their own bills
+        if (appUser.Role == "Tenant" && payment.Lease.Application.UserId != appUser.UserId)
+            return Forbid();
+
+        // All installments for this lease
+        var allInstallments = await _db.PaymentRecords
+            .Where(p => p.LeaseId == payment.LeaseId)
+            .OrderBy(p => p.DueDate)
+            .ToListAsync();
+
+        var ordered        = allInstallments.OrderBy(p => p.DueDate).ToList();
+        var installmentNum = ordered.FindIndex(p => p.PaymentId == paymentId) + 1;
+
+        var lease    = payment.Lease;
+        var unit     = lease.Application.Unit;
+        var property = unit.Property;
+        var tenant   = lease.Application.User;
+
+        var vm = new PaymentBillViewModel
+        {
+            InvoiceNumber     = $"INV-{payment.PaymentId:D6}",
+            IssuedDate        = payment.PaidDate ?? DateTime.Now,
+            TenantName        = tenant.FullName,
+            TenantEmail       = tenant.Email,
+            TenantPhone       = tenant.Phone,
+            PropertyName      = property.Name,
+            UnitNumber        = unit.UnitNumber,
+            PropertyAddress   = property.Address,
+            LeaseStart        = lease.LeaseStartDate,
+            LeaseEnd          = lease.LeaseEndDate,
+            PaymentPlanType   = lease.PaymentPlanType,
+            InstallmentNum    = installmentNum,
+            TotalInstallments = ordered.Count,
+            AmountDue         = payment.AmountDue,
+            LateFee           = payment.LateFee ?? 0,
+            AmountPaid        = payment.AmountPaid,
+            DueDate           = payment.DueDate,
+            PaidDate          = payment.PaidDate,
+            PaymentStatus     = payment.PaymentStatus,
+            Notes             = payment.Notes,
+            LeaseTotalDue     = ordered.Sum(p => p.AmountDue + (p.LateFee ?? 0)),
+            LeaseTotalPaid    = ordered.Where(p => p.AmountPaid.HasValue).Sum(p => p.AmountPaid!.Value),
+            AllInstallments   = ordered.Select((p, i) => new InstallmentSummaryViewModel
+            {
+                Number   = i + 1,
+                Amount   = p.AmountDue + (p.LateFee ?? 0),
+                DueDate  = p.DueDate,
+                Status   = p.PaymentStatus
+            }).ToList()
+        };
+
+        return View(vm);
+    }
+
     // GET /Payments/SelectPlan/{leaseId}
     [Authorize(Roles = "Tenant")]
     public async Task<IActionResult> SelectPlan(int leaseId)

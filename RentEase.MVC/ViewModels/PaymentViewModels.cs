@@ -80,6 +80,48 @@ public class PaymentConfirmationViewModel
     public List<InstallmentSummaryViewModel> Installments { get; set; } = new();
 }
 
+public class PaymentBillViewModel
+{
+    // Invoice meta
+    public string   InvoiceNumber    { get; set; } = string.Empty;
+    public DateTime IssuedDate       { get; set; }
+
+    // Tenant
+    public string   TenantName       { get; set; } = string.Empty;
+    public string?  TenantEmail      { get; set; }
+    public string?  TenantPhone      { get; set; }
+
+    // Property / unit
+    public string   PropertyName     { get; set; } = string.Empty;
+    public string   UnitNumber       { get; set; } = string.Empty;
+    public string?  PropertyAddress  { get; set; }
+
+    // Lease
+    public DateTime LeaseStart       { get; set; }
+    public DateTime LeaseEnd         { get; set; }
+    public string?  PaymentPlanType  { get; set; }
+
+    // This installment
+    public int      InstallmentNum   { get; set; }
+    public int      TotalInstallments{ get; set; }
+    public decimal  AmountDue        { get; set; }
+    public decimal  LateFee          { get; set; }
+    public decimal  TotalAmount      => AmountDue + LateFee;
+    public decimal? AmountPaid       { get; set; }
+    public DateTime DueDate          { get; set; }
+    public DateTime? PaidDate        { get; set; }
+    public string   PaymentStatus    { get; set; } = string.Empty;
+    public string?  Notes            { get; set; }
+
+    // Lease-wide balance
+    public decimal  LeaseTotalDue    { get; set; }
+    public decimal  LeaseTotalPaid   { get; set; }
+    public decimal  LeaseBalance     => LeaseTotalDue - LeaseTotalPaid;
+
+    // All installments (for mini-ledger)
+    public List<InstallmentSummaryViewModel> AllInstallments { get; set; } = new();
+}
+
 public class InstallmentSummaryViewModel
 {
     public int      Number        { get; set; }

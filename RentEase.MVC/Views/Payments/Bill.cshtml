@@ -1,0 +1,608 @@
+@model PropertyLeasing.MVC.ViewModels.PaymentBillViewModel
+@{
+    ViewData["Title"] = $"Invoice {Model.InvoiceNumber}";
+
+    string StatusColor(string s) => s switch {
+        "Paid"     => "#16a34a",
+        "Overdue"  => "#dc2626",
+        "Unpaid"   => "#d97706",
+        "Upcoming" => "#0284c7",
+        _          => "#6b7280"
+    };
+
+    decimal progressPct = Model.LeaseTotalDue > 0
+        ? Math.Min(100, Model.LeaseTotalPaid / Model.LeaseTotalDue * 100)
+        : 0;
+
+    string instIcon(string s) => s switch {
+        "Paid" => "✓", "Overdue" => "!", "Unpaid" => "○", _ => "◌"
+    };
+}
+
+<style>
+/* ═══════════════════════════════════════════════
+   SCREEN — action bar only
+═══════════════════════════════════════════════ */
+.screen-actions {
+    max-width: 860px;
+    margin: 0 auto 1rem;
+    display: flex;
+    gap: .5rem;
+}
+
+/* ═══════════════════════════════════════════════
+   INVOICE SHELL
+═══════════════════════════════════════════════ */
+.inv {
+    max-width: 860px;
+    margin: 0 auto;
+    background: #fff;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 13px;
+    color: #1a1a2e;
+    box-shadow: 0 0 40px rgba(0,0,0,.12);
+}
+
+/* ── TOP STRIPE ── */
+.inv-stripe {
+    height: 6px;
+    background: linear-gradient(90deg, #1e3a5f, #2563eb, #0ea5e9);
+}
+
+/* ── HEADER ── */
+.inv-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 28px 36px 22px;
+    border-bottom: 1px solid #e5e7eb;
+}
+.brand-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+}
+.brand-icon {
+    width: 40px; height: 40px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #1e3a5f, #2563eb);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 18px;
+}
+.brand-name   { font-size: 20px; font-weight: 800; color: #1e3a5f; letter-spacing: .3px; }
+.brand-tagline{ font-size: 10.5px; color: #6b7280; margin-bottom: 8px; }
+.brand-contact{ font-size: 10px; color: #6b7280; line-height: 1.7; }
+.brand-contact span { margin-right: 14px; }
+
+.inv-meta-box {
+    text-align: right;
+    min-width: 180px;
+}
+.inv-number-label { font-size: 10px; font-weight: 700; letter-spacing: 1.5px;
+                    text-transform: uppercase; color: #6b7280; }
+.inv-number       { font-size: 22px; font-weight: 800; color: #1e3a5f;
+                    letter-spacing: 1px; font-variant-numeric: tabular-nums; }
+.inv-date-issued  { font-size: 11px; color: #6b7280; margin-top: 4px; }
+.inv-installment  { font-size: 11px; color: #2563eb; font-weight: 600;
+                    margin-top: 2px; }
+
+/* ── STATUS BANNER ── */
+.status-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 36px;
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: .6px;
+    text-transform: uppercase;
+}
+.status-dot {
+    width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0;
+}
+.status-date { font-weight: 400; text-transform: none; margin-left: 4px;
+               font-size: 11px; opacity: .85; }
+
+/* ── BODY ── */
+.inv-body { padding: 28px 36px; }
+
+/* Section title */
+.sec-title {
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 1.8px;
+    text-transform: uppercase;
+    color: #9ca3af;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+/* Parties grid */
+.parties {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-bottom: 28px;
+}
+.party-card {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 14px 16px;
+}
+.party-label {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: #9ca3af;
+    margin-bottom: 8px;
+}
+.party-name  { font-size: 14px; font-weight: 700; color: #111827; margin-bottom: 5px; }
+.party-line  { font-size: 11px; color: #4b5563; line-height: 1.8;
+               display: flex; align-items: center; gap: 5px; }
+.party-icon  { width: 13px; text-align: center; color: #9ca3af; flex-shrink: 0; }
+
+/* Line items table */
+.items-table { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
+.items-table thead tr { background: #1e3a5f; color: #fff; }
+.items-table thead th {
+    padding: 10px 14px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: .8px;
+    text-transform: uppercase;
+}
+.items-table thead th:last-child { text-align: right; }
+.items-table tbody td {
+    padding: 12px 14px;
+    border-bottom: 1px solid #f3f4f6;
+    font-size: 12.5px;
+    color: #374151;
+    vertical-align: top;
+}
+.items-table tbody td:last-child { text-align: right; font-weight: 600; }
+.items-table tbody tr:last-child td { border-bottom: none; }
+.item-sub { font-size: 10.5px; color: #9ca3af; margin-top: 2px; }
+
+/* Totals */
+.totals-area {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 28px;
+}
+.totals-box {
+    width: 300px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    overflow: hidden;
+}
+.t-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 9px 16px;
+    font-size: 12px;
+    border-bottom: 1px solid #f3f4f6;
+}
+.t-row:last-child { border-bottom: none; }
+.t-row.t-sub  { color: #6b7280; }
+.t-row.t-fee  { color: #dc2626; }
+.t-row.t-grand{
+    background: #1e3a5f;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    padding: 13px 16px;
+}
+.t-row.t-paid { background: #f0fdf4; color: #16a34a; font-weight: 600; }
+.t-row.t-bal  { background: #fef2f2; color: #dc2626; font-weight: 600; }
+.t-row.t-clear{ background: #f0fdf4; color: #16a34a; font-weight: 600; }
+
+/* Balance summary */
+.balance-block {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 16px 18px;
+    margin-bottom: 28px;
+}
+.bal-numbers {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11.5px;
+    margin-bottom: 8px;
+    color: #6b7280;
+}
+.bal-numbers strong { color: #111827; }
+.bal-track {
+    background: #e5e7eb;
+    border-radius: 50px;
+    height: 8px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+.bal-fill {
+    height: 100%;
+    border-radius: 50px;
+    background: linear-gradient(90deg, #22c55e, #16a34a);
+}
+.bal-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+}
+
+/* Ledger table */
+.ledger { width: 100%; border-collapse: collapse; }
+.ledger thead tr { background: #f3f4f6; }
+.ledger thead th {
+    padding: 8px 12px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .8px;
+    text-transform: uppercase;
+    color: #6b7280;
+    border-bottom: 2px solid #e5e7eb;
+    text-align: left;
+}
+.ledger tbody td {
+    padding: 9px 12px;
+    font-size: 11.5px;
+    color: #374151;
+    border-bottom: 1px solid #f3f4f6;
+}
+.ledger tbody tr.this-row td {
+    background: #eff6ff;
+    font-weight: 700;
+    color: #1e40af;
+}
+.ledger tbody tr:last-child td { border-bottom: none; }
+.inst-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 50px;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+/* ── FOOTER ── */
+.inv-foot {
+    border-top: 1px solid #e5e7eb;
+    padding: 16px 36px;
+    background: #f9fafb;
+}
+.foot-main {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+.foot-brand { font-size: 13px; font-weight: 700; color: #1e3a5f; }
+.foot-reg   { font-size: 10px; color: #9ca3af; }
+.foot-note  { font-size: 10px; color: #9ca3af; text-align: center;
+              padding-top: 8px; border-top: 1px dashed #e5e7eb; }
+
+/* ── BOTTOM STRIPE ── */
+.inv-stripe-bot {
+    height: 4px;
+    background: linear-gradient(90deg, #0ea5e9, #2563eb, #1e3a5f);
+}
+
+/* ════════════════════════════════════════════
+   PRINT  — pixel-perfect PDF output
+════════════════════════════════════════════ */
+@@media print {
+    @@page {
+        size: A4;
+        margin: 12mm 12mm;
+    }
+
+    html, body {
+        background: #fff !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        color-adjust: exact;
+    }
+
+    /* Kill site chrome */
+    header, footer, .screen-actions,
+    nav, .no-print { display: none !important; }
+
+    .container { padding: 0 !important; margin: 0 !important; max-width: 100% !important; }
+
+    .inv {
+        box-shadow: none !important;
+        max-width: 100% !important;
+        width: 100%;
+        page-break-inside: avoid;
+    }
+
+    /* Force backgrounds to print */
+    .inv-stripe, .inv-stripe-bot,
+    .items-table thead tr,
+    .t-row.t-grand { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+    .inv-head   { padding: 18px 24px 14px; }
+    .inv-body   { padding: 18px 24px; }
+    .status-banner { padding: 8px 24px; }
+    .inv-foot   { padding: 12px 24px; }
+}
+</style>
+
+<!-- ── ACTION BAR (screen only) ── -->
+<div class="screen-actions no-print">
+    <a asp-action="Index" class="btn btn-outline-secondary btn-sm">
+        <i class="fa fa-arrow-left me-1"></i> Back
+    </a>
+    <button onclick="window.print()" class="btn btn-dark btn-sm ms-auto px-4">
+        <i class="fa fa-file-pdf me-2"></i>Download / Print PDF
+    </button>
+</div>
+
+<!-- ════════════════ INVOICE ════════════════ -->
+<div class="inv">
+
+    <div class="inv-stripe"></div>
+
+    <!-- HEADER -->
+    <div class="inv-head">
+        <div>
+            <div class="brand-logo">
+                <div class="brand-icon"><i class="fa fa-building"></i></div>
+                <div class="brand-name">RentEase</div>
+            </div>
+            <div class="brand-tagline">Leasing &amp; Property Management Platform</div>
+            <div class="brand-contact">
+                <span>✉ info@rentease.bh</span>
+                <span>✆ +973 1700 0000</span>
+                <span>🌐 www.rentease.bh</span>
+                <br>
+                <span>Manama, Kingdom of Bahrain &nbsp;·&nbsp; CR: 12345 &nbsp;·&nbsp; VAT: BH00000000</span>
+            </div>
+        </div>
+        <div class="inv-meta-box">
+            <div class="inv-number-label">Official Invoice</div>
+            <div class="inv-number">@Model.InvoiceNumber</div>
+            <div class="inv-date-issued">Issued: @Model.IssuedDate.ToString("dd MMMM yyyy")</div>
+            <div class="inv-installment">
+                Installment @Model.InstallmentNum / @Model.TotalInstallments
+                &nbsp;·&nbsp; @(Model.PaymentPlanType ?? "Monthly") Plan
+            </div>
+        </div>
+    </div>
+
+    <!-- STATUS BANNER -->
+    @{
+        var sColor = StatusColor(Model.PaymentStatus);
+        var sBg    = Model.PaymentStatus == "Paid"    ? "#f0fdf4" :
+                     Model.PaymentStatus == "Overdue" ? "#fef2f2" :
+                     Model.PaymentStatus == "Unpaid"  ? "#fffbeb" : "#eff6ff";
+    }
+    <div class="status-banner" style="background:@sBg; color:@sColor; border-bottom: 1px solid #e5e7eb;">
+        <div class="status-dot" style="background:@sColor;"></div>
+        Payment Status: @Model.PaymentStatus
+        @if (Model.PaidDate.HasValue)
+        {
+            <span class="status-date">
+                &nbsp;·&nbsp; Paid on @Model.PaidDate.Value.ToString("dd MMMM yyyy, hh:mm tt")
+            </span>
+        }
+        else
+        {
+            <span class="status-date">&nbsp;·&nbsp; Due: @Model.DueDate.ToString("dd MMMM yyyy")</span>
+        }
+    </div>
+
+    <div class="inv-body">
+
+        <!-- PARTIES -->
+        <div class="parties">
+            <div class="party-card">
+                <div class="party-label">Billed To</div>
+                <div class="party-name">@Model.TenantName</div>
+                @if (!string.IsNullOrEmpty(Model.TenantEmail))
+                {
+                    <div class="party-line"><span class="party-icon">✉</span>@Model.TenantEmail</div>
+                }
+                @if (!string.IsNullOrEmpty(Model.TenantPhone))
+                {
+                    <div class="party-line"><span class="party-icon">✆</span>@Model.TenantPhone</div>
+                }
+            </div>
+            <div class="party-card">
+                <div class="party-label">Property Details</div>
+                <div class="party-name">@Model.PropertyName</div>
+                <div class="party-line"><span class="party-icon">🚪</span>Unit @Model.UnitNumber</div>
+                @if (!string.IsNullOrEmpty(Model.PropertyAddress))
+                {
+                    <div class="party-line"><span class="party-icon">📍</span>@Model.PropertyAddress</div>
+                }
+                <div class="party-line">
+                    <span class="party-icon">📅</span>
+                    @Model.LeaseStart.ToString("dd MMM yyyy") — @Model.LeaseEnd.ToString("dd MMM yyyy")
+                </div>
+            </div>
+        </div>
+
+        <!-- LINE ITEMS -->
+        <div class="sec-title">Invoice Details</div>
+        <table class="items-table" style="margin-bottom:0;">
+            <thead>
+                <tr>
+                    <th style="width:50%">Description</th>
+                    <th>Due Date</th>
+                    <th style="text-align:right;">Amount (BD)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>
+                        <div style="font-weight:600;">Monthly Rent</div>
+                        <div class="item-sub">Installment @Model.InstallmentNum of @Model.TotalInstallments</div>
+                    </td>
+                    <td style="color:#374151;">@Model.DueDate.ToString("dd MMMM yyyy")</td>
+                    <td>BD @Model.AmountDue.ToString("N2")</td>
+                </tr>
+                @if (Model.LateFee > 0)
+                {
+                    <tr>
+                        <td>
+                            <div style="font-weight:600; color:#dc2626;">Late Fee</div>
+                            <div class="item-sub">Charged after grace period</div>
+                        </td>
+                        <td>—</td>
+                        <td style="color:#dc2626;">BD @Model.LateFee.ToString("N2")</td>
+                    </tr>
+                }
+                @if (!string.IsNullOrEmpty(Model.Notes))
+                {
+                    <tr>
+                        <td colspan="3"
+                            style="font-size:10.5px; color:#9ca3af; font-style:italic; background:#fafafa;">
+                            📝 @Model.Notes
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        <!-- TOTALS -->
+        <div class="totals-area" style="margin-top:0; padding-top:20px;">
+            <div class="totals-box">
+                <div class="t-row t-sub">
+                    <span>Subtotal</span>
+                    <span>BD @Model.AmountDue.ToString("N2")</span>
+                </div>
+                @if (Model.LateFee > 0)
+                {
+                    <div class="t-row t-fee">
+                        <span>Late Fee</span>
+                        <span>BD @Model.LateFee.ToString("N2")</span>
+                    </div>
+                }
+                <div class="t-row t-grand">
+                    <span>Total Due</span>
+                    <span>BD @Model.TotalAmount.ToString("N2")</span>
+                </div>
+                @if (Model.AmountPaid.HasValue)
+                {
+                    <div class="t-row t-paid">
+                        <span>✓ Amount Paid</span>
+                        <span>BD @Model.AmountPaid.Value.ToString("N2")</span>
+                    </div>
+                    var bal = Model.TotalAmount - Model.AmountPaid.Value;
+                    if (bal > 0)
+                    {
+                        <div class="t-row t-bal">
+                            <span>Balance Remaining</span>
+                            <span>BD @bal.ToString("N2")</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="t-row t-clear">
+                            <span>✓ Cleared</span>
+                            <span>No Balance Due</span>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+
+        <!-- LEASE BALANCE SUMMARY -->
+        <div class="sec-title">Lease Account Summary</div>
+        <div class="balance-block">
+            <div class="bal-numbers">
+                <span>Total Lease Value: <strong>BD @Model.LeaseTotalDue.ToString("N2")</strong></span>
+                <span>@progressPct.ToString("F0")% Settled</span>
+            </div>
+            <div class="bal-track">
+                <div class="bal-fill" style="width:@progressPct.ToString("F1")%;"></div>
+            </div>
+            <div class="bal-labels">
+                <span style="color:#16a34a; font-weight:600;">
+                    ✓ Paid: BD @Model.LeaseTotalPaid.ToString("N2")
+                </span>
+                @if (Model.LeaseBalance > 0)
+                {
+                    <span style="color:#dc2626; font-weight:600;">
+                        Remaining: BD @Model.LeaseBalance.ToString("N2")
+                    </span>
+                }
+                else
+                {
+                    <span style="color:#16a34a; font-weight:600;">★ Fully Settled</span>
+                }
+            </div>
+        </div>
+
+        <!-- ALL INSTALLMENTS LEDGER -->
+        <div class="sec-title">Payment Schedule</div>
+        <table class="ledger">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Due Date</th>
+                    <th>Amount (BD)</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var inst in Model.AllInstallments)
+                {
+                    bool isCurrent = inst.Number == Model.InstallmentNum;
+                    var ic = StatusColor(inst.Status);
+                    var ibg = inst.Status == "Paid"    ? "#dcfce7" :
+                              inst.Status == "Overdue" ? "#fee2e2" :
+                              inst.Status == "Unpaid"  ? "#fef9c3" : "#e0f2fe";
+                    <tr class="@(isCurrent ? "this-row" : "")">
+                        <td>@inst.Number / @Model.TotalInstallments @(isCurrent ? " ← Current" : "")</td>
+                        <td>@inst.DueDate.ToString("dd MMM yyyy")</td>
+                        <td style="font-weight:600;">BD @inst.Amount.ToString("N2")</td>
+                        <td>
+                            <span class="inst-badge"
+                                  style="background:@ibg; color:@ic;">
+                                @instIcon(inst.Status) @inst.Status
+                            </span>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+    </div><!-- /inv-body -->
+
+    <!-- FOOTER -->
+    <div class="inv-foot">
+        <div class="foot-main">
+            <div>
+                <div class="foot-brand">RentEase Property Management</div>
+                <div class="foot-reg">Manama, Kingdom of Bahrain &nbsp;|&nbsp; CR: 12345 &nbsp;|&nbsp; VAT: BH00000000</div>
+            </div>
+            <div style="text-align:right;">
+                <div class="foot-reg">✆ +973 1700 0000</div>
+                <div class="foot-reg">✉ info@rentease.bh</div>
+            </div>
+        </div>
+        <div class="foot-note">
+            This document is computer-generated and constitutes an official payment receipt. &nbsp;|&nbsp;
+            For inquiries: <strong>info@rentease.bh</strong> &nbsp;|&nbsp;
+            Generated: @DateTime.Now.ToString("dd MMM yyyy, hh:mm tt")
+        </div>
+    </div>
+
+    <div class="inv-stripe-bot"></div>
+
+</div><!-- /inv -->
+
+<!-- Floating print button (screen only) -->
+<div class="text-center mt-3 no-print mb-4">
+    <button onclick="window.print()" class="btn btn-dark px-5 py-2">
+        <i class="fa fa-file-pdf me-2"></i>Download as PDF
+    </button>
+</div>

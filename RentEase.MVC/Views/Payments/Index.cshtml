@@ -186,36 +186,45 @@ else
                                                 <span class="badge bg-@StatusBadge(p.PaymentStatus)">@DisplayStatus(p.PaymentStatus)</span>
                                             </td>
                                             <td>
-                                                @if (isManager && p.PaymentStatus != "Paid")
-                                                {
-                                                    <button type="button" class="btn btn-sm btn-outline-success"
-                                                            data-bs-toggle="modal" data-bs-target="#recordModal"
-                                                            data-payment-id="@p.PaymentId"
-                                                            data-amount-due="@total"
-                                                            data-unit="@p.UnitNumber"
-                                                            data-tenant="@p.TenantName">
-                                                        <i class="fa fa-check me-1"></i>Record
-                                                    </button>
-                                                }
-                                                else if (!isManager && p.PaymentStatus == "Paid")
-                                                {
-                                                    <span class="text-success small">
-                                                        <i class="fa fa-check-circle me-1"></i>@p.PaidDate?.ToString("dd MMM yyyy")
-                                                    </span>
-                                                }
-                                                else if (!isManager && p.PaymentStatus == "Upcoming")
-                                                {
-                                                    <span class="text-muted small">
-                                                        <i class="fa fa-clock me-1"></i>@p.DueDate.ToString("dd MMM yyyy")
-                                                    </span>
-                                                }
-                                                else if (!isManager && (p.PaymentStatus == "Unpaid" || p.PaymentStatus == "Pending" || p.PaymentStatus == "Overdue"))
-                                                {
-                                                    <a asp-action="Pay" asp-route-paymentId="@p.PaymentId"
-                                                       class="btn btn-sm @(p.PaymentStatus == "Overdue" ? "btn-danger" : "btn-warning")">
-                                                        <i class="fa fa-credit-card me-1"></i>Pay Now
+                                                <div class="d-flex flex-wrap gap-1">
+                                                    @* View Bill — available to everyone *@
+                                                    <a asp-action="Bill" asp-route-paymentId="@p.PaymentId"
+                                                       class="btn btn-sm btn-outline-primary"
+                                                       title="View Bill / Invoice">
+                                                        <i class="fa fa-file-invoice me-1"></i>Bill
                                                     </a>
-                                                }
+
+                                                    @if (isManager && p.PaymentStatus != "Paid")
+                                                    {
+                                                        <button type="button" class="btn btn-sm btn-outline-success"
+                                                                data-bs-toggle="modal" data-bs-target="#recordModal"
+                                                                data-payment-id="@p.PaymentId"
+                                                                data-amount-due="@total"
+                                                                data-unit="@p.UnitNumber"
+                                                                data-tenant="@p.TenantName">
+                                                            <i class="fa fa-check me-1"></i>Record
+                                                        </button>
+                                                    }
+                                                    else if (!isManager && p.PaymentStatus == "Paid")
+                                                    {
+                                                        <span class="text-success small d-flex align-items-center">
+                                                            <i class="fa fa-check-circle me-1"></i>@p.PaidDate?.ToString("dd MMM yyyy")
+                                                        </span>
+                                                    }
+                                                    else if (!isManager && p.PaymentStatus == "Upcoming")
+                                                    {
+                                                        <span class="text-muted small d-flex align-items-center">
+                                                            <i class="fa fa-clock me-1"></i>@p.DueDate.ToString("dd MMM yyyy")
+                                                        </span>
+                                                    }
+                                                    else if (!isManager && (p.PaymentStatus == "Unpaid" || p.PaymentStatus == "Pending" || p.PaymentStatus == "Overdue"))
+                                                    {
+                                                        <a asp-action="Pay" asp-route-paymentId="@p.PaymentId"
+                                                           class="btn btn-sm @(p.PaymentStatus == "Overdue" ? "btn-danger" : "btn-warning")">
+                                                            <i class="fa fa-credit-card me-1"></i>Pay Now
+                                                        </a>
+                                                    }
+                                                </div>
                                             </td>
                                         </tr>
                                     }
