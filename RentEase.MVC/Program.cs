@@ -44,6 +44,7 @@ builder.Services.AddHttpClient<ApiService>(client =>
 
 // ── App Services ──────────────────────────────────────
 builder.Services.AddScoped<NotificationService>();
+builder.Services.AddScoped<EmailService>();
 
 var app = builder.Build();
 

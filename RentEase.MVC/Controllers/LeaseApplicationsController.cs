@@ -15,15 +15,18 @@ public class LeaseApplicationsController : Controller
     private readonly PropertyLeasingDbContext _db;
     private readonly UserManager<AppUser>     _userManager;
     private readonly NotificationService      _notifier;
+    private readonly EmailService             _emailService;
 
     public LeaseApplicationsController(
         PropertyLeasingDbContext db,
-        UserManager<AppUser> userManager,
-        NotificationService notifier)
+        UserManager<AppUser>     userManager,
+        NotificationService      notifier,
+        EmailService             emailService)
     {
-        _db          = db;
-        _userManager = userManager;
-        _notifier    = notifier;
+        _db           = db;
+        _userManager  = userManager;
+        _notifier     = notifier;
+        _emailService = emailService;
     }
 
     private async Task<User?> GetAppUserAsync()
@@ -532,6 +535,12 @@ public class LeaseApplicationsController : Controller
                 $"New lease application from {appUser.FullName} for unit {model.UnitNumber}.",
                 "LeaseUpdate");
 
+        // Send confirmation email to tenant
+        try { await _emailService.SendApplicationSubmittedAsync(
+            appUser.Email, appUser.FullName, model.UnitNumber,
+            model.PropertyName ?? "", application.ApplicationId); }
+        catch { /* email failure should not block the flow */ }
+
         TempData["Success"] = "Application submitted successfully. Status: Pending.";
         return RedirectToAction("Index");
     }
@@ -937,6 +946,13 @@ public class LeaseApplicationsController : Controller
             $"Your application for unit {application.Unit.UnitNumber} is now under screening.",
             "LeaseUpdate");
 
+        // Send screening email to tenant
+        try { await _emailService.SendApplicationScreeningAsync(
+            application.User.Email, application.User.FullName,
+            application.Unit.UnitNumber, application.Unit.Property?.Name ?? "",
+            application.ApplicationId); }
+        catch { /* email failure should not block the flow */ }
+
         TempData["Success"] = "Application moved to Screening.";
         return RedirectToAction("Details", new { id = applicationId });
     }
@@ -1032,6 +1048,13 @@ public class LeaseApplicationsController : Controller
             "Please complete your payment to activate your lease.",
             "PaymentReminder");
 
+        // Send approval email to tenant
+        try { await _emailService.SendApplicationApprovedAsync(
+            application.User.Email, application.User.FullName,
+            application.Unit.UnitNumber, application.Unit.Property?.Name ?? "",
+            application.ApplicationId); }
+        catch { /* email failure should not block the flow */ }
+
         TempData["Success"] =
             $"Application approved. Lease created. {conflicting.Count} conflicting application(s) auto-rejected.";
         return RedirectToAction("Details", new { id = applicationId });
@@ -1074,6 +1097,13 @@ public class LeaseApplicationsController : Controller
         await _notifier.SendAsync(application.UserId,
             $"Your lease application for unit {application.Unit.UnitNumber} has been rejected.",
             "LeaseUpdate");
+
+        // Send rejection email to tenant
+        try { await _emailService.SendApplicationRejectedAsync(
+            application.User.Email, application.User.FullName,
+            application.Unit.UnitNumber, application.Unit.Property?.Name ?? "",
+            application.ApplicationId); }
+        catch { /* email failure should not block the flow */ }
 
         TempData["Success"] = "Application rejected.";
         return RedirectToAction("Details", new { id = applicationId });

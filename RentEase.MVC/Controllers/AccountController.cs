@@ -4,24 +4,28 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PropertyLeasing.API.Data;
 using PropertyLeasing.API.Models;
+using PropertyLeasing.MVC.Services;
 using PropertyLeasing.MVC.ViewModels;
 
 namespace PropertyLeasing.MVC.Controllers;
 
 public class AccountController : Controller
 {
-    private readonly UserManager<AppUser>   _userManager;
-    private readonly SignInManager<AppUser> _signInManager;
+    private readonly UserManager<AppUser>     _userManager;
+    private readonly SignInManager<AppUser>   _signInManager;
     private readonly PropertyLeasingDbContext _db;
+    private readonly EmailService             _emailService;
 
     public AccountController(
-        UserManager<AppUser>   userManager,
-        SignInManager<AppUser> signInManager,
-        PropertyLeasingDbContext db)
+        UserManager<AppUser>     userManager,
+        SignInManager<AppUser>   signInManager,
+        PropertyLeasingDbContext  db,
+        EmailService             emailService)
     {
         _userManager   = userManager;
         _signInManager = signInManager;
         _db            = db;
+        _emailService  = emailService;
     }
 
     // GET /Account/Login
@@ -228,9 +232,24 @@ public class AccountController : Controller
         });
         await _db.SaveChangesAsync();
 
-        // In production this would be emailed; for now show it on screen
-        TempData["ResetCode"]  = code;
-        TempData["ResetEmail"] = model.Email;
+        // Send reset code via email
+        try
+        {
+            await _emailService.SendPasswordResetAsync(
+                toEmail: model.Email,
+                toName:  identityUser.FullName ?? model.Email,
+                code:    code);
+
+            TempData["ResetEmail"]   = model.Email;
+            TempData["EmailSent"]    = true;
+        }
+        catch
+        {
+            // Fallback: show code on screen if email fails
+            TempData["ResetCode"]  = code;
+            TempData["ResetEmail"] = model.Email;
+        }
+
         return RedirectToAction("ResetPassword");
     }
 
