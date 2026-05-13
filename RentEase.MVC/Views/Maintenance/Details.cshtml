@@ -18,28 +18,30 @@
         _        => "secondary"
     };
     string CatIcon(string? t) => t switch {
+        "Plumbing"   => "🔧",
         "Electrical" => "⚡",
         "HVAC"       => "❄️",
-        "Plumbing"   => "🔧",
-        "Lock"       => "🚪",
-        "Lighting"   => "💡",
-        "Windows"    => "🪟",
-        "Cleaning"   => "🧹",
+        "Carpentry"  => "🪚",
         _            => "🔨"
     };
 
-    // Allowed statuses per role (Closed removed everywhere)
-    string[] allowedStatuses = role == "MaintenanceStaff"
-        ? new[] { "InProgress", "Resolved" }
-        : new[] { "Submitted", "Assigned", "InProgress", "Resolved" };
+    bool canUpdate = (role == "PropertyManager" || role == "MaintenanceStaff")
+                  && Model.Status != "Resolved"
+                  && Model.Status != "Closed";
 
-    // Status display config: label, icon, Bootstrap color
-    var statusConfig = new Dictionary<string, (string Label, string Icon, string Color)> {
-        ["Submitted"]  = ("Submitted",   "fa-circle-dot",      "secondary"),
-        ["Assigned"]   = ("Assigned",    "fa-user-check",      "info"),
-        ["InProgress"] = ("In Progress", "fa-screwdriver-wrench","primary"),
-        ["Resolved"]   = ("Resolved",    "fa-circle-check",    "success"),
+    var skillIcons = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Plumbing"]   = "🔧", ["Electrical"] = "⚡", ["HVAC"]      = "❄️",
+        ["Carpentry"]  = "🪚", ["General"]    = "🔨"
     };
+    string SkillBadges(string? skills)
+    {
+        if (string.IsNullOrEmpty(skills)) return "";
+        return string.Join(" ", skills.Split(',').Select(s => {
+            var t = s.Trim();
+            return (skillIcons.TryGetValue(t, out var ic) ? ic : "🔧") + " " + t;
+        }));
+    }
 }
 
 <style>
@@ -56,11 +58,9 @@
         align-items: center;
         justify-content: center;
     }
-    .res-upload-area:hover, .res-upload-area.dragover {
-        background: #d1fae5;
-        border-color: #0f6a35;
-    }
+    .res-upload-area:hover, .res-upload-area.dragover { background: #d1fae5; border-color: #0f6a35; }
     .res-upload-area.has-image { padding: .5rem; }
+
     .staff-card {
         border: 2px solid #dee2e6;
         border-radius: 10px;
@@ -68,29 +68,29 @@
         cursor: pointer;
         transition: all .15s ease;
         background: #fff;
+        margin-bottom: .4rem;
     }
-    .staff-card:hover  { border-color: #ffc107; background: #fffbf0; }
-    .staff-card.selected { border-color: #fd7e14; background: #fff3cd;
-                           box-shadow: 0 0 0 3px rgba(253,126,20,.2); }
-    .staff-avatar {
-        width: 36px; height: 36px; border-radius: 50%;
+    .staff-card:hover   { border-color: #ffc107; background: #fffbf0; }
+    .staff-card.sel     { border-color: #fd7e14; background: #fff3cd;
+                          box-shadow: 0 0 0 3px rgba(253,126,20,.2); }
+    .s-av {
+        width: 32px; height: 32px; border-radius: 50%;
         display: flex; align-items: center; justify-content: center;
-        font-weight: 700; font-size: 1rem; flex-shrink: 0;
+        font-weight: 700; font-size: .9rem; flex-shrink: 0;
     }
+
     .timeline { position: relative; padding-left: 2rem; }
     .timeline::before {
         content: '';
         position: absolute;
-        left: .7rem;
-        top: 0; bottom: 0;
+        left: .7rem; top: 0; bottom: 0;
         width: 2px;
         background: #dee2e6;
     }
     .timeline-item { position: relative; margin-bottom: 1.25rem; }
     .timeline-dot {
         position: absolute;
-        left: -1.65rem;
-        top: .25rem;
+        left: -1.65rem; top: .25rem;
         width: 14px; height: 14px;
         border-radius: 50%;
         border: 2px solid #fff;
@@ -99,31 +99,6 @@
     .info-row { display: flex; gap: .5rem; margin-bottom: .5rem; font-size: .9rem; }
     .info-label { color: #888; min-width: 130px; }
     .info-value { font-weight: 500; }
-
-    /* Status pill buttons */
-    .status-pill {
-        border-radius: 50px;
-        padding: .35rem .9rem;
-        font-size: .82rem;
-        font-weight: 600;
-        border: 2px solid #dee2e6;
-        background: #f8f9fa;
-        color: #555;
-        transition: all .15s ease;
-    }
-    .status-pill:hover {
-        border-color: #adb5bd;
-        background: #e9ecef;
-        color: #222;
-    }
-    .btn-status-Submitted.active   { background:#6c757d; border-color:#6c757d; color:#fff; }
-    .btn-status-Assigned.active    { background:#0dcaf0; border-color:#0dcaf0; color:#000; }
-    .btn-status-InProgress.active  { background:#0d6efd; border-color:#0d6efd; color:#fff; }
-    .btn-status-Resolved.active    { background:#198754; border-color:#198754; color:#fff; }
-    .btn-status-Submitted:hover:not(.active)   { border-color:#6c757d; color:#6c757d; }
-    .btn-status-Assigned:hover:not(.active)    { border-color:#0dcaf0; color:#0a9bba; }
-    .btn-status-InProgress:hover:not(.active)  { border-color:#0d6efd; color:#0d6efd; }
-    .btn-status-Resolved:hover:not(.active)    { border-color:#198754; color:#198754; }
 </style>
 
 <div class="d-flex align-items-center gap-2 mb-3">
@@ -135,18 +110,68 @@
     </h4>
 </div>
 
-@if (TempData["Success"] != null)
+@* ── Not-assigned notice for MaintenanceStaff viewing someone else's request ── *@
+@if (ViewBag.NotAssigned == true)
 {
-    <div class="alert alert-success alert-dismissible fade show">
-        <i class="fa fa-check-circle me-2"></i>@Html.Raw(TempData["Success"])
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    var assignedTo = ViewBag.AssignedToName as string;
+    <div class="alert alert-warning d-flex align-items-start gap-3 shadow-sm">
+        <i class="fa fa-triangle-exclamation fa-lg mt-1 text-warning"></i>
+        <div>
+            <strong>Access Restricted</strong><br />
+            @if (!string.IsNullOrEmpty(assignedTo))
+            {
+                <span>This request has been assigned to <strong>@assignedTo</strong>. You are not authorised to update it.</span>
+            }
+            else
+            {
+                <span>This request has not been assigned to you. You are not authorised to update it.</span>
+            }
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-header d-flex align-items-center gap-2"
+             style="background: linear-gradient(135deg,#fd7e14,#ffc107);">
+            <span class="fs-2">@CatIcon(Model.RequestType)</span>
+            <div>
+                <div class="fw-bold text-white fs-5">@Model.Title</div>
+                <small class="text-white opacity-75 font-monospace">@Model.TicketNumber</small>
+            </div>
+            <span class="badge bg-@BadgeColor(Model.Status) ms-auto fs-6">@Model.Status</span>
+        </div>
+        <div class="card-body">
+            <div class="info-row">
+                <span class="info-label"><i class="fa fa-building me-1"></i>Property</span>
+                <span class="info-value">@Model.PropertyName</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label"><i class="fa fa-door-open me-1"></i>Unit</span>
+                <span class="info-value">@Model.UnitNumber</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label"><i class="fa fa-tag me-1"></i>Category</span>
+                <span class="info-value">@(Model.RequestType ?? "—")</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label"><i class="fa fa-flag me-1"></i>Priority</span>
+                <span class="info-value">
+                    <span class="badge bg-@PriorityColor(Model.Priority)">@Model.Priority</span>
+                </span>
+            </div>
+            <div class="info-row">
+                <span class="info-label"><i class="fa fa-calendar me-1"></i>Submitted</span>
+                <span class="info-value">@Model.SubmittedAt.ToString("dd MMMM yyyy, hh:mm tt")</span>
+            </div>
+        </div>
     </div>
 }
+else
+{
 
 <div class="row g-4">
 
     <!-- LEFT: Request Info -->
-    <div class="col-lg-7">
+    <div class="col-lg-@(canUpdate ? "5" : "7")">
         <div class="card shadow-sm h-100">
             <div class="card-header d-flex align-items-center gap-2"
                  style="background: linear-gradient(135deg,#fd7e14,#ffc107);">
@@ -255,166 +280,9 @@
         </div>
     </div>
 
-    <!-- RIGHT: Update form (Manager/Staff) + History -->
-    <div class="col-lg-5 d-flex flex-column gap-4">
+    <!-- RIGHT: Update form (Manager / Staff) + History -->
+    <div class="col-lg-@(canUpdate ? "7" : "5") d-flex flex-column gap-4">
 
-        @if (role == "PropertyManager" || role == "MaintenanceStaff")
-        {
-            @if (Model.Status == "Resolved" || Model.Status == "Closed")
-            {
-                <!-- Locked banner -->
-                <div class="card shadow-sm border-@(Model.Status == "Resolved" ? "success" : "dark")">
-                    <div class="card-body text-center py-4">
-                        <i class="fa fa-lock fa-2x mb-2 text-@(Model.Status == "Resolved" ? "success" : "secondary")"></i>
-                        <div class="fw-bold fs-6">
-                            @if (Model.Status == "Resolved")
-                            { <span class="text-success">Request Resolved</span> }
-                            else
-                            { <span class="text-secondary">Request Closed</span> }
-                        </div>
-                        <div class="small text-muted mt-1">
-                            This request is <strong>@Model.Status</strong> and cannot be modified.
-                        </div>
-                        @if (Model.ResolvedAt.HasValue)
-                        {
-                            <div class="small text-muted">
-                                <i class="fa fa-check-circle text-success me-1"></i>
-                                Resolved on @Model.ResolvedAt.Value.ToString("dd MMM yyyy, hh:mm tt")
-                            </div>
-                        }
-                    </div>
-                </div>
-            }
-            else
-            {
-            <div class="card shadow-sm">
-                <div class="card-header bg-dark text-white">
-                    <h6 class="mb-0"><i class="fa fa-edit me-2"></i>Update Request</h6>
-                </div>
-                <div class="card-body">
-                    <form asp-action="Update" method="post" enctype="multipart/form-data">
-                        @Html.AntiForgeryToken()
-                        <input type="hidden" name="RequestId"     value="@Model.RequestId" />
-                        <input type="hidden" name="Title"         value="@Model.Title" />
-                        <input type="hidden" name="CurrentStatus" value="@Model.Status" />
-
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">New Status</label>
-                            <input type="hidden" name="NewStatus" id="newStatusInput" value="@Model.Status" />
-                            <div class="d-flex flex-wrap gap-2 mt-1">
-                                @foreach (var s in allowedStatuses)
-                                {
-                                    var cfg = statusConfig[s];
-                                    var isActive = s == Model.Status;
-                                    <button type="button"
-                                            class="btn status-pill @(isActive ? "active" : "") btn-status-@s"
-                                            data-status="@s"
-                                            onclick="pickStatus(this)"
-                                            style="--sc: var(--bs-@cfg.Color);">
-                                        <i class="fa @cfg.Icon me-1"></i>@cfg.Label
-                                    </button>
-                                }
-                            </div>
-                        </div>
-
-                        @if (role == "PropertyManager")
-                        {
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold">
-                                    <i class="fa fa-user-gear me-1 text-warning"></i>Assign to Staff
-                                </label>
-                                <input type="hidden" name="AssignedStaffId" id="assignedStaffId"
-                                       value="@(Model.AssignedStaffId?.ToString() ?? "")" />
-
-                                @{
-                                    var skillIcons = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-                                    {
-                                        ["Electrical"] = "⚡", ["HVAC"] = "❄️", ["Plumbing"] = "🔧",
-                                        ["Carpentry"] = "🪚", ["General"] = "🔨", ["Painting"] = "🎨",
-                                        ["Cleaning"] = "🧹", ["Locks"] = "🔐"
-                                    };
-                                    string SkillBadges(string? skills)
-                                    {
-                                        if (string.IsNullOrEmpty(skills)) return "";
-                                        return string.Join(" ", skills.Split(',').Select(s => {
-                                            var t = s.Trim();
-                                            var icon = skillIcons.TryGetValue(t, out var ic) ? ic : "🔧";
-                                            return $"{icon} {t}";
-                                        }));
-                                    }
-                                }
-                                @foreach (var s in Model.StaffList)
-                                {
-                                    var avail       = s.AvailabilityStatus ?? "Available";
-                                    var availColor  = avail == "Available" ? "success" : avail == "Busy" ? "warning" : "secondary";
-                                    var isSelected  = s.UserId == Model.AssignedStaffId;
-                                    <div class="staff-card @(isSelected ? "selected" : "")"
-                                         onclick="selectStaff(this, '@s.UserId')"
-                                         style="margin-bottom:.5rem;">
-                                        <div class="d-flex align-items-center gap-2">
-                                            <div class="staff-avatar bg-@availColor text-white">
-                                                @(s.FullName.Length > 0 ? s.FullName[0].ToString().ToUpper() : "?")
-                                            </div>
-                                            <div class="flex-grow-1">
-                                                <div class="fw-semibold">@s.FullName</div>
-                                                @if (!string.IsNullOrEmpty(s.SkillProfile))
-                                                {
-                                                    <div class="small text-muted">@SkillBadges(s.SkillProfile)</div>
-                                                }
-                                            </div>
-                                            <span class="badge bg-@availColor ms-auto">@avail</span>
-                                        </div>
-                                    </div>
-                                }
-                            </div>
-                        }
-
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">Notes</label>
-                            <textarea name="Notes" class="form-control" rows="3"
-                                      placeholder="Add notes about this update..."></textarea>
-                        </div>
-
-                        <!-- Resolution proof upload — shown only when Resolved selected -->
-                        <div id="resolutionProofSection" class="mb-3 d-none">
-                            <label class="form-label fw-semibold">
-                                <i class="fa fa-camera me-1 text-success"></i>
-                                Proof of Resolution Photo
-                                <span class="badge bg-success ms-1 small">Recommended</span>
-                            </label>
-                            <div id="resUploadArea" class="res-upload-area"
-                                 onclick="document.getElementById('resImageInput').click()"
-                                 ondragover="event.preventDefault(); this.classList.add('dragover')"
-                                 ondragleave="this.classList.remove('dragover')"
-                                 ondrop="handleResDrop(event)">
-                                <div id="resUploadPlaceholder">
-                                    <i class="fa fa-cloud-upload-alt fa-2x text-muted mb-1"></i>
-                                    <div class="text-muted small">Upload photo as proof the issue is fixed</div>
-                                    <div class="text-muted" style="font-size:.72rem;">JPG, PNG, WEBP — max 5 MB</div>
-                                </div>
-                                <img id="resImagePreview" src="#" alt="Resolution proof"
-                                     class="d-none rounded"
-                                     style="max-height:160px; max-width:100%; object-fit:cover;" />
-                            </div>
-                            <input type="file" id="resImageInput" name="ResolutionImageFile"
-                                   accept="image/jpeg,image/png,image/webp,image/gif"
-                                   class="d-none" onchange="previewResImage(this)" />
-                            <div id="resFileName" class="small text-muted mt-1"></div>
-                            <button type="button" id="removeResBtn"
-                                    class="btn btn-outline-danger btn-sm mt-1 d-none"
-                                    onclick="removeResImage()">
-                                <i class="fa fa-times me-1"></i>Remove
-                            </button>
-                        </div>
-
-                        <button type="submit" class="btn btn-dark w-100">
-                            <i class="fa fa-save me-2"></i>Save Update
-                        </button>
-                    </form>
-                </div>
-            </div>
-            } @* end else (not resolved/closed) *@
-        }
 
         <!-- Status History Timeline -->
         <div class="card shadow-sm">
@@ -431,13 +299,14 @@
                     <div class="timeline">
                         @foreach (var h in Model.History)
                         {
-                            var dotColor = h.NewStatus switch {
-                                "Submitted"  => "#6c757d",
-                                "Assigned"   => "#0dcaf0",
+                            var dotColor = h.NewStatus switch
+                            {
+                                "Submitted" => "#6c757d",
+                                "Assigned" => "#0dcaf0",
                                 "InProgress" => "#0d6efd",
-                                "Resolved"   => "#198754",
-                                "Closed"     => "#212529",
-                                _            => "#adb5bd"
+                                "Resolved" => "#198754",
+                                "Closed" => "#212529",
+                                _ => "#adb5bd"
                             };
                             <div class="timeline-item">
                                 <div class="timeline-dot" style="background:@dotColor; box-shadow:0 0 0 2px @dotColor;"></div>
@@ -466,44 +335,189 @@
             </div>
         </div>
 
+
+        @* ── Update form — only when request is still actionable ── *@
+        @if (role == "PropertyManager" || role == "MaintenanceStaff")
+        {
+            <div class="card shadow-sm">
+                <div class="card-header bg-dark text-white">
+                    <h6 class="mb-0"><i class="fa fa-edit me-2"></i>Update Request</h6>
+                </div>
+                <div class="card-body p-4">
+
+                    @if (Model.Status == "Resolved" || Model.Status == "Closed")
+                    {
+                        <div class="alert alert-success mb-0">
+                            <i class="fa fa-lock me-2"></i>
+                            This request is already <strong>@Model.Status</strong> and cannot be modified.
+                            @if (Model.ResolvedAt.HasValue)
+                            {
+                                <div class="small mt-1 text-muted">
+                                    <i class="fa fa-check-circle text-success me-1"></i>
+                                    Resolved on @Model.ResolvedAt.Value.ToString("dd MMM yyyy, hh:mm tt")
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <form asp-action="Update" method="post" enctype="multipart/form-data">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="RequestId"     value="@Model.RequestId" />
+                            <input type="hidden" name="Title"         value="@Model.Title" />
+                            <input type="hidden" name="CurrentStatus" value="@Model.Status" />
+                            <input type="hidden" name="NewStatus"     id="newStatusInput" value="@Model.Status" />
+
+                            @* Current status badge *@
+                            <div class="mb-4">
+                                <label class="form-label fw-semibold">Current Status</label>
+                                <div>
+                                    <span class="badge bg-@BadgeColor(Model.Status) px-3 py-2 fs-6">@Model.Status</span>
+                                </div>
+                            </div>
+
+                            @* ── Staff Assignment (Manager only) ── *@
+                            @if (role == "PropertyManager")
+                            {
+                                <div class="mb-4">
+                                    <label class="form-label fw-semibold">
+                                        <i class="fa fa-user-gear me-1 text-warning"></i>Assign to Staff
+                                    </label>
+                                    <input type="hidden" name="AssignedStaffId" id="assignedStaffIdInput"
+                                           value="@(Model.AssignedStaffId?.ToString() ?? "")" />
+
+                                    @if (Model.StaffList.Any())
+                                    {
+                                        @foreach (var s in Model.StaffList)
+                                        {
+                                            var avail      = s.AvailabilityStatus ?? "Available";
+                                            var aColor     = avail == "Available" ? "success" : avail == "Busy" ? "warning" : "secondary";
+                                            var isSel      = s.UserId == Model.AssignedStaffId;
+                                            <div class="staff-card @(isSel ? "sel" : "")"
+                                                 onclick="selStaff(this, '@s.UserId')">
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <div class="s-av bg-@aColor text-white">
+                                                        @(s.FullName.Length > 0 ? s.FullName[0].ToString().ToUpper() : "?")
+                                                    </div>
+                                                    <div class="flex-grow-1">
+                                                        <div class="fw-semibold small">@s.FullName</div>
+                                                        @if (!string.IsNullOrEmpty(s.SkillProfile))
+                                                        {
+                                                            <div class="small text-muted" style="font-size:.72rem;">
+                                                                @SkillBadges(s.SkillProfile)
+                                                            </div>
+                                                        }
+                                                    </div>
+                                                    <span class="badge bg-@aColor">@avail</span>
+                                                </div>
+                                            </div>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <div class="text-muted small">No maintenance staff available.</div>
+                                    }
+                                </div>
+                            }
+
+                            @* ── Notes ── *@
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">
+                                    <i class="fa fa-note-sticky me-1 text-warning"></i>Notes / Resolution
+                                </label>
+                                <textarea name="Notes" class="form-control" rows="4"
+                                          placeholder="Describe the action taken or reason for this status change..."></textarea>
+                            </div>
+
+                            @* ── Resolution proof photo — shown when staff clicks Resolved ── *@
+                            <div id="resolutionProofSection" class="mb-3 d-none">
+                                <label class="form-label fw-semibold">
+                                    <i class="fa fa-camera me-1 text-success"></i>
+                                    Proof of Resolution Photo
+                                    <span class="badge bg-success ms-1 small">Recommended</span>
+                                </label>
+                                <div id="resUploadArea" class="res-upload-area"
+                                     onclick="document.getElementById('resImageInput').click()"
+                                     ondragover="event.preventDefault(); this.classList.add('dragover')"
+                                     ondragleave="this.classList.remove('dragover')"
+                                     ondrop="handleResDrop(event)">
+                                    <div id="resUploadPlaceholder">
+                                        <i class="fa fa-cloud-upload-alt fa-2x text-muted mb-1"></i>
+                                        <div class="text-muted small">Upload photo as proof the issue is fixed</div>
+                                        <div class="text-muted" style="font-size:.72rem;">JPG, PNG, WEBP — max 5 MB</div>
+                                    </div>
+                                    <img id="resImagePreview" src="#" alt="Resolution proof"
+                                         class="d-none rounded"
+                                         style="max-height:160px; max-width:100%; object-fit:cover;" />
+                                </div>
+                                <input type="file" id="resImageInput" name="ResolutionImageFile"
+                                       accept="image/jpeg,image/png,image/webp,image/gif"
+                                       class="d-none" onchange="previewResImage(this)" />
+                                <div id="resFileName" class="small text-muted mt-1"></div>
+                                <button type="button" id="removeResBtn"
+                                        class="btn btn-outline-danger btn-sm mt-1 d-none"
+                                        onclick="removeResImage()">
+                                    <i class="fa fa-times me-1"></i>Remove
+                                </button>
+                            </div>
+
+                            @* ── Action buttons ── *@
+                            @if (role == "MaintenanceStaff")
+                            {
+                                <div class="d-flex gap-3 mt-4">
+                                    @if (Model.Status == "Assigned")
+                                    {
+                                        <button type="submit" class="btn btn-primary btn-lg flex-fill"
+                                                onclick="document.getElementById('newStatusInput').value='InProgress'">
+                                            <i class="fa fa-play me-2"></i>In Progress
+                                        </button>
+                                    }
+                                    else if (Model.Status == "InProgress")
+                                    {
+                                        <button type="submit" class="btn btn-success btn-lg flex-fill"
+                                                onclick="showResProof(); document.getElementById('newStatusInput').value='Resolved'">
+                                            <i class="fa fa-check me-2"></i>Resolved
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <div class="alert alert-info w-100 mb-0">
+                                            No action available for status <strong>@Model.Status</strong>.
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            else @* PropertyManager *@
+                            {
+                                <div class="d-flex gap-3 mt-4">
+                                    <button type="submit" class="btn btn-dark btn-lg flex-fill">
+                                        <i class="fa fa-user-check me-2"></i>Save Assignment
+                                    </button>
+                                </div>
+                            }
+                        </form>
+                    }
+                </div>
+            </div>
+        }
+
     </div>
 </div>
 
+} @* end else (normal view for assigned staff / manager / tenant) *@
+
 @section Scripts {
 <script>
-    function pickStatus(btn) {
-        // Deactivate all pills
-        document.querySelectorAll('.status-pill').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        const val = btn.dataset.status;
-        document.getElementById('newStatusInput').value = val;
+    function selStaff(el, userId) {
+        document.querySelectorAll('.staff-card').forEach(c => c.classList.remove('sel'));
+        el.classList.add('sel');
+        document.getElementById('assignedStaffIdInput').value = userId;
+    }
 
-        // Show/hide resolution proof upload
+    function showResProof() {
         const section = document.getElementById('resolutionProofSection');
-        if (section) {
-            if (val === 'Resolved') {
-                section.classList.remove('d-none');
-            } else {
-                section.classList.add('d-none');
-                removeResImage();
-            }
-        }
+        if (section) section.classList.remove('d-none');
     }
-
-    function selectStaff(el, userId) {
-        document.querySelectorAll('.staff-card').forEach(c => c.classList.remove('selected'));
-        el.classList.add('selected');
-        document.getElementById('assignedStaffId').value = userId;
-    }
-
-    // On load: if current status is Resolved, show the proof section
-    document.addEventListener('DOMContentLoaded', () => {
-        const activeBtn = document.querySelector('.status-pill.active');
-        if (activeBtn && activeBtn.dataset.status === 'Resolved') {
-            const section = document.getElementById('resolutionProofSection');
-            if (section) section.classList.remove('d-none');
-        }
-    });
 
     function previewResImage(input) {
         if (input.files && input.files[0]) {
@@ -555,5 +569,13 @@
         const btn = document.getElementById('removeResBtn');
         if (btn) btn.classList.add('d-none');
     }
+
+    // On load: if status is InProgress (staff about to resolve), pre-open proof section
+    document.addEventListener('DOMContentLoaded', () => {
+        const statusVal = document.getElementById('newStatusInput')?.value;
+        if (statusVal === 'InProgress') {
+            showResProof();
+        }
+    });
 </script>
 }

@@ -13,7 +13,7 @@ public class MaintenanceStaff
     [Column("UserID")]
     public int UserId { get; set; }
 
-    // e.g. Electrical, HVAC, Plumbing, General
+    // e.g. Plumbing / Electrical / HVAC / Carpentry / General
     [StringLength(200)]
     public string? SkillProfile { get; set; }
 

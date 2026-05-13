@@ -28,7 +28,7 @@ public partial class MaintenanceRequest
     [StringLength(500)]
     public string? Description { get; set; }
 
-    // Plumbing / Electrical / HVAC / General
+    // Plumbing / Electrical / HVAC / Carpentry / General
     [StringLength(50)]
     public string? RequestType { get; set; }
 
@@ -75,4 +75,7 @@ public partial class MaintenanceRequest
 
     [InverseProperty("MaintenanceRequest")]
     public virtual ICollection<MaintenanceStatusHistory> StatusHistory { get; set; } = new List<MaintenanceStatusHistory>();
+
+    [InverseProperty("MaintenanceRequest")]
+    public virtual ICollection<MaintenanceRequestLog> RequestLogs { get; set; } = new List<MaintenanceRequestLog>();
 }

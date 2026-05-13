@@ -28,12 +28,29 @@ public class AccountController : Controller
         _emailService  = emailService;
     }
 
+    private async Task<IActionResult> RedirectAfterLoginAsync(AppUser identityUser, string? returnUrl = null)
+    {
+        if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+            return Redirect(returnUrl);
+
+        var roles = await _userManager.GetRolesAsync(identityUser);
+        if (roles.Contains("MaintenanceStaff"))
+            return RedirectToAction("Index", "Maintenance");
+
+        return RedirectToAction("Index", "Home");
+    }
+
     // GET /Account/Login
     [HttpGet]
     public IActionResult Login(string? returnUrl = null)
     {
         if (User.Identity?.IsAuthenticated == true)
+        {
+            if (User.IsInRole("MaintenanceStaff"))
+                return RedirectToAction("Index", "Maintenance");
+
             return RedirectToAction("Index", "Home");
+        }
 
         ViewData["ReturnUrl"] = returnUrl;
         return View();
@@ -53,7 +70,13 @@ public class AccountController : Controller
         {
             // Log the login action
             var user = await _userManager.FindByEmailAsync(model.Email);
-            var appUser = await _db.Users.FirstOrDefaultAsync(u => u.IdentityUserId == user!.Id);
+            if (user == null)
+            {
+                ModelState.AddModelError(string.Empty, "Login succeeded but account mapping is missing.");
+                return View(model);
+            }
+
+            var appUser = await _db.Users.FirstOrDefaultAsync(u => u.IdentityUserId == user.Id);
             if (appUser != null)
             {
                 _db.Logs.Add(new Log
@@ -68,9 +91,7 @@ public class AccountController : Controller
                 await _db.SaveChangesAsync();
             }
 
-            if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
-                return Redirect(returnUrl);
-            return RedirectToAction("Index", "Home");
+            return await RedirectAfterLoginAsync(user, returnUrl);
         }
 
         ModelState.AddModelError(string.Empty, "Invalid email or password.");
@@ -126,7 +147,7 @@ public class AccountController : Controller
 
         await _signInManager.SignInAsync(identityUser, isPersistent: false);
         TempData["Success"] = "Registration successful! Welcome to Property Leasing.";
-        return RedirectToAction("Index", "Home");
+        return await RedirectAfterLoginAsync(identityUser);
     }
 
     // POST /Account/Logout

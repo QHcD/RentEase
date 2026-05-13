@@ -26,6 +26,7 @@ public partial class PropertyLeasingDbContext : DbContext
     public virtual DbSet<LeaseApplicationLog> LeaseApplicationLogs { get; set; }
     public virtual DbSet<LeaseLog> LeaseLogs { get; set; }
     public virtual DbSet<MaintenanceStaff> MaintenanceStaffs { get; set; }
+    public virtual DbSet<MaintenanceRequestLog> MaintenanceRequestLogs { get; set; }
     public virtual DbSet<Termination> Terminations { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) { }
@@ -184,6 +185,15 @@ public partial class PropertyLeasingDbContext : DbContext
                 .WithMany(p => p.LeaseLogs)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_LeaseLog_User");
+        });
+
+        // MaintenanceRequest -> MaintenanceRequestLog
+        modelBuilder.Entity<MaintenanceRequestLog>(entity =>
+        {
+            entity.HasOne(d => d.MaintenanceRequest)
+                .WithMany(p => p.RequestLogs)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_MaintenanceRequestLog_Request");
         });
 
         // User -> MaintenanceStaff (one-to-one)

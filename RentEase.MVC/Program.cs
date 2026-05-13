@@ -60,6 +60,28 @@ app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
+app.Use(async (context, next) =>
+{
+    if (context.User.Identity?.IsAuthenticated == true &&
+        context.User.IsInRole("MaintenanceStaff"))
+    {
+        var path = context.Request.Path.Value ?? string.Empty;
+        var isAllowed =
+            path.StartsWith("/Maintenance", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWith("/Notifications", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWith("/Account/Logout", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWith("/Account/Profile", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWith("/Account/AccessDenied", StringComparison.OrdinalIgnoreCase);
+
+        if (!isAllowed)
+        {
+            context.Response.Redirect("/Maintenance");
+            return;
+        }
+    }
+
+    await next();
+});
 
 app.MapControllerRoute(
     name: "default",
@@ -99,6 +121,30 @@ using (var scope = app.Services.CreateScope())
         logger.LogInformation("MaintenanceRequest image columns ensured.");
     }
     catch (Exception ex) { logger.LogWarning(ex, "Could not auto-add ImagePath column (non-fatal)."); }
+
+    try
+    {
+        // Create MaintenanceRequestLog table if it does not exist yet
+        var db = scope.ServiceProvider.GetRequiredService<PropertyLeasingDbContext>();
+        await db.Database.ExecuteSqlRawAsync(@"
+            IF NOT EXISTS (
+                SELECT 1 FROM INFORMATION_SCHEMA.TABLES
+                WHERE TABLE_NAME = 'MaintenanceRequestLog'
+            )
+            CREATE TABLE [MaintenanceRequestLog] (
+                [LogID]             INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                [RequestID]         INT NOT NULL,
+                [Action]            NVARCHAR(100) NOT NULL,
+                [Details]           NVARCHAR(500) NULL,
+                [PerformedByUserID] INT NULL,
+                [PerformedAt]       DATETIME NOT NULL CONSTRAINT [DF_MaintenanceRequestLog_PerformedAt] DEFAULT GETDATE(),
+                CONSTRAINT [FK_MaintenanceRequestLog_Request]
+                    FOREIGN KEY ([RequestID]) REFERENCES [MaintenanceRequest]([RequestID])
+            );
+        ");
+        logger.LogInformation("MaintenanceRequestLog table ensured.");
+    }
+    catch (Exception ex) { logger.LogWarning(ex, "Could not create MaintenanceRequestLog table (non-fatal)."); }
 
     try
     {

@@ -15,6 +15,9 @@ public class CreateMaintenanceViewModel
     public string? Description { get; set; }
 
     [Display(Name = "Request Type")]
+    [Required(ErrorMessage = "Please select a category.")]
+    [RegularExpression("^(Plumbing|Electrical|HVAC|Carpentry|General)$",
+        ErrorMessage = "Category must be Plumbing, Electrical, HVAC, Carpentry, or General.")]
     public string? RequestType { get; set; }
 
     public string Priority { get; set; } = "Medium";

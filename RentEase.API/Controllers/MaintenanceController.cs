@@ -14,6 +14,9 @@ namespace PropertyLeasing.API.Controllers;
 [Route("api/[controller]")]
 public class MaintenanceController : ControllerBase
 {
+    private static readonly HashSet<string> AllowedRequestTypes =
+        new(new[] { "Plumbing", "Electrical", "HVAC", "Carpentry", "General" }, StringComparer.OrdinalIgnoreCase);
+
     private readonly PropertyLeasingDbContext _db;
     private readonly IHubContext<MaintenanceHub> _hub;
 
@@ -117,6 +120,9 @@ public class MaintenanceController : ControllerBase
         var user = await _db.Users.FirstOrDefaultAsync(u => u.IdentityUserId == identityId);
         if (user == null) return Unauthorized();
 
+        if (string.IsNullOrWhiteSpace(dto.RequestType) || !AllowedRequestTypes.Contains(dto.RequestType))
+            return BadRequest(new { message = "Invalid request category." });
+
         // Generate unique ticket number
         var ticketNumber = $"TKT-{DateTime.Now:yyyy}-{new Random().Next(1000, 9999)}";
 
@@ -166,22 +172,55 @@ public class MaintenanceController : ControllerBase
 
         var identityId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         var updatedBy  = await _db.Users.FirstOrDefaultAsync(u => u.IdentityUserId == identityId);
+        if (updatedBy == null) return Unauthorized();
 
-        // Save history
-        _db.MaintenanceStatusHistories.Add(new MaintenanceStatusHistory
+        if (request.Status is "Resolved" or "Closed")
+            return BadRequest(new { message = $"Request is already {request.Status}." });
+
+        var oldStatus = request.Status;
+        var newStatus = request.Status;
+
+        if (User.IsInRole("PropertyManager"))
         {
-            RequestId       = request.RequestId,
-            OldStatus       = request.Status,
-            NewStatus       = dto.NewStatus,
-            Notes           = dto.Notes,
-            ChangedAt       = DateTime.Now,
-            ChangedByUserId = updatedBy?.UserId
-        });
+            if (dto.AssignedStaffId.HasValue)
+            {
+                request.AssignedStaffId = dto.AssignedStaffId.Value;
+                if (request.Status == "Submitted")
+                    newStatus = "Assigned";
+            }
+        }
+        else if (User.IsInRole("MaintenanceStaff"))
+        {
+            if (request.AssignedStaffId != updatedBy.UserId)
+                return Forbid();
 
-        request.Status = dto.NewStatus;
-        if (dto.AssignedStaffId.HasValue)
-            request.AssignedStaffId = dto.AssignedStaffId;
-        if (dto.NewStatus == "Resolved")
+            var assignedToInProgress = request.Status == "Assigned" && dto.NewStatus == "InProgress";
+            var inProgressToResolved = request.Status == "InProgress" && dto.NewStatus == "Resolved";
+            if (!assignedToInProgress && !inProgressToResolved)
+                return BadRequest(new { message = "Invalid status transition for maintenance staff." });
+
+            newStatus = dto.NewStatus;
+        }
+        else
+        {
+            return Forbid();
+        }
+
+        request.Status = newStatus;
+        if (oldStatus != newStatus)
+        {
+            _db.MaintenanceStatusHistories.Add(new MaintenanceStatusHistory
+            {
+                RequestId       = request.RequestId,
+                OldStatus       = oldStatus,
+                NewStatus       = newStatus,
+                Notes           = dto.Notes,
+                ChangedAt       = DateTime.Now,
+                ChangedByUserId = updatedBy.UserId
+            });
+        }
+
+        if (newStatus == "Resolved")
         {
             request.ResolvedAt      = DateTime.Now;
             request.ResolutionNotes = dto.Notes;

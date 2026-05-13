@@ -12,6 +12,9 @@ namespace PropertyLeasing.MVC.Controllers;
 [Authorize]
 public class MaintenanceController : Controller
 {
+    private static readonly HashSet<string> AllowedRequestTypes =
+        new(new[] { "Plumbing", "Electrical", "HVAC", "Carpentry", "General" }, StringComparer.OrdinalIgnoreCase);
+
     private readonly PropertyLeasingDbContext _db;
     private readonly UserManager<AppUser>     _userManager;
     private readonly NotificationService      _notifier;
@@ -34,6 +37,24 @@ public class MaintenanceController : Controller
         var identity = await _userManager.GetUserAsync(User);
         if (identity == null) return null;
         return await _db.Users.FirstOrDefaultAsync(u => u.IdentityUserId == identity.Id);
+    }
+
+    private async Task PopulateTenantUnitsAsync(CreateMaintenanceViewModel model, int userId)
+    {
+        var activeLeases = await _db.Leases
+            .Include(l => l.Application).ThenInclude(a => a.Unit).ThenInclude(u => u.Property)
+            .Where(l => l.Application.UserId == userId && l.Status == "Active")
+            .ToListAsync();
+
+        model.AvailableUnits = activeLeases
+            .Select(l => new UnitSelectOption
+            {
+                UnitId = l.Application.Unit.UnitId,
+                UnitNumber = l.Application.Unit.UnitNumber,
+                PropertyName = l.Application.Unit.Property.Name
+            })
+            .DistinctBy(u => u.UnitId)
+            .ToList();
     }
 
     // GET /Maintenance
@@ -115,9 +136,29 @@ public class MaintenanceController : Controller
         if (appUser.Role == "Tenant" && request.TenantUserId != appUser.UserId)
             return Forbid();
 
-        // Staff can only see assigned
+        // MaintenanceStaff: if the request belongs to a different staff member, show
+        // an informational message on the same page instead of a hard 403.
         if (appUser.Role == "MaintenanceStaff" && request.AssignedStaffId != appUser.UserId)
-            return Forbid();
+        {
+            ViewBag.Role            = appUser.Role;
+            ViewBag.NotAssigned     = true;
+            ViewBag.AssignedToName  = request.AssignedStaff?.FullName; // null = not yet assigned
+            return View(new MaintenanceDetailViewModel
+            {
+                RequestId    = request.RequestId,
+                TicketNumber = request.TicketNumber ?? "",
+                Title        = request.Title,
+                RequestType  = request.RequestType,
+                Priority     = request.Priority,
+                Status       = request.Status,
+                UnitNumber   = request.Unit.UnitNumber,
+                PropertyName = request.Unit.Property.Name,
+                TenantName   = request.Tenant.FullName,
+                SubmittedAt  = request.SubmittedAt,
+                History      = new List<StatusHistoryViewModel>(),
+                StaffList    = new List<StaffSelectItem>()
+            });
+        }
 
         // Build history with changer names
         var changerIds = request.StatusHistory
@@ -130,7 +171,10 @@ public class MaintenanceController : Controller
             .Where(u => changerIds.Contains(u.UserId))
             .ToDictionaryAsync(u => u.UserId, u => u.FullName);
 
-        var staffList = appUser.Role != "Tenant"
+        // Load all staff then filter by request category.
+        // "General" requests are open to every staff member.
+        // Any other category only shows staff whose SkillProfile contains that category.
+        var allStaff = appUser.Role != "Tenant"
             ? await _db.Users
                 .Include(u => u.StaffProfile)
                 .Where(u => u.Role == "MaintenanceStaff")
@@ -143,6 +187,18 @@ public class MaintenanceController : Controller
                 })
                 .ToListAsync()
             : new List<StaffSelectItem>();
+
+        var isGeneralOrUnset = string.IsNullOrEmpty(request.RequestType) ||
+                               request.RequestType.Equals("General", StringComparison.OrdinalIgnoreCase);
+
+        var staffList = isGeneralOrUnset
+            ? allStaff
+            : allStaff
+                .Where(s => !string.IsNullOrEmpty(s.SkillProfile) &&
+                            s.SkillProfile
+                             .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                             .Any(skill => skill.Trim().Equals(request.RequestType, StringComparison.OrdinalIgnoreCase)))
+                .ToList();
 
         var vm = new MaintenanceDetailViewModel
         {
@@ -236,27 +292,27 @@ public class MaintenanceController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Submit(CreateMaintenanceViewModel model)
     {
-        if (!ModelState.IsValid) return View(model);
-
         var appUser = await GetAppUserAsync();
         if (appUser == null) return Unauthorized();
+
+        if (!ModelState.IsValid)
+        {
+            await PopulateTenantUnitsAsync(model, appUser.UserId);
+            return View(model);
+        }
+
+        if (string.IsNullOrWhiteSpace(model.RequestType) || !AllowedRequestTypes.Contains(model.RequestType))
+        {
+            ModelState.AddModelError(nameof(model.RequestType),
+                "Category must be Plumbing, Electrical, HVAC, Carpentry, or General.");
+            await PopulateTenantUnitsAsync(model, appUser.UserId);
+            return View(model);
+        }
 
         // If unit not filled yet, reload with units list
         if (model.UnitId == 0)
         {
-            var activeLeases = await _db.Leases
-                .Include(l => l.Application).ThenInclude(a => a.Unit).ThenInclude(u => u.Property)
-                .Where(l => l.Application.UserId == appUser.UserId && l.Status == "Active")
-                .ToListAsync();
-            model.AvailableUnits = activeLeases
-                .Select(l => new UnitSelectOption
-                {
-                    UnitId       = l.Application.Unit.UnitId,
-                    UnitNumber   = l.Application.Unit.UnitNumber,
-                    PropertyName = l.Application.Unit.Property.Name
-                })
-                .DistinctBy(u => u.UnitId)
-                .ToList();
+            await PopulateTenantUnitsAsync(model, appUser.UserId);
             ModelState.AddModelError("UnitId", "Please select a unit.");
             return View(model);
         }
@@ -314,6 +370,30 @@ public class MaintenanceController : Controller
         _db.MaintenanceRequests.Add(request);
         await _db.SaveChangesAsync();
 
+        var now = DateTime.Now;
+
+        // Record "Submitted" in the Status History (shows in the Details timeline)
+        _db.MaintenanceStatusHistories.Add(new MaintenanceStatusHistory
+        {
+            RequestId       = request.RequestId,
+            OldStatus       = null,
+            NewStatus       = "Submitted",
+            Notes           = $"Request submitted by tenant. Category: {model.RequestType}. Priority: {model.Priority}.",
+            ChangedAt       = now,
+            ChangedByUserId = appUser.UserId
+        });
+
+        // Record in the activity log
+        _db.MaintenanceRequestLogs.Add(new MaintenanceRequestLog
+        {
+            RequestId         = request.RequestId,
+            Action            = "Submitted",
+            Details           = $"Ticket {ticketNumber} submitted for unit {model.UnitNumber}. Category: {model.RequestType}. Priority: {model.Priority}.",
+            PerformedByUserId = appUser.UserId,
+            PerformedAt       = now
+        });
+        await _db.SaveChangesAsync();
+
         // Notify managers
         var managers = await _db.Users.Where(u => u.Role == "PropertyManager").ToListAsync();
         foreach (var mgr in managers)
@@ -343,40 +423,7 @@ public class MaintenanceController : Controller
         return RedirectToAction("Index");
     }
 
-    // GET /Maintenance/Update/{id} — Manager/Staff
-    [Authorize(Roles = "PropertyManager,MaintenanceStaff")]
-    public async Task<IActionResult> Update(int id)
-    {
-        var request = await _db.MaintenanceRequests.FindAsync(id);
-        if (request == null) return NotFound();
-
-        var staffList = await _db.Users
-            .Include(u => u.StaffProfile)
-            .Where(u => u.Role == "MaintenanceStaff")
-            .Select(u => new StaffSelectItem
-            {
-                UserId             = u.UserId,
-                FullName           = u.FullName,
-                SkillProfile       = u.StaffProfile != null ? u.StaffProfile.SkillProfile       : null,
-                AvailabilityStatus = u.StaffProfile != null ? u.StaffProfile.AvailabilityStatus : null
-            })
-            .ToListAsync();
-
-        return View(new UpdateMaintenanceViewModel
-        {
-            RequestId       = request.RequestId,
-            Title           = request.Title,
-            Description     = request.Description,
-            RequestType     = request.RequestType,
-            ImagePath       = request.ImagePath,
-            CurrentStatus   = request.Status,
-            NewStatus       = request.Status,
-            AssignedStaffId = request.AssignedStaffId,
-            StaffList       = staffList
-        });
-    }
-
-    // POST /Maintenance/Update
+    // POST /Maintenance/Update  — form submitted from Details page
     [Authorize(Roles = "PropertyManager,MaintenanceStaff")]
     [HttpPost]
     [ValidateAntiForgeryToken]
@@ -390,46 +437,65 @@ public class MaintenanceController : Controller
         if (request == null) return NotFound();
 
         var appUser = await GetAppUserAsync();
+        if (appUser == null) return Unauthorized();
 
-        // ── LOCK: Resolved and Closed requests cannot be changed ──────────────
+        // Resolved / Closed requests are locked
         if (request.Status == "Resolved" || request.Status == "Closed")
         {
             TempData["Error"] = $"This request is already {request.Status} and cannot be modified.";
             return RedirectToAction("Details", new { id = request.RequestId });
         }
 
-        // Staff can only set InProgress / Resolved — not reassign status to Submitted/Assigned/Closed
-        if (appUser?.Role == "MaintenanceStaff")
+        var oldStatus          = request.Status;
+        var oldAssignedStaffId = request.AssignedStaffId;
+
+        // Manager flow: assigning staff auto-moves Submitted -> Assigned
+        if (appUser.Role == "PropertyManager")
         {
-            var allowedForStaff = new[] { "InProgress", "Resolved" };
-            if (!allowedForStaff.Contains(model.NewStatus))
-                model.NewStatus = request.Status; // keep unchanged if invalid
+            if (model.AssignedStaffId.HasValue)
+            {
+                request.AssignedStaffId = model.AssignedStaffId.Value;
+                model.NewStatus = request.Status == "Submitted" ? "Assigned" : request.Status;
+            }
+            else
+            {
+                model.NewStatus = request.Status;
+            }
         }
-
-        var oldStatus = request.Status;
-
-        // Save status history
-        _db.MaintenanceStatusHistories.Add(new MaintenanceStatusHistory
+        else if (appUser.Role == "MaintenanceStaff")
         {
-            RequestId       = request.RequestId,
-            OldStatus       = request.Status,
-            NewStatus       = model.NewStatus,
-            Notes           = model.Notes,
-            ChangedAt       = DateTime.Now,
-            ChangedByUserId = appUser?.UserId
-        });
+            if (request.AssignedStaffId != appUser.UserId)
+                return Forbid();
+
+            var isAssignedToInProgress = request.Status == "Assigned"    && model.NewStatus == "InProgress";
+            var isInProgressToResolved = request.Status == "InProgress"  && model.NewStatus == "Resolved";
+            if (!isAssignedToInProgress && !isInProgressToResolved)
+            {
+                TempData["Error"] = "Invalid status transition for maintenance staff.";
+                return RedirectToAction("Details", new { id = request.RequestId });
+            }
+        }
 
         request.Status = model.NewStatus;
 
-        if (model.AssignedStaffId.HasValue && appUser?.Role == "PropertyManager")
-            request.AssignedStaffId = model.AssignedStaffId;
+        if (oldStatus != request.Status)
+        {
+            _db.MaintenanceStatusHistories.Add(new MaintenanceStatusHistory
+            {
+                RequestId       = request.RequestId,
+                OldStatus       = oldStatus,
+                NewStatus       = request.Status,
+                Notes           = model.Notes,
+                ChangedAt       = DateTime.Now,
+                ChangedByUserId = appUser.UserId
+            });
+        }
 
         if (model.NewStatus == "Resolved")
         {
             request.ResolvedAt      = DateTime.Now;
             request.ResolutionNotes = model.Notes;
 
-            // Save resolution proof photo if uploaded
             if (model.ResolutionImageFile != null && model.ResolutionImageFile.Length > 0)
             {
                 try
@@ -440,7 +506,7 @@ public class MaintenanceController : Controller
                     {
                         var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "maintenance");
                         Directory.CreateDirectory(uploadsDir);
-                        var fileName = $"RESOLVED-{(request.TicketNumber ?? request.RequestId.ToString()).Replace("/","-")}_{Guid.NewGuid():N}{ext}";
+                        var fileName = $"RESOLVED-{(request.TicketNumber ?? request.RequestId.ToString()).Replace("/", "-")}_{Guid.NewGuid():N}{ext}";
                         var filePath = Path.Combine(uploadsDir, fileName);
                         using var stream = new FileStream(filePath, FileMode.Create);
                         await model.ResolutionImageFile.CopyToAsync(stream);
@@ -450,39 +516,66 @@ public class MaintenanceController : Controller
                 catch { /* non-fatal */ }
             }
         }
+        else
+        {
+            request.ResolvedAt      = null;
+            request.ResolutionNotes = null;
+        }
 
         await _db.SaveChangesAsync();
 
-        // ── Rich notification messages ─────────────────────────────────────────
-        var updaterName  = appUser?.FullName ?? "Staff";
+        // Compute change flags
+        var statusChanged   = oldStatus != request.Status;
+        var assignedChanged = oldAssignedStaffId != request.AssignedStaffId;
+
+        // Log the action
+        var logDetails = new System.Text.StringBuilder();
+        if (statusChanged)
+            logDetails.Append($"Status: {oldStatus} → {request.Status}. ");
+        if (assignedChanged && request.AssignedStaffId.HasValue)
+            logDetails.Append($"Assigned staff ID: {request.AssignedStaffId}. ");
+        if (!string.IsNullOrWhiteSpace(model.Notes))
+            logDetails.Append($"Notes: {model.Notes.Trim().Substring(0, Math.Min(model.Notes.Trim().Length, 200))}.");
+
+        _db.MaintenanceRequestLogs.Add(new MaintenanceRequestLog
+        {
+            RequestId         = request.RequestId,
+            Action            = statusChanged ? "StatusChanged" : "Updated",
+            Details           = logDetails.Length > 0 ? logDetails.ToString() : "No changes recorded.",
+            PerformedByUserId = appUser.UserId,
+            PerformedAt       = DateTime.Now
+        });
+        await _db.SaveChangesAsync();
+
+        // Notifications
+        var updaterName  = appUser.FullName;
         var notesSnippet = !string.IsNullOrWhiteSpace(model.Notes)
             ? $" — \"{model.Notes.Trim().Substring(0, Math.Min(model.Notes.Trim().Length, 80))}\""
             : "";
 
-        // Notify tenant (in-app) — show old → new transition + notes snippet
-        var tenantMsg = model.NewStatus == "Resolved"
-            ? $"✅ Your request \"{request.Title}\" has been RESOLVED{notesSnippet}"
-            : $"🔧 Request \"{request.Title}\": {oldStatus} → {model.NewStatus}{notesSnippet}";
-        await _notifier.SendAsync(request.TenantUserId, tenantMsg, "MaintenanceUpdate");
+        if (statusChanged)
+        {
+            var tenantMsg = request.Status == "Resolved"
+                ? $"✅ Your request \"{request.Title}\" has been RESOLVED{notesSnippet}"
+                : $"🔧 Request \"{request.Title}\": {oldStatus} → {request.Status}{notesSnippet}";
+            await _notifier.SendAsync(request.TenantUserId, tenantMsg, "MaintenanceUpdate");
+        }
 
-        // Notify manager when staff changes status
-        if (appUser?.Role == "MaintenanceStaff")
+        if (appUser.Role == "MaintenanceStaff" && statusChanged)
         {
             var managers = await _db.Users.Where(u => u.Role == "PropertyManager").ToListAsync();
             foreach (var mgr in managers)
                 await _notifier.SendAsync(mgr.UserId,
-                    $"🔧 [{request.TicketNumber}] \"{request.Title}\": {oldStatus} → {model.NewStatus} by {updaterName}{notesSnippet}",
+                    $"🔧 [{request.TicketNumber}] \"{request.Title}\": {oldStatus} → {request.Status} by {updaterName}{notesSnippet}",
                     "MaintenanceUpdate");
         }
 
-        // Notify assigned staff if newly assigned
-        if (model.AssignedStaffId.HasValue && appUser?.Role == "PropertyManager")
-            await _notifier.SendAsync(model.AssignedStaffId.Value,
-                $"📋 You have been assigned to \"{request.Title}\" (Ticket: {request.TicketNumber}). Status: {model.NewStatus}",
+        if (assignedChanged && request.AssignedStaffId.HasValue && appUser.Role == "PropertyManager")
+            await _notifier.SendAsync(request.AssignedStaffId.Value,
+                $"📋 You have been assigned to \"{request.Title}\" (Ticket: {request.TicketNumber}). Status: {request.Status}",
                 "MaintenanceUpdate");
 
-        // Send status-change email to tenant
-        if (!string.IsNullOrWhiteSpace(request.Tenant?.Email))
+        if (statusChanged && !string.IsNullOrWhiteSpace(request.Tenant?.Email))
         {
             try
             {
@@ -492,7 +585,7 @@ public class MaintenanceController : Controller
                     ticketNumber: request.TicketNumber ?? "",
                     title:        request.Title,
                     unitNumber:   request.Unit?.UnitNumber ?? "",
-                    newStatus:    model.NewStatus,
+                    newStatus:    request.Status,
                     notes:        model.Notes);
             }
             catch { /* email failure must not block the flow */ }

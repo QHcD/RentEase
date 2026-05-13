@@ -34,12 +34,22 @@ public static class ContextSeed
             await SeedUser(userManager, db, "tenant5@example.com",        "Omar Al-Rumaihi",    "Tenant@123",  "Tenant", "+97333556677", logger);
             await SeedUser(userManager, db, "murtadhaahss05@gmail.com",   "Murtadha",           "12345678aA@", "Tenant", "+97333000001", logger);
 
-            // ── Maintenance Staff ──
-            await SeedUser(userManager, db, "staff1@propleasing.com", "Ali Hassan",        "Staff@123", "MaintenanceStaff", "+97333445566", logger);
-            await SeedUser(userManager, db, "staff2@propleasing.com", "Yusuf Al-Darwish", "Staff@123", "MaintenanceStaff", "+97333778899", logger);
-            await SeedUser(userManager, db, "staff3@propleasing.com", "Khalid Al-Hamad",  "Staff@123", "MaintenanceStaff", "+97333334455", logger);
+            // ── Maintenance Staff (2 per category) ──
+            await SeedUser(userManager, db, "staff1@propleasing.com",  "Ali Hassan",          "Staff@123", "MaintenanceStaff", "+97333445566", logger); // Plumbing
+            await SeedUser(userManager, db, "staff2@propleasing.com",  "Yusuf Al-Darwish",    "Staff@123", "MaintenanceStaff", "+97333778899", logger); // Plumbing
+            await SeedUser(userManager, db, "staff3@propleasing.com",  "Khalid Al-Hamad",     "Staff@123", "MaintenanceStaff", "+97333334455", logger); // Electrical
+            await SeedUser(userManager, db, "staff4@propleasing.com",  "Mariam Al-Mutawa",    "Staff@123", "MaintenanceStaff", "+97333441111", logger); // Electrical
+            await SeedUser(userManager, db, "staff5@propleasing.com",  "Faisal Al-Najjar",    "Staff@123", "MaintenanceStaff", "+97333442222", logger); // HVAC
+            await SeedUser(userManager, db, "staff6@propleasing.com",  "Laila Al-Sayed",      "Staff@123", "MaintenanceStaff", "+97333443333", logger); // HVAC
+            await SeedUser(userManager, db, "staff7@propleasing.com",  "Hassan Al-Mahdi",     "Staff@123", "MaintenanceStaff", "+97333444444", logger); // Carpentry
+            await SeedUser(userManager, db, "staff8@propleasing.com",  "Nora Al-Kooheji",     "Staff@123", "MaintenanceStaff", "+97333445500", logger); // Carpentry
+            await SeedUser(userManager, db, "staff9@propleasing.com",  "Saeed Al-Qassim",     "Staff@123", "MaintenanceStaff", "+97333446666", logger); // General
+            await SeedUser(userManager, db, "staff10@propleasing.com", "Reem Al-Madani",      "Staff@123", "MaintenanceStaff", "+97333447777", logger); // General
 
-            // ── Staff profiles (idempotent) ──
+            // ── Reset current business data then reseed ──
+            await ResetBusinessDataAsync(db, logger);
+
+            // ── Staff profiles (idempotent/upsert) ──
             await SeedStaffProfilesAsync(db);
 
             // ── Business data ──
@@ -106,14 +116,45 @@ public static class ContextSeed
         catch (Exception ex) { logger.LogError(ex, "[Seed] SeedUser failed for {Email}.", email); }
     }
 
+    private static async Task ResetBusinessDataAsync(PropertyLeasingDbContext db, ILogger logger)
+    {
+        logger.LogInformation("[Seed] Clearing existing business data...");
+
+        await db.Database.ExecuteSqlRawAsync(@"
+DELETE FROM [LeaseLog];
+DELETE FROM [MaintenanceStatusHistory];
+IF OBJECT_ID('MaintenanceRequestLog') IS NOT NULL DELETE FROM [MaintenanceRequestLog];
+DELETE FROM [PaymentRecord];
+DELETE FROM [Document];
+DELETE FROM [Lease];
+DELETE FROM [LeaseApplicationLog];
+DELETE FROM [MaintenanceRequest];
+DELETE FROM [LeaseApplication];
+DELETE FROM [Notification];
+DELETE FROM [Feedback];
+DELETE FROM [Log];
+DELETE FROM [Unit];
+DELETE FROM [Property];
+DELETE FROM [Termination];
+DELETE FROM [MaintenanceStaff];
+        ");
+    }
+
     // ── Create MaintenanceStaff profile rows (idempotent) ────────────────────
     private static async Task SeedStaffProfilesAsync(PropertyLeasingDbContext db)
     {
         var profiles = new[]
         {
-            ("staff1@propleasing.com", "Electrical, HVAC",       "Available"),
-            ("staff2@propleasing.com", "Plumbing, General",      "Available"),
-            ("staff3@propleasing.com", "Carpentry, Plumbing",    "Busy"),
+            ("staff1@propleasing.com",  "Plumbing",   "Available"),
+            ("staff2@propleasing.com",  "Plumbing",   "Available"),
+            ("staff3@propleasing.com",  "Electrical", "Available"),
+            ("staff4@propleasing.com",  "Electrical", "Available"),
+            ("staff5@propleasing.com",  "HVAC",       "Available"),
+            ("staff6@propleasing.com",  "HVAC",       "Available"),
+            ("staff7@propleasing.com",  "Carpentry",  "Available"),
+            ("staff8@propleasing.com",  "Carpentry",  "Available"),
+            ("staff9@propleasing.com",  "General",    "Available"),
+            ("staff10@propleasing.com", "General",    "Available"),
         };
 
         foreach (var (email, skills, avail) in profiles)
@@ -121,7 +162,8 @@ public static class ContextSeed
             var user = await db.Users.FirstOrDefaultAsync(u => u.Email == email);
             if (user == null) continue;
 
-            if (!await db.MaintenanceStaffs.AnyAsync(s => s.UserId == user.UserId))
+            var existingProfile = await db.MaintenanceStaffs.FirstOrDefaultAsync(s => s.UserId == user.UserId);
+            if (existingProfile == null)
             {
                 db.MaintenanceStaffs.Add(new MaintenanceStaff
                 {
@@ -129,6 +171,11 @@ public static class ContextSeed
                     SkillProfile        = skills,
                     AvailabilityStatus  = avail
                 });
+            }
+            else
+            {
+                existingProfile.SkillProfile = skills;
+                existingProfile.AvailabilityStatus = avail;
             }
         }
         await db.SaveChangesAsync();
@@ -140,18 +187,32 @@ public static class ContextSeed
         if (await db.Properties.CountAsync() >= 10) return;
         logger.LogInformation("[Seed] Starting business data seed...");
 
-        var mgr = await db.Users.FirstOrDefaultAsync(u => u.Email == "manager@propleasing.com");
-        var t1  = await db.Users.FirstOrDefaultAsync(u => u.Email == "tenant1@example.com");
-        var t2  = await db.Users.FirstOrDefaultAsync(u => u.Email == "tenant2@example.com");
-        var t3  = await db.Users.FirstOrDefaultAsync(u => u.Email == "tenant3@example.com");
-        var t4  = await db.Users.FirstOrDefaultAsync(u => u.Email == "tenant4@example.com");
-        var t5  = await db.Users.FirstOrDefaultAsync(u => u.Email == "tenant5@example.com");
-        var st1 = await db.Users.FirstOrDefaultAsync(u => u.Email == "staff1@propleasing.com");
-        var st2 = await db.Users.FirstOrDefaultAsync(u => u.Email == "staff2@propleasing.com");
-        var st3 = await db.Users.FirstOrDefaultAsync(u => u.Email == "staff3@propleasing.com");
+        var mgr  = await db.Users.FirstOrDefaultAsync(u => u.Email == "manager@propleasing.com");
+        var t1   = await db.Users.FirstOrDefaultAsync(u => u.Email == "tenant1@example.com");
+        var t2   = await db.Users.FirstOrDefaultAsync(u => u.Email == "tenant2@example.com");
+        var t3   = await db.Users.FirstOrDefaultAsync(u => u.Email == "tenant3@example.com");
+        var t4   = await db.Users.FirstOrDefaultAsync(u => u.Email == "tenant4@example.com");
+        var t5   = await db.Users.FirstOrDefaultAsync(u => u.Email == "tenant5@example.com");
+        // Plumbing staff
+        var st1  = await db.Users.FirstOrDefaultAsync(u => u.Email == "staff1@propleasing.com");
+        var st2  = await db.Users.FirstOrDefaultAsync(u => u.Email == "staff2@propleasing.com");
+        // Electrical staff
+        var st3  = await db.Users.FirstOrDefaultAsync(u => u.Email == "staff3@propleasing.com");
+        var st4  = await db.Users.FirstOrDefaultAsync(u => u.Email == "staff4@propleasing.com");
+        // HVAC staff
+        var st5  = await db.Users.FirstOrDefaultAsync(u => u.Email == "staff5@propleasing.com");
+        var st6  = await db.Users.FirstOrDefaultAsync(u => u.Email == "staff6@propleasing.com");
+        // Carpentry staff
+        var st7  = await db.Users.FirstOrDefaultAsync(u => u.Email == "staff7@propleasing.com");
+        var st8  = await db.Users.FirstOrDefaultAsync(u => u.Email == "staff8@propleasing.com");
+        // General staff
+        var st9  = await db.Users.FirstOrDefaultAsync(u => u.Email == "staff9@propleasing.com");
+        var st10 = await db.Users.FirstOrDefaultAsync(u => u.Email == "staff10@propleasing.com");
 
         if (mgr == null || t1 == null || t2 == null || t3 == null ||
-            t4 == null || t5 == null || st1 == null || st2 == null || st3 == null)
+            t4 == null || t5 == null || st1 == null || st2 == null || st3 == null ||
+            st4 == null || st5 == null || st6 == null || st7 == null || st8 == null ||
+            st9 == null || st10 == null)
             return;
 
         // ── 10 Properties ──────────────────────────────────────────────────────
@@ -631,16 +692,73 @@ public static class ContextSeed
 
         await db.SaveChangesAsync();
 
-        // ── Maintenance Requests ──────────────────────────────────────────────
-        db.MaintenanceRequests.AddRange(
-            new MaintenanceRequest { UnitId = seefUnits[0].UnitId,   TenantUserId = t1.UserId, AssignedStaffId = st1.UserId, Title = "AC Unit Malfunction",       Description = "Bedroom AC stopped cooling. Room temperature above 35°C.",     RequestType = "HVAC",       Priority = "High",   Status = "InProgress", TicketNumber = "TKT-2026-001", SubmittedAt = DateTime.Today.AddDays(-3) },
-            new MaintenanceRequest { UnitId = riffaUnits[0].UnitId,  TenantUserId = t2.UserId, AssignedStaffId = st2.UserId, Title = "Kitchen Sink Leaking",      Description = "Drain pipe under sink is leaking, water damage to cabinet.",   RequestType = "Plumbing",   Priority = "Medium", Status = "Assigned",   TicketNumber = "TKT-2026-002", SubmittedAt = DateTime.Today.AddDays(-5) },
-            new MaintenanceRequest { UnitId = juffairUnits[4].UnitId,TenantUserId = t3.UserId,                               Title = "Broken Window Latch",       Description = "Bedroom window latch is broken and cannot be locked.",         RequestType = "General",    Priority = "Low",    Status = "Submitted",  TicketNumber = "TKT-2026-003", SubmittedAt = DateTime.Today.AddDays(-1) },
-            new MaintenanceRequest { UnitId = adliyaUnits[1].UnitId, TenantUserId = t4.UserId, AssignedStaffId = st3.UserId, Title = "Electrical Socket Sparking",Description = "Living room socket sparking when appliances are plugged in.",   RequestType = "Electrical", Priority = "High",   Status = "InProgress", TicketNumber = "TKT-2026-004", SubmittedAt = DateTime.Today.AddDays(-2) },
-            new MaintenanceRequest { UnitId = amwajUnits[4].UnitId,  TenantUserId = t5.UserId,                               Title = "Balcony Door Stiff",        Description = "Sliding balcony door hard to open/close, needs lubrication.",   RequestType = "General",    Priority = "Low",    Status = "Submitted",  TicketNumber = "TKT-2026-005", SubmittedAt = DateTime.Today },
-            new MaintenanceRequest { UnitId = budaiyaUnits[0].UnitId,TenantUserId = t1.UserId, AssignedStaffId = st2.UserId, Title = "Water Heater Not Working",  Description = "Hot water unavailable. Water heater pilot light keeps going out.",RequestType = "Plumbing",  Priority = "High",   Status = "Resolved",   TicketNumber = "TKT-2026-006", SubmittedAt = DateTime.Today.AddDays(-10), ResolvedAt = DateTime.Today.AddDays(-7),  ResolutionNotes = "Thermocouple replaced. Water heater operational." },
-            new MaintenanceRequest { UnitId = diplomaticUnits[3].UnitId,TenantUserId=t4.UserId,                              Title = "Intercom Not Functioning",  Description = "Building intercom system not working in unit.",                 RequestType = "Electrical", Priority = "Medium", Status = "Submitted",  TicketNumber = "TKT-2026-007", SubmittedAt = DateTime.Today.AddDays(-1) },
-            new MaintenanceRequest { UnitId = busaiteen_units[5].UnitId,TenantUserId=t5.UserId,AssignedStaffId = st1.UserId, Title = "Bathroom Tiles Cracked",    Description = "Three floor tiles cracked, safety hazard, needs replacement.",  RequestType = "General",    Priority = "Medium", Status = "Closed",     TicketNumber = "TKT-2025-088", SubmittedAt = DateTime.Today.AddMonths(-2), ResolvedAt = DateTime.Today.AddMonths(-2).AddDays(3), ResolutionNotes = "Tiles replaced with matching stock." }
+        // ── Maintenance Requests (category matches assigned staff skill) ─────────
+        // Submitted — no staff yet
+        var mr1 = new MaintenanceRequest { UnitId = juffairUnits[4].UnitId,      TenantUserId = t3.UserId,  Title = "Broken Window Latch",        Description = "Bedroom window latch broken, cannot lock window securely.",        RequestType = "Carpentry",  Priority = "Low",    Status = "Submitted",  TicketNumber = "TKT-2026-001", SubmittedAt = DateTime.Today.AddDays(-1) };
+        var mr2 = new MaintenanceRequest { UnitId = diplomaticUnits[3].UnitId,   TenantUserId = t4.UserId,  Title = "Intercom Not Functioning",   Description = "Building intercom system not responding in unit.",                 RequestType = "Electrical", Priority = "Medium", Status = "Submitted",  TicketNumber = "TKT-2026-002", SubmittedAt = DateTime.Today.AddDays(-1) };
+        var mr3 = new MaintenanceRequest { UnitId = amwajUnits[4].UnitId,        TenantUserId = t5.UserId,  Title = "Balcony Door Stiff",         Description = "Sliding balcony door hard to open/close, needs lubrication.",      RequestType = "General",    Priority = "Low",    Status = "Submitted",  TicketNumber = "TKT-2026-003", SubmittedAt = DateTime.Today };
+
+        // Assigned — staff assigned, work not started yet
+        var mr4 = new MaintenanceRequest { UnitId = riffaUnits[0].UnitId,        TenantUserId = t2.UserId,  AssignedStaffId = st2.UserId, Title = "Kitchen Sink Leaking",       Description = "Drain pipe under sink leaking, water damage to cabinet floor.",  RequestType = "Plumbing",   Priority = "Medium", Status = "Assigned",   TicketNumber = "TKT-2026-004", SubmittedAt = DateTime.Today.AddDays(-5) };
+        var mr5 = new MaintenanceRequest { UnitId = busaiteen_units[5].UnitId,   TenantUserId = t5.UserId,  AssignedStaffId = st7.UserId, Title = "Cabinet Door Hinge Broken",  Description = "Kitchen cabinet door hinge snapped off, door dangling loose.",    RequestType = "Carpentry",  Priority = "Medium", Status = "Assigned",   TicketNumber = "TKT-2026-005", SubmittedAt = DateTime.Today.AddDays(-3) };
+
+        // InProgress — staff actively working
+        var mr6 = new MaintenanceRequest { UnitId = seefUnits[0].UnitId,         TenantUserId = t1.UserId,  AssignedStaffId = st5.UserId, Title = "AC Unit Malfunction",        Description = "Bedroom AC stopped cooling. Room temperature exceeds 35°C.",      RequestType = "HVAC",       Priority = "High",   Status = "InProgress", TicketNumber = "TKT-2026-006", SubmittedAt = DateTime.Today.AddDays(-3) };
+        var mr7 = new MaintenanceRequest { UnitId = adliyaUnits[1].UnitId,       TenantUserId = t4.UserId,  AssignedStaffId = st3.UserId, Title = "Electrical Socket Sparking", Description = "Living room socket sparks dangerously when plugging appliances.",  RequestType = "Electrical", Priority = "High",   Status = "InProgress", TicketNumber = "TKT-2026-007", SubmittedAt = DateTime.Today.AddDays(-2) };
+
+        // Resolved — work completed
+        var mr8 = new MaintenanceRequest { UnitId = budaiyaUnits[0].UnitId,      TenantUserId = t1.UserId,  AssignedStaffId = st1.UserId, Title = "Water Heater Not Working",   Description = "Hot water unavailable. Pilot light keeps going out.",             RequestType = "Plumbing",   Priority = "High",   Status = "Resolved",   TicketNumber = "TKT-2026-008", SubmittedAt = DateTime.Today.AddDays(-10), ResolvedAt = DateTime.Today.AddDays(-7), ResolutionNotes = "Thermocouple replaced. Water heater fully operational." };
+        var mr9 = new MaintenanceRequest { UnitId = muharraqUnits[0].UnitId,     TenantUserId = t1.UserId,  AssignedStaffId = st6.UserId, Title = "HVAC Filter Replacement",    Description = "Air quality poor, HVAC filter clogged and needs replacement.",    RequestType = "HVAC",       Priority = "Medium", Status = "Resolved",   TicketNumber = "TKT-2026-009", SubmittedAt = DateTime.Today.AddDays(-14), ResolvedAt = DateTime.Today.AddDays(-11), ResolutionNotes = "HEPA filter replaced and system serviced." };
+
+        // Closed — fully closed after resolution
+        var mr10 = new MaintenanceRequest { UnitId = busaiteen_units[5].UnitId,  TenantUserId = t5.UserId,  AssignedStaffId = st9.UserId, Title = "Bathroom Tiles Cracked",     Description = "Three floor tiles cracked — safety hazard, needs replacement.",   RequestType = "General",    Priority = "Medium", Status = "Closed",     TicketNumber = "TKT-2025-088", SubmittedAt = DateTime.Today.AddMonths(-2), ResolvedAt = DateTime.Today.AddMonths(-2).AddDays(3), ResolutionNotes = "Cracked tiles replaced with matching stock." };
+
+        db.MaintenanceRequests.AddRange(mr1, mr2, mr3, mr4, mr5, mr6, mr7, mr8, mr9, mr10);
+        await db.SaveChangesAsync();
+
+        // ── Status History — every request starts with "Submitted" ──────────────
+        db.MaintenanceStatusHistories.AddRange(
+            new MaintenanceStatusHistory { RequestId = mr1.RequestId,  OldStatus = null, NewStatus = "Submitted", Notes = "Request submitted by tenant.",                                       ChangedAt = mr1.SubmittedAt,  ChangedByUserId = t3.UserId },
+            new MaintenanceStatusHistory { RequestId = mr2.RequestId,  OldStatus = null, NewStatus = "Submitted", Notes = "Request submitted by tenant.",                                       ChangedAt = mr2.SubmittedAt,  ChangedByUserId = t4.UserId },
+            new MaintenanceStatusHistory { RequestId = mr3.RequestId,  OldStatus = null, NewStatus = "Submitted", Notes = "Request submitted by tenant.",                                       ChangedAt = mr3.SubmittedAt,  ChangedByUserId = t5.UserId },
+            new MaintenanceStatusHistory { RequestId = mr4.RequestId,  OldStatus = null, NewStatus = "Submitted", Notes = "Request submitted by tenant.",                                       ChangedAt = mr4.SubmittedAt,  ChangedByUserId = t2.UserId },
+            new MaintenanceStatusHistory { RequestId = mr5.RequestId,  OldStatus = null, NewStatus = "Submitted", Notes = "Request submitted by tenant.",                                       ChangedAt = mr5.SubmittedAt,  ChangedByUserId = t5.UserId },
+            new MaintenanceStatusHistory { RequestId = mr6.RequestId,  OldStatus = null, NewStatus = "Submitted", Notes = "Request submitted by tenant.",                                       ChangedAt = mr6.SubmittedAt,  ChangedByUserId = t1.UserId },
+            new MaintenanceStatusHistory { RequestId = mr7.RequestId,  OldStatus = null, NewStatus = "Submitted", Notes = "Request submitted by tenant.",                                       ChangedAt = mr7.SubmittedAt,  ChangedByUserId = t4.UserId },
+            new MaintenanceStatusHistory { RequestId = mr8.RequestId,  OldStatus = null, NewStatus = "Submitted", Notes = "Request submitted by tenant. Category: Plumbing. Priority: High.",  ChangedAt = mr8.SubmittedAt,  ChangedByUserId = t1.UserId },
+            new MaintenanceStatusHistory { RequestId = mr9.RequestId,  OldStatus = null, NewStatus = "Submitted", Notes = "Request submitted by tenant. Category: HVAC. Priority: Medium.",    ChangedAt = mr9.SubmittedAt,  ChangedByUserId = t1.UserId },
+            new MaintenanceStatusHistory { RequestId = mr10.RequestId, OldStatus = null, NewStatus = "Submitted", Notes = "Request submitted by tenant. Category: General. Priority: Medium.", ChangedAt = mr10.SubmittedAt, ChangedByUserId = t5.UserId }
+        );
+        await db.SaveChangesAsync();
+
+        // ── Status History for non-Submitted requests ─────────────────────────
+        // Assigned requests: Submitted → Assigned
+        db.MaintenanceStatusHistories.AddRange(
+            new MaintenanceStatusHistory { RequestId = mr4.RequestId,  OldStatus = "Submitted", NewStatus = "Assigned",    Notes = "Staff assigned to investigate leak.",           ChangedAt = mr4.SubmittedAt.AddDays(1),  ChangedByUserId = mgr.UserId },
+            new MaintenanceStatusHistory { RequestId = mr5.RequestId,  OldStatus = "Submitted", NewStatus = "Assigned",    Notes = "Carpentry staff scheduled for inspection.",     ChangedAt = mr5.SubmittedAt.AddDays(1),  ChangedByUserId = mgr.UserId }
+        );
+        // InProgress requests: Submitted → Assigned → InProgress
+        db.MaintenanceStatusHistories.AddRange(
+            new MaintenanceStatusHistory { RequestId = mr6.RequestId,  OldStatus = "Submitted",  NewStatus = "Assigned",   Notes = "HVAC specialist assigned.",                     ChangedAt = mr6.SubmittedAt.AddDays(1),  ChangedByUserId = mgr.UserId },
+            new MaintenanceStatusHistory { RequestId = mr6.RequestId,  OldStatus = "Assigned",   NewStatus = "InProgress", Notes = "Staff on-site, diagnosing AC fault.",            ChangedAt = mr6.SubmittedAt.AddDays(2),  ChangedByUserId = st5.UserId },
+            new MaintenanceStatusHistory { RequestId = mr7.RequestId,  OldStatus = "Submitted",  NewStatus = "Assigned",   Notes = "Electrician dispatched immediately.",             ChangedAt = mr7.SubmittedAt.AddHours(4), ChangedByUserId = mgr.UserId },
+            new MaintenanceStatusHistory { RequestId = mr7.RequestId,  OldStatus = "Assigned",   NewStatus = "InProgress", Notes = "Socket panel opened, fault located.",             ChangedAt = mr7.SubmittedAt.AddDays(1),  ChangedByUserId = st3.UserId }
+        );
+        // Resolved requests: full progression
+        db.MaintenanceStatusHistories.AddRange(
+            new MaintenanceStatusHistory { RequestId = mr8.RequestId,  OldStatus = "Submitted",  NewStatus = "Assigned",   Notes = "Plumber assigned.",                              ChangedAt = mr8.SubmittedAt.AddDays(1),  ChangedByUserId = mgr.UserId },
+            new MaintenanceStatusHistory { RequestId = mr8.RequestId,  OldStatus = "Assigned",   NewStatus = "InProgress", Notes = "Inspecting water heater.",                       ChangedAt = mr8.SubmittedAt.AddDays(2),  ChangedByUserId = st1.UserId },
+            new MaintenanceStatusHistory { RequestId = mr8.RequestId,  OldStatus = "InProgress", NewStatus = "Resolved",   Notes = "Thermocouple replaced. Hot water restored.",     ChangedAt = mr8.ResolvedAt!.Value,       ChangedByUserId = st1.UserId },
+            new MaintenanceStatusHistory { RequestId = mr9.RequestId,  OldStatus = "Submitted",  NewStatus = "Assigned",   Notes = "HVAC technician scheduled.",                     ChangedAt = mr9.SubmittedAt.AddDays(1),  ChangedByUserId = mgr.UserId },
+            new MaintenanceStatusHistory { RequestId = mr9.RequestId,  OldStatus = "Assigned",   NewStatus = "InProgress", Notes = "Filter inspection underway.",                    ChangedAt = mr9.SubmittedAt.AddDays(2),  ChangedByUserId = st6.UserId },
+            new MaintenanceStatusHistory { RequestId = mr9.RequestId,  OldStatus = "InProgress", NewStatus = "Resolved",   Notes = "HEPA filter replaced, system serviced.",         ChangedAt = mr9.ResolvedAt!.Value,       ChangedByUserId = st6.UserId }
+        );
+        // Closed request: full progression + Closed
+        db.MaintenanceStatusHistories.AddRange(
+            new MaintenanceStatusHistory { RequestId = mr10.RequestId, OldStatus = "Submitted",  NewStatus = "Assigned",   Notes = "General maintenance staff dispatched.",          ChangedAt = mr10.SubmittedAt.AddDays(1), ChangedByUserId = mgr.UserId },
+            new MaintenanceStatusHistory { RequestId = mr10.RequestId, OldStatus = "Assigned",   NewStatus = "InProgress", Notes = "Tile removal in progress.",                      ChangedAt = mr10.SubmittedAt.AddDays(2), ChangedByUserId = st9.UserId },
+            new MaintenanceStatusHistory { RequestId = mr10.RequestId, OldStatus = "InProgress", NewStatus = "Resolved",   Notes = mr10.ResolutionNotes,                             ChangedAt = mr10.ResolvedAt!.Value,      ChangedByUserId = st9.UserId },
+            new MaintenanceStatusHistory { RequestId = mr10.RequestId, OldStatus = "Resolved",   NewStatus = "Closed",     Notes = "Tenant confirmed issue resolved. Ticket closed.", ChangedAt = mr10.ResolvedAt!.Value.AddDays(1), ChangedByUserId = mgr.UserId }
         );
         await db.SaveChangesAsync();
 
