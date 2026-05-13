@@ -238,6 +238,22 @@ public class EmailService
         await SendAsync(toEmail, subject, body);
     }
 
+    // ── Renewal Application Submitted ──────────────────────────────────────
+    public async Task SendRenewalSubmittedAsync(string toEmail, string toName,
+        string unitNumber, string propertyName, DateTime newEndDate, int applicationId)
+    {
+        string subject = "RentEase — Renewal Application Received";
+        string body    = BuildApplicationEmail(toName, unitNumber, propertyName, applicationId,
+            status:  "Pending",
+            title:   "Renewal Application Received",
+            message: $"Your lease renewal request for Unit {unitNumber} at {propertyName} has been submitted successfully and is now under review. " +
+                     $"Requested new end date: <strong>{newEndDate:dd MMM yyyy}</strong>. " +
+                     $"We will notify you once a decision has been made.",
+            color:   "#f57c00",
+            icon:    "🔄");
+        await SendAsync(toEmail, subject, body);
+    }
+
     // ── Core Send Method ───────────────────────────────────────────────────
     private async Task SendAsync(string toEmail, string subject, string htmlBody)
     {

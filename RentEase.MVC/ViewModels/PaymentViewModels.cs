@@ -23,15 +23,19 @@ public class PaymentListViewModel
 
 public class SelectPlanViewModel
 {
-    public int     LeaseId         { get; set; }
-    public string  UnitNumber      { get; set; } = string.Empty;
-    public string  PropertyName    { get; set; } = string.Empty;
-    public DateTime LeaseStartDate { get; set; }
-    public DateTime LeaseEndDate   { get; set; }
-    public decimal MonthlyRent     { get; set; }
-    public decimal SecurityDeposit { get; set; }
-    public int     TotalMonths     { get; set; }
-    public decimal TotalAmount     { get; set; }
+    public int      LeaseId         { get; set; }
+    public string   UnitNumber      { get; set; } = string.Empty;
+    public string   PropertyName    { get; set; } = string.Empty;
+    public DateTime LeaseStartDate  { get; set; }
+    public DateTime LeaseEndDate    { get; set; }
+    public decimal  MonthlyRent     { get; set; }
+    public decimal  SecurityDeposit { get; set; }
+    public int      TotalMonths     { get; set; }
+    public decimal  TotalAmount     { get; set; }
+
+    // Partial-month support
+    public int      ActualDays      { get; set; }   // real calendar days
+    public bool     IsPartialMonth  { get; set; }   // < 30 days → pro-rated, Full only
 
     [Required(ErrorMessage = "Please select a payment plan.")]
     public string? SelectedPlan    { get; set; }  // "Full" or "Monthly"

@@ -86,6 +86,7 @@ public class MaintenanceController : Controller
             ["Assigned"]   = allStatuses.Count(s => s == "Assigned"),
             ["InProgress"] = allStatuses.Count(s => s == "InProgress"),
             ["Resolved"]   = allStatuses.Count(s => s == "Resolved"),
+            ["Cancelled"]  = allStatuses.Count(s => s == "Cancelled"),
         };
 
         var query = baseQuery;
@@ -107,10 +108,74 @@ public class MaintenanceController : Controller
                 PropertyName  = r.Unit.Property.Name,
                 TenantName    = r.Tenant.FullName,
                 AssignedStaff = r.AssignedStaff != null ? r.AssignedStaff.FullName : null,
-                SubmittedAt   = r.SubmittedAt,
-                ResolvedAt    = r.ResolvedAt
+                SubmittedAt        = r.SubmittedAt,
+                ResolvedAt         = r.ResolvedAt,
+                CancellationReason = r.CancellationReason
             })
             .ToListAsync();
+
+        // ── Expiring leases panel + general staff list (Manager only) ─────────
+        if (appUser.Role == "PropertyManager")
+        {
+            var today  = DateTime.Today;
+            var cutoff = today.AddDays(7);
+
+            // Units that already have an open (non-cancelled/resolved) pre-tenancy request
+            var busyUnitIds = await _db.MaintenanceRequests
+                .Where(r => r.ScheduledDate.HasValue &&
+                            r.Status != "Cancelled" && r.Status != "Resolved" && r.Status != "Closed")
+                .Select(r => r.UnitId)
+                .Distinct()
+                .ToListAsync();
+
+            // Renewal application IDs where the tenant already PAID (new lease is not PendingPayment)
+            // Only confirmed-paid renewals hide the unit from the panel
+            var confirmedRenewalAppIds = await _db.Leases
+                .Where(l => l.Status != "PendingPayment" && l.Status != "Terminated")
+                .Select(l => l.ApplicationId)
+                .Distinct()
+                .ToListAsync();
+
+            var expiringLeases = await _db.Leases
+                .Include(l => l.Application).ThenInclude(a => a.Unit).ThenInclude(u => u.Property)
+                .Include(l => l.Application.User)
+                .Where(l => l.Status == "Active"
+                         && l.LeaseEndDate >= today
+                         && l.LeaseEndDate <= cutoff
+                         // Hide only if renewal is confirmed paid — not just approved
+                         && (l.RenewLeaseApplicationId == null
+                             || !confirmedRenewalAppIds.Contains(l.RenewLeaseApplicationId.Value)))
+                .ToListAsync();
+
+            ViewBag.ExpiringLeases = expiringLeases
+                .Select(l => new ExpiringLeaseViewModel
+                {
+                    LeaseId        = l.LeaseId,
+                    UnitId         = l.Application.UnitId,
+                    UnitNumber     = l.Application.Unit.UnitNumber,
+                    PropertyName   = l.Application.Unit.Property.Name,
+                    TenantName     = l.Application.User.FullName,
+                    TenantUserId   = l.Application.UserId,
+                    LeaseEndDate   = l.LeaseEndDate,
+                    DaysRemaining  = (l.LeaseEndDate - today).Days,
+                    HasOpenRequest = busyUnitIds.Contains(l.Application.UnitId)
+                })
+                .ToList();
+
+            ViewBag.GeneralStaff = await _db.Users
+                .Include(u => u.StaffProfile)
+                .Where(u => u.Role == "MaintenanceStaff" &&
+                            u.StaffProfile != null &&
+                            u.StaffProfile.SkillProfile == "General")
+                .Select(u => new StaffSelectItem
+                {
+                    UserId             = u.UserId,
+                    FullName           = u.FullName,
+                    SkillProfile       = u.StaffProfile != null ? u.StaffProfile.SkillProfile       : null,
+                    AvailabilityStatus = u.StaffProfile != null ? u.StaffProfile.AvailabilityStatus : null
+                })
+                .ToListAsync();
+        }
 
         ViewBag.CurrentStatus = status;
         ViewBag.Role          = appUser.Role;
@@ -218,9 +283,11 @@ public class MaintenanceController : Controller
             SubmittedAt     = request.SubmittedAt,
             ResolvedAt      = request.ResolvedAt,
             ResolutionNotes = request.ResolutionNotes,
-            ImagePath           = request.ImagePath,
-            ResolutionImagePath = request.ResolutionImagePath,
-            StaffList           = staffList,
+            ImagePath            = request.ImagePath,
+            ResolutionImagePath  = request.ResolutionImagePath,
+            ScheduledDate        = request.ScheduledDate,
+            CancellationReason   = request.CancellationReason,
+            StaffList            = staffList,
             History         = request.StatusHistory
                 .OrderByDescending(h => h.ChangedAt)
                 .Select(h => new StatusHistoryViewModel
@@ -439,8 +506,8 @@ public class MaintenanceController : Controller
         var appUser = await GetAppUserAsync();
         if (appUser == null) return Unauthorized();
 
-        // Resolved / Closed requests are locked
-        if (request.Status == "Resolved" || request.Status == "Closed")
+        // Resolved / Closed / Cancelled requests are locked
+        if (request.Status == "Resolved" || request.Status == "Closed" || request.Status == "Cancelled")
         {
             TempData["Error"] = $"This request is already {request.Status} and cannot be modified.";
             return RedirectToAction("Details", new { id = request.RequestId });
@@ -474,6 +541,17 @@ public class MaintenanceController : Controller
                 TempData["Error"] = "Invalid status transition for maintenance staff.";
                 return RedirectToAction("Details", new { id = request.RequestId });
             }
+
+            // Pre-tenancy requests: staff cannot mark Resolved before the scheduled date
+            if (model.NewStatus == "Resolved" &&
+                request.ScheduledDate.HasValue &&
+                DateTime.Today < request.ScheduledDate.Value.Date)
+            {
+                TempData["Error"] =
+                    $"This pre-tenancy maintenance is scheduled for {request.ScheduledDate.Value:dd MMM yyyy}. " +
+                    $"You can only resolve it on or after that date.";
+                return RedirectToAction("Details", new { id = request.RequestId });
+            }
         }
 
         request.Status = model.NewStatus;
@@ -495,6 +573,10 @@ public class MaintenanceController : Controller
         {
             request.ResolvedAt      = DateTime.Now;
             request.ResolutionNotes = model.Notes;
+
+            // Pre-tenancy: release unit back to Available once maintenance is done
+            if (request.ScheduledDate.HasValue && request.Unit != null)
+                request.Unit.AvailabilityStatus = "Available";
 
             if (model.ResolutionImageFile != null && model.ResolutionImageFile.Length > 0)
             {
@@ -593,5 +675,155 @@ public class MaintenanceController : Controller
 
         TempData["Success"] = "Maintenance request updated successfully.";
         return RedirectToAction("Details", new { id = request.RequestId });
+    }
+
+    // POST /Maintenance/ScheduleUnitMaintenance
+    [Authorize(Roles = "PropertyManager")]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ScheduleUnitMaintenance(int leaseId, int staffId, DateTime scheduledDate)
+    {
+        var appUser = await GetAppUserAsync();
+        if (appUser == null) return Unauthorized();
+
+        var lease = await _db.Leases
+            .Include(l => l.Application).ThenInclude(a => a.Unit).ThenInclude(u => u.Property)
+            .Include(l => l.Application.User)
+            .FirstOrDefaultAsync(l => l.LeaseId == leaseId);
+
+        if (lease == null) return NotFound();
+
+        if (lease.Status != "Active")
+        {
+            TempData["Error"] = "Pre-tenancy maintenance can only be scheduled for active leases.";
+            return RedirectToAction("Index");
+        }
+
+        var staff = await _db.Users.FirstOrDefaultAsync(u => u.UserId == staffId && u.Role == "MaintenanceStaff");
+        if (staff == null)
+        {
+            TempData["Error"] = "Selected staff member not found.";
+            return RedirectToAction("Index");
+        }
+
+        // Date must be on or after the day after the lease ends
+        var minDate = lease.LeaseEndDate.AddDays(1).Date;
+        if (scheduledDate.Date < minDate)
+        {
+            TempData["Error"] = $"Scheduled date must be on or after {minDate:dd MMM yyyy} (the day after the lease ends).";
+            return RedirectToAction("Index");
+        }
+
+        // Staff load check: block if staff already has 2+ requests on the same day
+        var sameDayCount = await _db.MaintenanceRequests.CountAsync(
+            r => r.AssignedStaffId == staffId &&
+                 r.ScheduledDate.HasValue &&
+                 r.ScheduledDate.Value.Date == scheduledDate.Date &&
+                 r.Status != "Cancelled" && r.Status != "Resolved" && r.Status != "Closed");
+
+        if (sameDayCount >= 2)
+        {
+            TempData["Error"] =
+                $"{staff.FullName} already has {sameDayCount} maintenance request(s) scheduled on {scheduledDate:dd MMM yyyy}. " +
+                "Please choose a different date or assign another staff member.";
+            return RedirectToAction("Index");
+        }
+
+        // Prevent duplicate open requests for the same unit
+        var alreadyExists = await _db.MaintenanceRequests.AnyAsync(
+            r => r.UnitId == lease.Application.UnitId &&
+                 r.ScheduledDate.HasValue &&
+                 r.Status != "Cancelled" && r.Status != "Resolved" && r.Status != "Closed");
+
+        if (alreadyExists)
+        {
+            TempData["Error"] = "A pre-tenancy maintenance request already exists for this unit.";
+            return RedirectToAction("Index");
+        }
+
+        scheduledDate = scheduledDate.Date;
+        var ticketNumber  = $"PRE-{DateTime.Now:yyyy}-{new Random().Next(1000, 9999)}";
+
+        var request = new MaintenanceRequest
+        {
+            UnitId          = lease.Application.UnitId,
+            TenantUserId    = lease.Application.UserId,
+            AssignedStaffId = staffId,
+            Title           = $"Pre-Tenancy Maintenance — Unit {lease.Application.Unit.UnitNumber}",
+            Description     = $"Unit preparation after lease ends on {lease.LeaseEndDate:dd MMM yyyy}. " +
+                              $"Tenant: {lease.Application.User.FullName}.",
+            RequestType     = "General",
+            Priority        = "High",
+            Status          = "Assigned",
+            TicketNumber    = ticketNumber,
+            SubmittedAt     = DateTime.Now,
+            ScheduledDate   = scheduledDate
+        };
+
+        // If maintenance day is today, mark the unit Under Maintenance immediately
+        if (scheduledDate.Date == DateTime.Today)
+        {
+            var unitToUpdate = await _db.Units.FindAsync(lease.Application.UnitId);
+            if (unitToUpdate != null)
+                unitToUpdate.AvailabilityStatus = "UnderMaintenance";
+        }
+
+        _db.MaintenanceRequests.Add(request);
+        await _db.SaveChangesAsync();
+
+        var now = DateTime.Now;
+        _db.MaintenanceStatusHistories.Add(new MaintenanceStatusHistory
+        {
+            RequestId       = request.RequestId,
+            OldStatus       = null,
+            NewStatus       = "Assigned",
+            Notes           = $"Pre-tenancy maintenance scheduled by manager. Work date: {scheduledDate:dd MMM yyyy}.",
+            ChangedAt       = now,
+            ChangedByUserId = appUser.UserId
+        });
+
+        _db.MaintenanceRequestLogs.Add(new MaintenanceRequestLog
+        {
+            RequestId         = request.RequestId,
+            Action            = "Submitted",
+            Details           = $"Pre-tenancy maintenance created for unit {lease.Application.Unit.UnitNumber}. " +
+                                $"Ticket: {ticketNumber}. Scheduled: {scheduledDate:dd MMM yyyy}.",
+            PerformedByUserId = appUser.UserId,
+            PerformedAt       = now
+        });
+
+        await _db.SaveChangesAsync();
+
+        await _notifier.SendAsync(staffId,
+            $"📋 Pre-tenancy maintenance assigned to you — Unit {lease.Application.Unit.UnitNumber}, " +
+            $"{lease.Application.Unit.Property.Name}. " +
+            $"Ticket: {ticketNumber}. Scheduled: {scheduledDate:dd MMM yyyy}.",
+            "MaintenanceUpdate");
+
+        TempData["Success"] =
+            $"Pre-tenancy maintenance scheduled for {scheduledDate:dd MMM yyyy}. Ticket: <strong>{ticketNumber}</strong>.";
+        return RedirectToAction("Index");
+    }
+
+    // GET /Maintenance/StaffLoad?date=2026-05-20
+    // Returns JSON: { "123": 1, "456": 3, ... } — count of open scheduled requests per staff on that date
+    [Authorize(Roles = "PropertyManager")]
+    [HttpGet]
+    public async Task<IActionResult> StaffLoad(string date)
+    {
+        if (!DateTime.TryParse(date, out var targetDate))
+            return BadRequest("Invalid date.");
+
+        var loads = await _db.MaintenanceRequests
+            .Where(r => r.AssignedStaffId.HasValue &&
+                        r.ScheduledDate.HasValue &&
+                        r.ScheduledDate.Value.Date == targetDate.Date &&
+                        r.Status != "Cancelled" && r.Status != "Resolved" && r.Status != "Closed")
+            .GroupBy(r => r.AssignedStaffId!.Value)
+            .Select(g => new { StaffId = g.Key, Count = g.Count() })
+            .ToListAsync();
+
+        var result = loads.ToDictionary(x => x.StaffId.ToString(), x => x.Count);
+        return Json(result);
     }
 }

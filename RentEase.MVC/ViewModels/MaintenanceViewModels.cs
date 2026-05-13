@@ -54,8 +54,9 @@ public class MaintenanceListViewModel
     public string   PropertyName  { get; set; } = string.Empty;
     public string   TenantName    { get; set; } = string.Empty;
     public string?  AssignedStaff { get; set; }
-    public DateTime SubmittedAt   { get; set; }
-    public DateTime? ResolvedAt   { get; set; }
+    public DateTime SubmittedAt        { get; set; }
+    public DateTime? ResolvedAt        { get; set; }
+    public string?  CancellationReason { get; set; }
 }
 
 public class UpdateMaintenanceViewModel
@@ -140,9 +141,24 @@ public class MaintenanceDetailViewModel
     public int?      AssignedStaffId { get; set; }
     public DateTime  SubmittedAt     { get; set; }
     public DateTime? ResolvedAt      { get; set; }
+    public DateTime? ScheduledDate   { get; set; }
     public string?   ResolutionNotes      { get; set; }
     public string?   ImagePath            { get; set; }
     public string?   ResolutionImagePath  { get; set; }
+    public string?   CancellationReason   { get; set; }
     public List<StatusHistoryViewModel> History   { get; set; } = new();
     public List<StaffSelectItem>        StaffList { get; set; } = new();
+}
+
+public class ExpiringLeaseViewModel
+{
+    public int      LeaseId        { get; set; }
+    public int      UnitId         { get; set; }
+    public string   UnitNumber     { get; set; } = string.Empty;
+    public string   PropertyName   { get; set; } = string.Empty;
+    public string   TenantName     { get; set; } = string.Empty;
+    public int      TenantUserId   { get; set; }
+    public DateTime LeaseEndDate   { get; set; }
+    public int      DaysRemaining  { get; set; }
+    public bool     HasOpenRequest { get; set; }
 }

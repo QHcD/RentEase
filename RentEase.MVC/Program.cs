@@ -45,6 +45,7 @@ builder.Services.AddHttpClient<ApiService>(client =>
 // ── App Services ──────────────────────────────────────
 builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<EmailService>();
+builder.Services.AddHostedService<MaintenanceDailyService>();
 
 var app = builder.Build();
 
@@ -106,19 +107,22 @@ using (var scope = app.Services.CreateScope())
         // Auto-add ImagePath column to MaintenanceRequest if it doesn't exist yet
         var db = scope.ServiceProvider.GetRequiredService<PropertyLeasingDbContext>();
         await db.Database.ExecuteSqlRawAsync(@"
-            IF NOT EXISTS (
-                SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
-                WHERE TABLE_NAME = 'MaintenanceRequest' AND COLUMN_NAME = 'ImagePath'
-            )
-            ALTER TABLE MaintenanceRequest ADD ImagePath NVARCHAR(300) NULL;
-
-            IF NOT EXISTS (
-                SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
-                WHERE TABLE_NAME = 'MaintenanceRequest' AND COLUMN_NAME = 'ResolutionImagePath'
-            )
-            ALTER TABLE MaintenanceRequest ADD ResolutionImagePath NVARCHAR(300) NULL;
+            IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='MaintenanceRequest' AND COLUMN_NAME='ImagePath')
+                ALTER TABLE MaintenanceRequest ADD ImagePath NVARCHAR(300) NULL;
         ");
-        logger.LogInformation("MaintenanceRequest image columns ensured.");
+        await db.Database.ExecuteSqlRawAsync(@"
+            IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='MaintenanceRequest' AND COLUMN_NAME='ResolutionImagePath')
+                ALTER TABLE MaintenanceRequest ADD ResolutionImagePath NVARCHAR(300) NULL;
+        ");
+        await db.Database.ExecuteSqlRawAsync(@"
+            IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='MaintenanceRequest' AND COLUMN_NAME='ScheduledDate')
+                ALTER TABLE MaintenanceRequest ADD ScheduledDate DATETIME NULL;
+        ");
+        await db.Database.ExecuteSqlRawAsync(@"
+            IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='MaintenanceRequest' AND COLUMN_NAME='CancellationReason')
+                ALTER TABLE MaintenanceRequest ADD CancellationReason NVARCHAR(200) NULL;
+        ");
+        logger.LogInformation("MaintenanceRequest extra columns ensured.");
     }
     catch (Exception ex) { logger.LogWarning(ex, "Could not auto-add ImagePath column (non-fatal)."); }
 
