@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PropertyLeasing.Reporting.Services;
@@ -21,10 +23,8 @@ public class ReportsController : Controller
     {
         string? token = null;
 
-        // Try session first
         try { token = HttpContext.Session.GetString("JwtToken"); } catch { }
 
-        // Fallback to claims
         if (string.IsNullOrEmpty(token))
             token = User.FindFirstValue("JwtToken");
 
@@ -32,53 +32,74 @@ public class ReportsController : Controller
             _api.SetToken(token);
     }
 
-    // GET /Reports/Occupancy
-    public async Task<IActionResult> Occupancy()
+    /// <summary>Clears session/cookie and sends user to login when the API JWT is invalid or expired.</summary>
+    private async Task<IActionResult> WithReportApi(Func<Task<IActionResult>> action)
     {
-        SetApiToken();
-        var data = await _api.GetOccupancyReportAsync();
-        return View(data);
+        try
+        {
+            return await action();
+        }
+        catch (ReportApiUnauthorizedException)
+        {
+            HttpContext.Session.Clear();
+            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            TempData["SessionError"] =
+                "The reporting API rejected your session (JWT expired or invalid). Please sign in again.";
+            return RedirectToAction("Login", "Account");
+        }
     }
+
+    // GET /Reports/Occupancy
+    public Task<IActionResult> Occupancy() =>
+        WithReportApi(async () =>
+        {
+            SetApiToken();
+            var data = await _api.GetOccupancyReportAsync();
+            return View(data);
+        });
 
     // GET /Reports/Maintenance
-    public async Task<IActionResult> Maintenance()
-    {
-        SetApiToken();
-        var data = await _api.GetMaintenanceReportAsync();
-        return View(data);
-    }
+    public Task<IActionResult> Maintenance() =>
+        WithReportApi(async () =>
+        {
+            SetApiToken();
+            var data = await _api.GetMaintenanceReportAsync();
+            return View(data);
+        });
 
     // GET /Reports/Payments
-    public async Task<IActionResult> Payments()
-    {
-        SetApiToken();
-        var data = await _api.GetPaymentReportAsync();
-        return View(data);
-    }
+    public Task<IActionResult> Payments() =>
+        WithReportApi(async () =>
+        {
+            SetApiToken();
+            var data = await _api.GetPaymentReportAsync();
+            return View(data);
+        });
 
     // GET /Reports/Applications
-    public async Task<IActionResult> Applications(string? status, string? leaseStatus, string? tab)
-    {
-        SetApiToken();
-        var applications = await _api.GetApplicationsReportAsync();
-        var leases = await _api.GetLeasesReportAsync();
-
-        if (!string.IsNullOrWhiteSpace(status))
-            applications = applications.Where(a => a.Status == status).ToList();
-
-        if (!string.IsNullOrWhiteSpace(leaseStatus))
-            leases = leases.Where(l => l.Status == leaseStatus).ToList();
-
-        ViewBag.Status = status;
-        ViewBag.LeaseStatus = leaseStatus;
-        ViewBag.ActiveTab = string.Equals(tab, "leases", StringComparison.OrdinalIgnoreCase)
-            ? "leases"
-            : "applications";
-
-        return View(new ApplicationsLeasesReportViewModel
+    public Task<IActionResult> Applications(string? status, string? leaseStatus, string? tab) =>
+        WithReportApi(async () =>
         {
-            Applications = applications,
-            Leases = leases
+            SetApiToken();
+            var applications = await _api.GetApplicationsReportAsync();
+            var leases = await _api.GetLeasesReportAsync();
+
+            if (!string.IsNullOrWhiteSpace(status))
+                applications = applications.Where(a => a.Status == status).ToList();
+
+            if (!string.IsNullOrWhiteSpace(leaseStatus))
+                leases = leases.Where(l => l.Status == leaseStatus).ToList();
+
+            ViewBag.Status = status;
+            ViewBag.LeaseStatus = leaseStatus;
+            ViewBag.ActiveTab = string.Equals(tab, "leases", StringComparison.OrdinalIgnoreCase)
+                ? "leases"
+                : "applications";
+
+            return View(new ApplicationsLeasesReportViewModel
+            {
+                Applications = applications,
+                Leases = leases
+            });
         });
-    }
 }

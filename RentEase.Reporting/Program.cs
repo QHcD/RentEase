@@ -3,6 +3,8 @@ using PropertyLeasing.Reporting.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+var apiBaseUrl = builder.Configuration["ApiSettings:BaseUrl"] ?? "https://localhost:63199";
+
 // ── MVC ───────────────────────────────────────────────
 builder.Services.AddControllersWithViews();
 
@@ -24,12 +26,19 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
     });
 
 // ── HttpClient pointing to the Web API ────────────────
-// All data is fetched from the API — no direct DB access
+// Development: accept localhost HTTPS dev certificate so chart APIs do not silently fail.
+var relaxSslDev = builder.Environment.IsDevelopment();
 builder.Services.AddHttpClient<ApiClient>(client =>
-{
-    client.BaseAddress = new Uri(
-        builder.Configuration["ApiSettings:BaseUrl"] ?? "https://localhost:7001");
-});
+    {
+        client.BaseAddress = new Uri(apiBaseUrl.TrimEnd('/'));
+    })
+    .ConfigurePrimaryHttpMessageHandler(() =>
+    {
+        var handler = new HttpClientHandler();
+        if (relaxSslDev)
+            handler.ServerCertificateCustomValidationCallback = (_, _, _, _) => true;
+        return handler;
+    });
 
 var app = builder.Build();
 

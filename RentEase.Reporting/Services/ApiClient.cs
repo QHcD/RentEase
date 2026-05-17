@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -12,7 +13,6 @@ public class ApiClient
 {
     private readonly HttpClient _http;
     private readonly ILogger<ApiClient> _logger;
-    private readonly JsonSerializerOptions _json = new() { PropertyNameCaseInsensitive = true };
 
     public ApiClient(HttpClient http, ILogger<ApiClient> logger)
     {
@@ -27,6 +27,25 @@ public class ApiClient
             new AuthenticationHeaderValue("Bearer", token);
     }
 
+    private static void EnsureAuthorized(HttpResponseMessage response)
+    {
+        if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+            throw new ReportApiUnauthorizedException();
+    }
+
+    private async Task<string?> ReadBodyForLogAsync(HttpResponseMessage response)
+    {
+        try
+        {
+            var s = await response.Content.ReadAsStringAsync();
+            return s.Length > 512 ? s[..512] + "…" : s;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     // Login and get JWT token from API
     public async Task<AuthResponse?> LoginAsync(string email, string password)
     {
@@ -39,7 +58,7 @@ public class ApiClient
             if (!response.IsSuccessStatusCode) return null;
 
             var json = await response.Content.ReadAsStringAsync();
-            return JsonSerializer.Deserialize<AuthResponse>(json, _json);
+            return JsonSerializer.Deserialize<AuthResponse>(json, ReportingJsonDefaults.SerializerOptions);
         }
         catch (Exception ex)
         {
@@ -54,14 +73,25 @@ public class ApiClient
         try
         {
             var response = await _http.GetAsync("/api/reports/occupancy");
-            if (!response.IsSuccessStatusCode) return new();
+            EnsureAuthorized(response);
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("GetOccupancyReport failed: {Status} — {Body}",
+                    (int)response.StatusCode, await ReadBodyForLogAsync(response));
+                return [];
+            }
+
             var json = await response.Content.ReadAsStringAsync();
-            return JsonSerializer.Deserialize<List<OccupancyReportItem>>(json, _json) ?? new();
+            return JsonSerializer.Deserialize<List<OccupancyReportItem>>(json, ReportingJsonDefaults.SerializerOptions) ?? [];
+        }
+        catch (ReportApiUnauthorizedException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "GetOccupancyReport failed");
-            return new();
+            return [];
         }
     }
 
@@ -71,9 +101,20 @@ public class ApiClient
         try
         {
             var response = await _http.GetAsync("/api/reports/maintenance");
-            if (!response.IsSuccessStatusCode) return null;
+            EnsureAuthorized(response);
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("GetMaintenanceReport failed: {Status} — {Body}",
+                    (int)response.StatusCode, await ReadBodyForLogAsync(response));
+                return null;
+            }
+
             var json = await response.Content.ReadAsStringAsync();
-            return JsonSerializer.Deserialize<MaintenanceReportItem>(json, _json);
+            return JsonSerializer.Deserialize<MaintenanceReportItem>(json, ReportingJsonDefaults.SerializerOptions);
+        }
+        catch (ReportApiUnauthorizedException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -88,9 +129,20 @@ public class ApiClient
         try
         {
             var response = await _http.GetAsync("/api/reports/payments");
-            if (!response.IsSuccessStatusCode) return null;
+            EnsureAuthorized(response);
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("GetPaymentReport failed: {Status} — {Body}",
+                    (int)response.StatusCode, await ReadBodyForLogAsync(response));
+                return null;
+            }
+
             var json = await response.Content.ReadAsStringAsync();
-            return JsonSerializer.Deserialize<PaymentReportItem>(json, _json);
+            return JsonSerializer.Deserialize<PaymentReportItem>(json, ReportingJsonDefaults.SerializerOptions);
+        }
+        catch (ReportApiUnauthorizedException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -105,14 +157,25 @@ public class ApiClient
         try
         {
             var response = await _http.GetAsync("/api/reports/applications");
-            if (!response.IsSuccessStatusCode) return new();
+            EnsureAuthorized(response);
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("GetApplicationsReport failed: {Status} — {Body}",
+                    (int)response.StatusCode, await ReadBodyForLogAsync(response));
+                return [];
+            }
+
             var json = await response.Content.ReadAsStringAsync();
-            return JsonSerializer.Deserialize<List<ApplicationReportItem>>(json, _json) ?? new();
+            return JsonSerializer.Deserialize<List<ApplicationReportItem>>(json, ReportingJsonDefaults.SerializerOptions) ?? [];
+        }
+        catch (ReportApiUnauthorizedException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "GetApplicationsReport failed");
-            return new();
+            return [];
         }
     }
 
@@ -122,14 +185,25 @@ public class ApiClient
         try
         {
             var response = await _http.GetAsync("/api/reports/leases");
-            if (!response.IsSuccessStatusCode) return new();
+            EnsureAuthorized(response);
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("GetLeasesReport failed: {Status} — {Body}",
+                    (int)response.StatusCode, await ReadBodyForLogAsync(response));
+                return [];
+            }
+
             var json = await response.Content.ReadAsStringAsync();
-            return JsonSerializer.Deserialize<List<LeaseReportItem>>(json, _json) ?? new();
+            return JsonSerializer.Deserialize<List<LeaseReportItem>>(json, ReportingJsonDefaults.SerializerOptions) ?? [];
+        }
+        catch (ReportApiUnauthorizedException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "GetLeasesReport failed");
-            return new();
+            return [];
         }
     }
 }

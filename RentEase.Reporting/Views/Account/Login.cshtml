@@ -18,6 +18,10 @@
                 <p class="text-muted small mb-3">Property managers only. Credentials are validated against the RentEase API.</p>
                 <form asp-action="Login" method="post" id="loginForm">
                     @Html.AntiForgeryToken()
+                    @if (TempData["SessionError"] is string sessionErr && !string.IsNullOrWhiteSpace(sessionErr))
+                    {
+                        <div class="alert alert-warning py-2 small mb-3"><i class="fa fa-clock me-2"></i>@sessionErr</div>
+                    }
                     <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2 small"></div>
 
                     <div class="mb-3">

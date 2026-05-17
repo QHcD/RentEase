@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PropertyLeasing.API.Data;
 using PropertyLeasing.API.Models;
+using PropertyLeasing.MVC.Helpers;
 using PropertyLeasing.MVC.ViewModels;
 
 namespace PropertyLeasing.MVC.Controllers;
@@ -47,11 +48,15 @@ public class PropertiesController : Controller
         return View(properties);
     }
 
-    // GET /Properties/Units/{propertyId}
-    public async Task<IActionResult> Units(int propertyId, string? unitType, decimal? maxRent)
+    // GET /Properties/Units?propertyId=…&avail=…&types=…&maxRent=…
+    // avail: comma-separated (Available,Occupied,UnderMaintenance) or all | types: comma-separated unit types
+    public async Task<IActionResult> Units(int propertyId, decimal? maxRent)
     {
         var property = await _db.Properties.FindAsync(propertyId);
         if (property == null) return NotFound();
+
+        var (availShowAll, availStatuses) = PropertyUnitsFilterHelper.ParseAvailability(Request.Query);
+        var unitTypesFilter = PropertyUnitsFilterHelper.ParseUnitTypes(Request.Query);
 
         var query = _db.Units
             .Include(u => u.Property)
@@ -59,8 +64,11 @@ public class PropertiesController : Controller
             .Where(u => u.PropertyId == propertyId)
             .AsQueryable();
 
-        if (!string.IsNullOrWhiteSpace(unitType))
-            query = query.Where(u => u.UnitType == unitType);
+        if (!availShowAll && availStatuses.Count > 0)
+            query = query.Where(u => availStatuses.Contains(u.AvailabilityStatus));
+
+        if (unitTypesFilter.Count > 0)
+            query = query.Where(u => unitTypesFilter.Contains(u.UnitType));
 
         if (maxRent.HasValue)
             query = query.Where(u => u.MonthlyRent <= maxRent);
@@ -86,8 +94,10 @@ public class PropertiesController : Controller
 
         ViewBag.PropertyName = property.Name;
         ViewBag.PropertyId   = propertyId;
-        ViewBag.UnitType     = unitType;
         ViewBag.MaxRent      = maxRent;
+        ViewBag.AvailShowAll = availShowAll;
+        ViewBag.AvailSelection = availStatuses;
+        ViewBag.UnitTypesSelection = unitTypesFilter;
         return View(units);
     }
 

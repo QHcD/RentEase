@@ -5,6 +5,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>PropertyLeasing.Reporting</RootNamespace>
+    <!-- Avoid locking RentEase.Reporting.exe while the site is running (enables dotnet test / rebuild). -->
+    <UseAppHost>false</UseAppHost>
   </PropertyGroup>
 
   <!-- NOTE: No project reference to API — all data comes through HttpClient -->

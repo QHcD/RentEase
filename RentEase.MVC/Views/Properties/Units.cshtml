@@ -12,28 +12,89 @@
     </div>
 </div>
 
-<!-- Filters -->
-<form method="get" class="row g-2 mb-4">
-    <input type="hidden" name="propertyId" value="@ViewBag.PropertyId" />
-    <div class="col-md-3">
-        <select name="unitType" class="form-select">
-            <option value="">All Types</option>
-            <option value="Apartment" selected="@(ViewBag.UnitType == "Apartment")">Apartment</option>
-            <option value="Studio" selected="@(ViewBag.UnitType == "Studio")">Studio</option>
-            <option value="Office" selected="@(ViewBag.UnitType == "Office")">Office</option>
-            <option value="Shop" selected="@(ViewBag.UnitType == "Shop")">Shop</option>
-        </select>
+@{
+    var pid = (int)ViewBag.PropertyId;
+    var availShowAll = (bool)ViewBag.AvailShowAll;
+    var availSel = ViewBag.AvailSelection as List<string> ?? [];
+    var typesSel = ViewBag.UnitTypesSelection as List<string> ?? [];
+    decimal? maxRent = ViewBag.MaxRent as decimal?;
+    var typesQuery = PropertyUnitsFilterHelper.TypesQueryValue(typesSel);
+}
+<!-- Filters: multi-select toggles (click to add/remove); max rent applies with Apply -->
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="mb-3">
+            <div class="form-label small text-muted mb-1">Availability</div>
+            <div class="d-flex flex-wrap gap-2">
+                @foreach (var opt in PropertyUnitsFilterHelper.AvailabilityOptions)
+                {
+                    var nextAvailList = PropertyUnitsFilterHelper.ToggleAvailability(availShowAll, availSel, opt);
+                    var nextAvailShowAll = nextAvailList.Count == 0;
+                    var nextAvailParam = PropertyUnitsFilterHelper.AvailQueryValue(nextAvailShowAll, nextAvailList);
+                    var isAvailOn = !availShowAll && availSel.Contains(opt);
+                    var availLabel = opt == "UnderMaintenance" ? "Under maintenance" : opt;
+                    <a asp-controller="Properties" asp-action="Units"
+                       asp-route-propertyId="@pid"
+                       asp-route-avail="@nextAvailParam"
+                       asp-route-types="@typesQuery"
+                       asp-route-maxRent="@maxRent"
+                       class="btn btn-sm @(isAvailOn ? "btn-primary" : "btn-outline-secondary")">
+                        @if (isAvailOn)
+                        {
+                            <i class="fa fa-check me-1"></i>
+                        }
+                        @availLabel
+                    </a>
+                }
+            </div>
+            <div class="form-text">No selection means all statuses.</div>
+        </div>
+
+        <div class="mb-3">
+            <div class="form-label small text-muted mb-1">Unit type</div>
+            <div class="d-flex flex-wrap gap-2">
+                @foreach (var opt in PropertyUnitsFilterHelper.UnitTypeOptions)
+                {
+                    var nextTypes = PropertyUnitsFilterHelper.ToggleUnitType(typesSel, opt);
+                    var nextTypesQuery = PropertyUnitsFilterHelper.TypesQueryValue(nextTypes);
+                    var isTypeOn = typesSel.Contains(opt);
+                    <a asp-controller="Properties" asp-action="Units"
+                       asp-route-propertyId="@pid"
+                       asp-route-avail="@PropertyUnitsFilterHelper.AvailQueryValue(availShowAll, availSel)"
+                       asp-route-types="@nextTypesQuery"
+                       asp-route-maxRent="@maxRent"
+                       class="btn btn-sm @(isTypeOn ? "btn-primary" : "btn-outline-secondary")">
+                        @if (isTypeOn)
+                        {
+                            <i class="fa fa-check me-1"></i>
+                        }
+                        @opt
+                    </a>
+                }
+            </div>
+            <div class="form-text">No selection means all types.</div>
+        </div>
+
+        <form method="get" class="row g-2 align-items-end">
+            <input type="hidden" name="propertyId" value="@pid" />
+            <input type="hidden" name="avail" value="@PropertyUnitsFilterHelper.AvailQueryValue(availShowAll, availSel)" />
+            @if (typesSel.Count > 0)
+            {
+                <input type="hidden" name="types" value="@string.Join(",", typesSel)" />
+            }
+            <div class="col-md-4 col-lg-3">
+                <label class="form-label small text-muted mb-0">Max rent (BD)</label>
+                <input type="number" name="maxRent" value="@(maxRent.HasValue ? maxRent.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) : "")" class="form-control" placeholder="Any" step="0.01" />
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary w-100">Apply rent</button>
+            </div>
+            <div class="col-md-2">
+                <a asp-controller="Properties" asp-action="Units" asp-route-propertyId="@pid" class="btn btn-outline-secondary w-100">Clear all</a>
+            </div>
+        </form>
     </div>
-    <div class="col-md-3">
-        <input type="number" name="maxRent" value="@ViewBag.MaxRent" class="form-control" placeholder="Max rent (BD)" />
-    </div>
-    <div class="col-md-2">
-        <button type="submit" class="btn btn-primary w-100">Filter</button>
-    </div>
-    <div class="col-md-2">
-        <a asp-action="Units" asp-route-propertyId="@ViewBag.PropertyId" class="btn btn-outline-secondary w-100">Clear</a>
-    </div>
-</form>
+</div>
 
 <div class="row g-3">
     @foreach (var u in Model)
