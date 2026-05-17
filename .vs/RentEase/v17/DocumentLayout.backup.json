@@ -3,6 +3,10 @@
   "WorkspaceRootPath": "C:\\Users\\User\\source\\repos\\RentEase\\",
   "Documents": [
     {
+      "AbsoluteMoniker": "D:0:0:{22222222-2222-2222-2222-222222222222}|RentEase.MVC\\RentEase.MVC.csproj|c:\\users\\user\\source\\repos\\rentease\\rentease.mvc\\views\\properties\\create.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{22222222-2222-2222-2222-222222222222}|RentEase.MVC\\RentEase.MVC.csproj|solutionrelative:rentease.mvc\\views\\properties\\create.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
       "AbsoluteMoniker": "D:0:0:{11111111-1111-1111-1111-111111111111}|RentEase.API\\RentEase.API.csproj|c:\\users\\user\\source\\repos\\rentease\\rentease.api\\models\\leaseapplication.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{11111111-1111-1111-1111-111111111111}|RentEase.API\\RentEase.API.csproj|solutionrelative:rentease.api\\models\\leaseapplication.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
@@ -79,6 +83,19 @@
             {
               "$type": "Document",
               "DocumentIndex": 0,
+              "Title": "Create.cshtml",
+              "DocumentMoniker": "C:\\Users\\User\\source\\repos\\RentEase\\RentEase.MVC\\Views\\Properties\\Create.cshtml",
+              "RelativeDocumentMoniker": "RentEase.MVC\\Views\\Properties\\Create.cshtml",
+              "ToolTip": "C:\\Users\\User\\source\\repos\\RentEase\\RentEase.MVC\\Views\\Properties\\Create.cshtml",
+              "RelativeToolTip": "RentEase.MVC\\Views\\Properties\\Create.cshtml",
+              "ViewState": "AgIAANUAAAAAAAAAAAAAANUAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2026-05-17T22:46:35.103Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
               "Title": "LeaseApplication.cs",
               "DocumentMoniker": "C:\\Users\\User\\source\\repos\\RentEase\\RentEase.API\\Models\\LeaseApplication.cs",
               "RelativeDocumentMoniker": "RentEase.API\\Models\\LeaseApplication.cs",
@@ -86,12 +103,11 @@
               "RelativeToolTip": "RentEase.API\\Models\\LeaseApplication.cs",
               "ViewState": "AgIAABEAAAAAAAAAAAAswBkAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-05-17T19:10:14.727Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-05-17T19:10:14.727Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 2,
               "Title": "Lease.cs",
               "DocumentMoniker": "C:\\Users\\User\\source\\repos\\RentEase\\RentEase.API\\Models\\Lease.cs",
               "RelativeDocumentMoniker": "RentEase.API\\Models\\Lease.cs",
@@ -103,7 +119,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 2,
+              "DocumentIndex": 3,
               "Title": "Details.cshtml",
               "DocumentMoniker": "C:\\Users\\User\\source\\repos\\RentEase\\RentEase.MVC\\Views\\Maintenance\\Details.cshtml",
               "RelativeDocumentMoniker": "RentEase.MVC\\Views\\Maintenance\\Details.cshtml",
@@ -115,7 +131,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 4,
+              "DocumentIndex": 5,
               "Title": "MaintenanceController.cs",
               "DocumentMoniker": "C:\\Users\\User\\source\\repos\\RentEase\\RentEase.MVC\\Controllers\\MaintenanceController.cs",
               "RelativeDocumentMoniker": "RentEase.MVC\\Controllers\\MaintenanceController.cs",
@@ -127,7 +143,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 5,
+              "DocumentIndex": 6,
               "Title": "Index.cshtml",
               "DocumentMoniker": "C:\\Users\\User\\source\\repos\\RentEase\\RentEase.MVC\\Views\\Maintenance\\Index.cshtml",
               "RelativeDocumentMoniker": "RentEase.MVC\\Views\\Maintenance\\Index.cshtml",
@@ -139,7 +155,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 6,
+              "DocumentIndex": 7,
               "Title": "SupportingControllers.cs",
               "DocumentMoniker": "C:\\Users\\User\\source\\repos\\RentEase\\RentEase.MVC\\Controllers\\SupportingControllers.cs",
               "RelativeDocumentMoniker": "RentEase.MVC\\Controllers\\SupportingControllers.cs",
@@ -151,7 +167,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 3,
+              "DocumentIndex": 4,
               "Title": "Program.cs",
               "DocumentMoniker": "C:\\Users\\User\\source\\repos\\RentEase\\RentEase.MVC\\Program.cs",
               "RelativeDocumentMoniker": "RentEase.MVC\\Program.cs",
@@ -163,7 +179,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 7,
+              "DocumentIndex": 8,
               "Title": "LeaseDetails.cshtml",
               "DocumentMoniker": "C:\\Users\\User\\source\\repos\\RentEase\\RentEase.MVC\\Views\\LeaseApplications\\LeaseDetails.cshtml",
               "RelativeDocumentMoniker": "RentEase.MVC\\Views\\LeaseApplications\\LeaseDetails.cshtml",
@@ -175,7 +191,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 8,
+              "DocumentIndex": 9,
               "Title": "Index.cshtml",
               "DocumentMoniker": "C:\\Users\\User\\source\\repos\\RentEase\\RentEase.MVC\\Views\\LeaseApplications\\Index.cshtml",
               "RelativeDocumentMoniker": "RentEase.MVC\\Views\\LeaseApplications\\Index.cshtml",
@@ -187,7 +203,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 9,
+              "DocumentIndex": 10,
               "Title": "LeaseApplicationDetails.cshtml",
               "DocumentMoniker": "C:\\Users\\User\\source\\repos\\RentEase\\RentEase.MVC\\Views\\LeaseApplications\\LeaseApplicationDetails.cshtml",
               "RelativeDocumentMoniker": "RentEase.MVC\\Views\\LeaseApplications\\LeaseApplicationDetails.cshtml",
@@ -199,7 +215,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 10,
+              "DocumentIndex": 11,
               "Title": "TerminateLease.cshtml",
               "DocumentMoniker": "C:\\Users\\User\\source\\repos\\RentEase\\RentEase.MVC\\Views\\LeaseApplications\\TerminateLease.cshtml",
               "RelativeDocumentMoniker": "RentEase.MVC\\Views\\LeaseApplications\\TerminateLease.cshtml",
@@ -211,7 +227,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 11,
+              "DocumentIndex": 12,
               "Title": "HomeController.cs",
               "DocumentMoniker": "C:\\Users\\User\\source\\repos\\RentEase\\RentEase.MVC\\Controllers\\HomeController.cs",
               "RelativeDocumentMoniker": "RentEase.MVC\\Controllers\\HomeController.cs",
@@ -223,7 +239,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 12,
+              "DocumentIndex": 13,
               "Title": "appsettings.json",
               "DocumentMoniker": "C:\\Users\\User\\source\\repos\\RentEase\\RentEase.MVC\\appsettings.json",
               "RelativeDocumentMoniker": "RentEase.MVC\\appsettings.json",
@@ -235,7 +251,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 13,
+              "DocumentIndex": 14,
               "Title": "PropertyLeasingDbContextModelSnapshot.cs",
               "DocumentMoniker": "C:\\Users\\User\\source\\repos\\RentEase\\RentEase.API\\Migrations\\PropertyLeasingDb\\PropertyLeasingDbContextModelSnapshot.cs",
               "RelativeDocumentMoniker": "RentEase.API\\Migrations\\PropertyLeasingDb\\PropertyLeasingDbContextModelSnapshot.cs",
@@ -247,7 +263,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 14,
+              "DocumentIndex": 15,
               "Title": "20260506195811_AddLeaseLogs.Designer.cs",
               "DocumentMoniker": "C:\\Users\\User\\source\\repos\\RentEase\\RentEase.API\\Migrations\\PropertyLeasingDb\\20260506195811_AddLeaseLogs.Designer.cs",
               "RelativeDocumentMoniker": "RentEase.API\\Migrations\\PropertyLeasingDb\\20260506195811_AddLeaseLogs.Designer.cs",
@@ -259,7 +275,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 15,
+              "DocumentIndex": 16,
               "Title": "Program.cs",
               "DocumentMoniker": "C:\\Users\\User\\source\\repos\\RentEase\\RentEase.API\\Program.cs",
               "RelativeDocumentMoniker": "RentEase.API\\Program.cs",

@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PropertyLeasing.API.Data;
 using PropertyLeasing.API.Models;
-using PropertyLeasing.LeaseApplicationLogic;
+using PropertyLeasing.BusinessLogic;
 using PropertyLeasing.MVC.Services;
 using PropertyLeasing.MVC.ViewModels;
 

@@ -1,17 +1,18 @@
-@* ── Create.cshtml ── *@
-@model PropertyLeasing.API.Models.Property
+@model PropertyLeasing.MVC.ViewModels.CreatePropertyViewModel
+@using PropertyLeasing.MVC.Helpers
 @{
     ViewData["Title"] = "Add Property";
+    ViewData["AmenitiesApplyHint"] = "Applied to every new unit.";
 }
 
 <div class="row justify-content-center">
-    <div class="col-md-7">
+    <div class="col-lg-9">
         <div class="card shadow-sm">
             <div class="card-header bg-success text-white">
                 <h5 class="mb-0"><i class="fa fa-plus me-2"></i>Add New Property</h5>
             </div>
             <div class="card-body">
-                <form asp-action="Create" method="post">
+                <form asp-action="Create" method="post" id="createPropertyForm">
                     @Html.AntiForgeryToken()
                     <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2 small"></div>
 
@@ -30,11 +31,11 @@
                         <span asp-validation-for="Address" class="text-danger small"></span>
                     </div>
                     <div class="row g-2 mb-3">
-                        <div class="col-6">
+                        <div class="col-md-6">
                             <label asp-for="City" class="form-label"></label>
                             <input asp-for="City" class="form-control" />
                         </div>
-                        <div class="col-6">
+                        <div class="col-md-6">
                             <label asp-for="PropertyType" class="form-label"></label>
                             <select asp-for="PropertyType" class="form-select">
                                 <option value="">-- Select --</option>
@@ -43,6 +44,29 @@
                             </select>
                         </div>
                     </div>
+
+                    <partial name="_PropertyAmenitiesEditor" model="Model" />
+                    <span asp-validation-for="CustomAmenities" class="text-danger small d-block"></span>
+
+                    <div class="row g-2 mb-3 align-items-end">
+                        <div class="col-md-6">
+                            <label asp-for="NumberOfFloors" class="form-label"></label>
+                            <input asp-for="NumberOfFloors" class="form-control" type="number" min="1" max="99" id="NumberOfFloors" />
+                            <span asp-validation-for="NumberOfFloors" class="text-danger small"></span>
+                        </div>
+                        <div class="col-md-6">
+                            <label asp-for="UnitNumberPrefix" class="form-label"></label>
+                            <input asp-for="UnitNumberPrefix" class="form-control" maxlength="20" placeholder="e.g. JUU" />
+                            <span asp-validation-for="UnitNumberPrefix" class="text-danger small"></span>
+                        </div>
+                    </div>
+                    <p class="form-text text-muted small mb-3">
+                        The same optional prefix applies to all floors (e.g. <strong>JUU 1014</strong> on floor 10, or <strong>1014</strong> if left blank).
+                    </p>
+
+                    <h6 class="text-muted mb-2">Units by floor</h6>
+                    <div id="floorRowsContainer" class="border rounded p-3 bg-light mb-3"></div>
+
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-success">
                             <i class="fa fa-save me-1"></i> Save
@@ -57,4 +81,133 @@
 
 @section Scripts {
     @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    <script>
+        (function () {
+            document.querySelectorAll('.amenity-fixed-cb').forEach(function (cb) {
+                function sync() {
+                    var lbl = cb.closest('.amenity-fixed-label');
+                    if (!lbl) return;
+                    lbl.classList.toggle('btn-primary', cb.checked);
+                    lbl.classList.toggle('btn-outline-secondary', !cb.checked);
+                    var icon = lbl.querySelector('.amenity-check-icon');
+                    if (icon) icon.classList.toggle('invisible', !cb.checked);
+                }
+                cb.addEventListener('change', sync);
+                sync();
+            });
+
+            var customListEl = document.getElementById('customAmenitiesList');
+            var addBtn = document.getElementById('addCustomAmenity');
+            var maxCustom = @PropertyLeasing.BusinessLogic.PropertyAmenitySelection.MaxCustomAmenityItems;
+            var maxLen = @PropertyLeasing.BusinessLogic.PropertyAmenitySelection.MaxCustomAmenityItemLength;
+
+            function reindexCustomRows() {
+                if (!customListEl) return;
+                customListEl.querySelectorAll('.custom-amenity-row input[type=text]').forEach(function (inp, idx) {
+                    inp.name = 'CustomAmenities[' + idx + ']';
+                });
+            }
+
+            function bindRemove(btn) {
+                btn.addEventListener('click', function () {
+                    var row = btn.closest('.custom-amenity-row');
+                    if (row) row.remove();
+                    reindexCustomRows();
+                });
+            }
+
+            customListEl.querySelectorAll('.remove-custom-amenity').forEach(bindRemove);
+
+            if (addBtn && customListEl) {
+                addBtn.addEventListener('click', function () {
+                    var count = customListEl.querySelectorAll('.custom-amenity-row').length;
+                    if (count >= maxCustom) return;
+                    var wrap = document.createElement('div');
+                    wrap.className = 'custom-amenity-row input-group input-group-sm';
+                    wrap.innerHTML =
+                        '<input type="text" class="form-control" maxlength="' + maxLen + '" placeholder="Custom amenity name" />' +
+                        '<button type="button" class="btn btn-outline-danger remove-custom-amenity" title="Remove">' +
+                        '<i class="fa fa-times"></i></button>';
+                    customListEl.appendChild(wrap);
+                    bindRemove(wrap.querySelector('.remove-custom-amenity'));
+                    reindexCustomRows();
+                });
+            }
+
+            var floorInput = document.getElementById('NumberOfFloors');
+            var container = document.getElementById('floorRowsContainer');
+            if (!floorInput || !container) return;
+
+            var initialRows = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.FloorRows ?? new List<FloorUnitRowInput>()));
+
+            function clampFloors(n) {
+                if (isNaN(n) || n < 1) return 1;
+                if (n > 99) return 99;
+                return n;
+            }
+
+            function readCurrentRows() {
+                var rows = container.querySelectorAll('.floor-row');
+                var data = [];
+                rows.forEach(function (row) {
+                    var unitsEl = row.querySelector('.units-on-floor');
+                    data.push({
+                        UnitsOnFloor: unitsEl ? parseInt(unitsEl.value, 10) || 1 : 1
+                    });
+                });
+                return data;
+            }
+
+            function render() {
+                var n = clampFloors(parseInt(floorInput.value, 10));
+                floorInput.value = String(n);
+
+                var prev = readCurrentRows();
+                container.innerHTML = '';
+
+                for (var i = 0; i < n; i++) {
+                    var seed = prev[i] || initialRows[i] || { UnitsOnFloor: 1 };
+                    var unitsVal = seed.UnitsOnFloor != null ? seed.UnitsOnFloor : 1;
+
+                    var wrap = document.createElement('div');
+                    wrap.className = 'row g-2 mb-2 align-items-end floor-row';
+
+                    var labelCol = document.createElement('div');
+                    labelCol.className = 'col-12 col-md-auto';
+                    labelCol.innerHTML = '<span class="badge bg-secondary">Floor ' + (i + 1) + '</span>';
+
+                    var unitsCol = document.createElement('div');
+                    unitsCol.className = 'col-12 col-md-5';
+                    var unitsLabel = document.createElement('label');
+                    unitsLabel.className = 'form-label small mb-0';
+                    unitsLabel.setAttribute('for', 'units_' + i);
+                    unitsLabel.textContent = 'Units on this floor';
+                    var unitsInput = document.createElement('input');
+                    unitsInput.type = 'number';
+                    unitsInput.className = 'form-control units-on-floor';
+                    unitsInput.id = 'units_' + i;
+                    unitsInput.name = 'FloorRows[' + i + '].UnitsOnFloor';
+                    unitsInput.min = 1;
+                    unitsInput.max = 99;
+                    unitsInput.required = true;
+                    unitsInput.value = String(unitsVal);
+                    unitsCol.appendChild(unitsLabel);
+                    unitsCol.appendChild(unitsInput);
+
+                    var hintCol = document.createElement('div');
+                    hintCol.className = 'col-12 col-md text-muted small';
+                    hintCol.textContent = 'Numbers look like floor×100 + unit (e.g. 1014). With prefix: “JUU 1014”.';
+
+                    wrap.appendChild(labelCol);
+                    wrap.appendChild(unitsCol);
+                    wrap.appendChild(hintCol);
+                    container.appendChild(wrap);
+                }
+            }
+
+            floorInput.addEventListener('change', render);
+            floorInput.addEventListener('input', render);
+            render();
+        })();
+    </script>
 }

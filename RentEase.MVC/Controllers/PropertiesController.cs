@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PropertyLeasing.API.Data;
 using PropertyLeasing.API.Models;
+using PropertyLeasing.BusinessLogic;
 using PropertyLeasing.MVC.Helpers;
 using PropertyLeasing.MVC.ViewModels;
 
@@ -45,6 +46,9 @@ public class PropertiesController : Controller
 
         ViewBag.Search = search;
         ViewBag.Type   = type;
+        if (User.IsInRole("PropertyManager"))
+            ViewBag.BlockingDeletePropertyIds = await PropertyUnitDeletionHelper.GetPropertyIdsWithBlockingLeasesAsync(_db);
+
         return View(properties);
     }
 
@@ -98,6 +102,9 @@ public class PropertiesController : Controller
         ViewBag.AvailShowAll = availShowAll;
         ViewBag.AvailSelection = availStatuses;
         ViewBag.UnitTypesSelection = unitTypesFilter;
+        if (User.IsInRole("PropertyManager"))
+            ViewBag.BlockingLeaseUnitIds = await PropertyUnitDeletionHelper.GetBlockingUnitIdsForPropertyAsync(_db, propertyId);
+
         return View(units);
     }
 
@@ -123,23 +130,100 @@ public class PropertiesController : Controller
         var properties = await _db.Properties
             .Include(p => p.Units)
             .ToListAsync();
+        ViewBag.BlockingDeletePropertyIds = await PropertyUnitDeletionHelper.GetPropertyIdsWithBlockingLeasesAsync(_db);
         return View(properties);
     }
 
     // GET /Properties/Create
     [Authorize(Roles = "PropertyManager")]
-    public IActionResult Create() => View();
+    public IActionResult Create()
+    {
+        var vm = new CreatePropertyViewModel
+        {
+            NumberOfFloors = 1,
+            FloorRows      = new List<FloorUnitRowInput> { new() }
+        };
+        return View(vm);
+    }
 
     // POST /Properties/Create
     [Authorize(Roles = "PropertyManager")]
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create(Property model)
+    public async Task<IActionResult> Create(CreatePropertyViewModel model)
     {
-        if (!ModelState.IsValid) return View(model);
-        _db.Properties.Add(model);
+        if (model.FloorRows == null || model.FloorRows.Count != model.NumberOfFloors)
+            ModelState.AddModelError(string.Empty,
+                "Floor rows must match the number of floors. Adjust the floor count or refresh the page.");
+
+        if (model.CustomAmenities is { Count: > 0 } &&
+            model.CustomAmenities.Count > PropertyAmenitySelection.MaxCustomAmenityItems)
+            ModelState.AddModelError(nameof(model.CustomAmenities),
+                $"At most {PropertyAmenitySelection.MaxCustomAmenityItems} custom amenities are allowed.");
+
+        if (model.CustomAmenities is { Count: > 0 })
+        {
+            if (model.CustomAmenities.Any(c => (c?.Trim() ?? string.Empty).Length >
+                                                PropertyAmenitySelection.MaxCustomAmenityItemLength))
+                ModelState.AddModelError(nameof(model.CustomAmenities),
+                    $"Each custom amenity must be at most {PropertyAmenitySelection.MaxCustomAmenityItemLength} characters.");
+        }
+
+        if (!ModelState.IsValid)
+            return View(model);
+
+        var mergedAmenities = PropertyAmenitySelection.Merge(
+            model.SelectedFixedAmenities,
+            model.CustomAmenities,
+            PropertyAmenityOptions.All).ToList();
+
+        var amenitiesJoined = PropertyAmenitySelection.JoinForUnit(mergedAmenities);
+        var amenitiesLengthError = PropertyAmenitySelection.ValidateJoinedLength(amenitiesJoined);
+        if (amenitiesLengthError != null)
+            ModelState.AddModelError(nameof(model.CustomAmenities), amenitiesLengthError);
+
+        if (!ModelState.IsValid)
+            return View(model);
+
+        IReadOnlyList<string> unitNumbers;
+        try
+        {
+            var prefix = model.UnitNumberPrefix;
+            var floors = model.FloorRows!
+                .Select(r => ((string?)prefix, r.UnitsOnFloor))
+                .ToList();
+            unitNumbers = PropertyCreateUnitNaming.BuildUnitNumbers(floors);
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            ModelState.AddModelError(string.Empty, "Invalid floor layout. Each floor needs 1–99 units.");
+            return View(model);
+        }
+
+        var property = new Property
+        {
+            Name             = model.Name,
+            Description      = model.Description,
+            Address          = model.Address,
+            City             = model.City,
+            PropertyType     = model.PropertyType,
+            GracePeriodDays  = 5,
+            LateFeePercent   = 5
+        };
+
+        foreach (var number in unitNumbers)
+        {
+            property.Units.Add(new Unit
+            {
+                UnitNumber           = number,
+                Amenities            = amenitiesJoined,
+                AvailabilityStatus   = "Available"
+            });
+        }
+
+        _db.Properties.Add(property);
         await _db.SaveChangesAsync();
-        TempData["Success"] = "Property created successfully.";
+        TempData["Success"] = $"Property created successfully with {unitNumbers.Count} unit(s).";
         return RedirectToAction("Manage");
     }
 
@@ -147,23 +231,91 @@ public class PropertiesController : Controller
     [Authorize(Roles = "PropertyManager")]
     public async Task<IActionResult> Edit(int id)
     {
-        var property = await _db.Properties.FindAsync(id);
+        var property = await _db.Properties.AsNoTracking().FirstOrDefaultAsync(p => p.PropertyId == id);
         if (property == null) return NotFound();
-        return View(property);
+
+        var amenitySource = await _db.Units
+            .Where(u => u.PropertyId == id)
+            .OrderBy(u => u.UnitId)
+            .Select(u => u.Amenities)
+            .FirstOrDefaultAsync();
+
+        var (fixedSel, customs) = PropertyAmenitySelection.SplitFromStoredString(amenitySource, PropertyAmenityOptions.All);
+
+        var vm = new EditPropertyViewModel
+        {
+            PropertyId      = property.PropertyId,
+            Name            = property.Name,
+            Description     = property.Description,
+            Address         = property.Address,
+            City            = property.City,
+            PropertyType    = property.PropertyType,
+            ImgPath         = property.ImgPath,
+            GracePeriodDays = property.GracePeriodDays,
+            LateFeePercent  = property.LateFeePercent,
+            SelectedFixedAmenities = fixedSel,
+            CustomAmenities        = customs
+        };
+
+        return View(vm);
     }
 
     // POST /Properties/Edit/{id}
     [Authorize(Roles = "PropertyManager")]
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Edit(int id, Property model)
+    public async Task<IActionResult> Edit(int id, EditPropertyViewModel model)
     {
         if (id != model.PropertyId) return BadRequest();
-        if (!ModelState.IsValid) return View(model);
-        _db.Properties.Update(model);
+
+        if (model.CustomAmenities is { Count: > 0 } &&
+            model.CustomAmenities.Count > PropertyAmenitySelection.MaxCustomAmenityItems)
+            ModelState.AddModelError(nameof(model.CustomAmenities),
+                $"At most {PropertyAmenitySelection.MaxCustomAmenityItems} custom amenities are allowed.");
+
+        if (model.CustomAmenities is { Count: > 0 })
+        {
+            if (model.CustomAmenities.Any(c => (c?.Trim() ?? string.Empty).Length >
+                                                PropertyAmenitySelection.MaxCustomAmenityItemLength))
+                ModelState.AddModelError(nameof(model.CustomAmenities),
+                    $"Each custom amenity must be at most {PropertyAmenitySelection.MaxCustomAmenityItemLength} characters.");
+        }
+
+        if (!ModelState.IsValid)
+            return View(model);
+
+        var mergedAmenities = PropertyAmenitySelection.Merge(
+            model.SelectedFixedAmenities,
+            model.CustomAmenities,
+            PropertyAmenityOptions.All).ToList();
+
+        var amenitiesJoined = PropertyAmenitySelection.JoinForUnit(mergedAmenities);
+        var amenitiesLengthError = PropertyAmenitySelection.ValidateJoinedLength(amenitiesJoined);
+        if (amenitiesLengthError != null)
+            ModelState.AddModelError(nameof(model.CustomAmenities), amenitiesLengthError);
+
+        if (!ModelState.IsValid)
+            return View(model);
+
+        var entity = await _db.Properties.FindAsync(id);
+        if (entity == null) return NotFound();
+
+        entity.Name             = model.Name;
+        entity.Description      = model.Description;
+        entity.Address          = model.Address;
+        entity.City             = model.City;
+        entity.PropertyType     = model.PropertyType;
+        entity.ImgPath          = model.ImgPath;
+        entity.GracePeriodDays  = model.GracePeriodDays;
+        entity.LateFeePercent   = model.LateFeePercent;
+
         await _db.SaveChangesAsync();
+
+        await _db.Units.Where(u => u.PropertyId == id)
+            .ExecuteUpdateAsync(s => s.SetProperty(u => u.Amenities, amenitiesJoined));
+
         TempData["Success"] = "Property updated successfully.";
-        return RedirectToAction("Manage");
+        return RedirectToAction(nameof(Manage));
     }
 
     // POST /Properties/Delete/{id}
@@ -172,11 +324,62 @@ public class PropertiesController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Delete(int id)
     {
-        var property = await _db.Properties.FindAsync(id);
+        var property = await _db.Properties.FirstOrDefaultAsync(p => p.PropertyId == id);
         if (property == null) return NotFound();
-        _db.Properties.Remove(property);
-        await _db.SaveChangesAsync();
-        TempData["Success"] = "Property deleted.";
-        return RedirectToAction("Manage");
+
+        var unitIds = await _db.Units.Where(u => u.PropertyId == id).Select(u => u.UnitId).ToListAsync();
+
+        try
+        {
+            var (ok, error) = await PropertyUnitDeletionHelper.TryCascadeDeleteUnitsAsync(_db, unitIds);
+            if (!ok)
+            {
+                TempData["Error"] = error;
+                return RedirectToAction(nameof(Manage));
+            }
+
+            var propRow = await _db.Properties.FindAsync(id);
+            if (propRow != null)
+            {
+                _db.Properties.Remove(propRow);
+                await _db.SaveChangesAsync();
+            }
+
+            TempData["Success"] = "Property deleted.";
+        }
+        catch (DbUpdateException)
+        {
+            TempData["Error"] = "Unable to delete this property because related data could not be removed. Try again or contact support.";
+        }
+
+        return RedirectToAction(nameof(Manage));
+    }
+
+    // POST /Properties/DeleteUnit — manager only; removes one unit if no blocking lease.
+    [Authorize(Roles = "PropertyManager")]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteUnit(int unitId, int propertyId)
+    {
+        var unit = await _db.Units.FirstOrDefaultAsync(u => u.UnitId == unitId && u.PropertyId == propertyId);
+        if (unit == null) return NotFound();
+
+        try
+        {
+            var (ok, error) = await PropertyUnitDeletionHelper.TryCascadeDeleteUnitsAsync(_db, new List<int> { unitId });
+            if (!ok)
+            {
+                TempData["Error"] = error;
+                return RedirectToAction(nameof(Units), new { propertyId });
+            }
+
+            TempData["Success"] = $"Unit {unit.UnitNumber} was deleted.";
+        }
+        catch (DbUpdateException)
+        {
+            TempData["Error"] = "Unable to delete this unit because related data could not be removed. Try again or contact support.";
+        }
+
+        return RedirectToAction(nameof(Units), new { propertyId });
     }
 }

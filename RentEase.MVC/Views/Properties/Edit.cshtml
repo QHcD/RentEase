@@ -1,10 +1,12 @@
-@model PropertyLeasing.API.Models.Property
+@model PropertyLeasing.MVC.ViewModels.EditPropertyViewModel
+@using PropertyLeasing.MVC.Helpers
 @{
     ViewData["Title"] = "Edit Property";
+    ViewData["AmenitiesApplyHint"] = "Applied to every unit in this property.";
 }
 
 <div class="row justify-content-center">
-    <div class="col-md-7">
+    <div class="col-lg-9">
         <div class="card shadow-sm">
             <div class="card-header bg-primary text-white">
                 <h5 class="mb-0"><i class="fa fa-edit me-2"></i>Edit Property — @Model.Name</h5>
@@ -13,6 +15,7 @@
                 <form asp-action="Edit" asp-route-id="@Model.PropertyId" method="post">
                     @Html.AntiForgeryToken()
                     <input type="hidden" asp-for="PropertyId" />
+                    <input type="hidden" asp-for="ImgPath" />
                     <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2 small"></div>
 
                     <div class="mb-3">
@@ -30,11 +33,11 @@
                         <span asp-validation-for="Address" class="text-danger small"></span>
                     </div>
                     <div class="row g-2 mb-3">
-                        <div class="col-6">
+                        <div class="col-md-6">
                             <label asp-for="City" class="form-label"></label>
                             <input asp-for="City" class="form-control" />
                         </div>
-                        <div class="col-6">
+                        <div class="col-md-6">
                             <label asp-for="PropertyType" class="form-label"></label>
                             <select asp-for="PropertyType" class="form-select">
                                 <option value="">-- Select --</option>
@@ -43,7 +46,23 @@
                             </select>
                         </div>
                     </div>
-                    <div class="d-flex gap-2">
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label asp-for="GracePeriodDays" class="form-label"></label>
+                            <input asp-for="GracePeriodDays" class="form-control" type="number" min="0" max="365" />
+                            <span asp-validation-for="GracePeriodDays" class="text-danger small"></span>
+                        </div>
+                        <div class="col-md-6">
+                            <label asp-for="LateFeePercent" class="form-label"></label>
+                            <input asp-for="LateFeePercent" class="form-control" type="number" min="0" max="100" step="0.01" />
+                            <span asp-validation-for="LateFeePercent" class="text-danger small"></span>
+                        </div>
+                    </div>
+
+                    <partial name="_PropertyAmenitiesEditor" model="Model" />
+                    <span asp-validation-for="CustomAmenities" class="text-danger small d-block"></span>
+
+                    <div class="d-flex gap-2 mt-3">
                         <button type="submit" class="btn btn-primary">
                             <i class="fa fa-save me-1"></i> Update
                         </button>
@@ -57,4 +76,58 @@
 
 @section Scripts {
     @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    <script>
+        (function () {
+            document.querySelectorAll('.amenity-fixed-cb').forEach(function (cb) {
+                function sync() {
+                    var lbl = cb.closest('.amenity-fixed-label');
+                    if (!lbl) return;
+                    lbl.classList.toggle('btn-primary', cb.checked);
+                    lbl.classList.toggle('btn-outline-secondary', !cb.checked);
+                    var icon = lbl.querySelector('.amenity-check-icon');
+                    if (icon) icon.classList.toggle('invisible', !cb.checked);
+                }
+                cb.addEventListener('change', sync);
+                sync();
+            });
+
+            var customListEl = document.getElementById('customAmenitiesList');
+            var addBtn = document.getElementById('addCustomAmenity');
+            var maxCustom = @PropertyLeasing.BusinessLogic.PropertyAmenitySelection.MaxCustomAmenityItems;
+            var maxLen = @PropertyLeasing.BusinessLogic.PropertyAmenitySelection.MaxCustomAmenityItemLength;
+
+            function reindexCustomRows() {
+                if (!customListEl) return;
+                customListEl.querySelectorAll('.custom-amenity-row input[type=text]').forEach(function (inp, idx) {
+                    inp.name = 'CustomAmenities[' + idx + ']';
+                });
+            }
+
+            function bindRemove(btn) {
+                btn.addEventListener('click', function () {
+                    var row = btn.closest('.custom-amenity-row');
+                    if (row) row.remove();
+                    reindexCustomRows();
+                });
+            }
+
+            if (customListEl) customListEl.querySelectorAll('.remove-custom-amenity').forEach(bindRemove);
+
+            if (addBtn && customListEl) {
+                addBtn.addEventListener('click', function () {
+                    var count = customListEl.querySelectorAll('.custom-amenity-row').length;
+                    if (count >= maxCustom) return;
+                    var wrap = document.createElement('div');
+                    wrap.className = 'custom-amenity-row input-group input-group-sm';
+                    wrap.innerHTML =
+                        '<input type="text" class="form-control" maxlength="' + maxLen + '" placeholder="Custom amenity name" />' +
+                        '<button type="button" class="btn btn-outline-danger remove-custom-amenity" title="Remove">' +
+                        '<i class="fa fa-times"></i></button>';
+                    customListEl.appendChild(wrap);
+                    bindRemove(wrap.querySelector('.remove-custom-amenity'));
+                    reindexCustomRows();
+                });
+            }
+        })();
+    </script>
 }

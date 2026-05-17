@@ -60,19 +60,31 @@
                        class="btn btn-outline-primary btn-sm flex-fill">
                         <i class="fa fa-door-open me-1"></i> View Units
                     </a>
-                    @if (User.IsInRole("PropertyManager"))
-                    {
-                        <a asp-action="Edit" asp-route-id="@p.PropertyId" class="btn btn-outline-warning btn-sm">
-                            <i class="fa fa-edit"></i>
-                        </a>
-                        <form asp-action="Delete" asp-route-id="@p.PropertyId" method="post"
-                              onsubmit="return confirm('Delete this property?')">
-                            @Html.AntiForgeryToken()
-                            <button type="submit" class="btn btn-outline-danger btn-sm">
-                                <i class="fa fa-trash"></i>
-                            </button>
-                        </form>
-                    }
+                        @if (User.IsInRole("PropertyManager"))
+                        {
+                            <a asp-action="Edit" asp-route-id="@p.PropertyId" class="btn btn-outline-warning btn-sm">
+                                <i class="fa fa-edit"></i>
+                            </a>
+                            var blockingIndex = ViewBag.BlockingDeletePropertyIds as HashSet<int>;
+                            var cannotDelete = blockingIndex != null && blockingIndex.Contains(p.PropertyId);
+                            if (cannotDelete)
+                            {
+                                <button type="button" class="btn btn-outline-secondary btn-sm" disabled
+                                        title="Cannot delete while a unit has an active lease, pending payment, or approved lease awaiting activation.">
+                                    <i class="fa fa-trash"></i>
+                                </button>
+                            }
+                            else
+                            {
+                                <form asp-action="Delete" asp-route-id="@p.PropertyId" method="post"
+                                      onsubmit="return confirm('Delete this property? All units and historical lease records on this property will be removed.')">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn btn-outline-danger btn-sm">
+                                        <i class="fa fa-trash"></i>
+                                    </button>
+                                </form>
+                            }
+                        }
                 </div>
             </div>
         </div>

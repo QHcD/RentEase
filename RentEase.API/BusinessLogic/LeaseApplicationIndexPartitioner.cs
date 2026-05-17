@@ -1,8 +1,7 @@
-namespace PropertyLeasing.LeaseApplicationLogic;
+namespace PropertyLeasing.BusinessLogic;
 
 /// <summary>
-/// Splits lease applications into regular vs renewal (ParentLeaseId)
-/// for the Applications index tabs.
+/// Splits lease applications into regular vs renewal (ParentLeaseId) for the Applications index tabs.
 /// </summary>
 public static class LeaseApplicationIndexPartitioner
 {
@@ -28,9 +27,6 @@ public static class LeaseApplicationIndexPartitioner
         return (regular, renewals);
     }
 
-    /// <summary>
-    /// Status counts for application sub-tabs. Include <c>All</c> for total count.
-    /// </summary>
     public static Dictionary<string, int> BuildStatusCounts<T>(
         IReadOnlyCollection<T> items,
         Func<T, string> statusSelector,

@@ -2,6 +2,7 @@
 @model List<PropertyLeasing.API.Models.Property>
 @{
     ViewData["Title"] = "Manage Properties";
+    var blockingManage = ViewBag.BlockingDeletePropertyIds as HashSet<int>;
 }
 
 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -34,11 +35,24 @@
                             <a asp-action="Edit" asp-route-id="@p.PropertyId" class="btn btn-sm btn-outline-primary">Edit</a>
                             <a asp-controller="Properties" asp-action="Units" asp-route-propertyId="@p.PropertyId"
                                class="btn btn-sm btn-outline-info">Units</a>
-                            <form asp-action="Delete" asp-route-id="@p.PropertyId" method="post" class="d-inline"
-                                  data-confirm="Delete this property?">
-                                @Html.AntiForgeryToken()
-                                <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
-                            </form>
+                            @{
+                                var cannotDelProperty = blockingManage != null && blockingManage.Contains(p.PropertyId);
+                            }
+                            @if (cannotDelProperty)
+                            {
+                                <button type="button" class="btn btn-sm btn-outline-secondary" disabled
+                                        title="Cannot delete while a unit has an active lease, pending payment, or approved lease awaiting activation.">
+                                    Delete
+                                </button>
+                            }
+                            else
+                            {
+                                <form asp-action="Delete" asp-route-id="@p.PropertyId" method="post" class="d-inline"
+                                      data-confirm="Delete this property and all units on it? Historical lease data for those units will be removed.">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                                </form>
+                            }
                         </td>
                     </tr>
                 }

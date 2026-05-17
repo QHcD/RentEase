@@ -2498,7 +2498,6 @@
           "Microsoft.AspNetCore.SignalR": "1.2.9",
           "Microsoft.EntityFrameworkCore.SqlServer": "9.0.0",
           "Microsoft.EntityFrameworkCore.Tools": "9.0.0",
-          "RentEase.LeaseApplicationLogic": "1.0.0",
           "Swashbuckle.AspNetCore": "6.6.2",
           "System.IdentityModel.Tokens.Jwt": "8.16.0"
         },
@@ -2511,16 +2510,6 @@
         "frameworkReferences": [
           "Microsoft.AspNetCore.App"
         ]
-      },
-      "RentEase.LeaseApplicationLogic/1.0.0": {
-        "type": "project",
-        "framework": ".NETCoreApp,Version=v9.0",
-        "compile": {
-          "bin/placeholder/RentEase.LeaseApplicationLogic.dll": {}
-        },
-        "runtime": {
-          "bin/placeholder/RentEase.LeaseApplicationLogic.dll": {}
-        }
       }
     }
   },
@@ -6684,11 +6673,6 @@
       "type": "project",
       "path": "../RentEase.API/RentEase.API.csproj",
       "msbuildProject": "../RentEase.API/RentEase.API.csproj"
-    },
-    "RentEase.LeaseApplicationLogic/1.0.0": {
-      "type": "project",
-      "path": "../RentEase.LeaseApplicationLogic/RentEase.LeaseApplicationLogic.csproj",
-      "msbuildProject": "../RentEase.LeaseApplicationLogic/RentEase.LeaseApplicationLogic.csproj"
     }
   },
   "projectFileDependencyGroups": {
@@ -6700,7 +6684,6 @@
       "Microsoft.EntityFrameworkCore.SqlServer >= 9.0.0",
       "Microsoft.EntityFrameworkCore.Tools >= 9.0.0",
       "RentEase.API >= 1.0.0",
-      "RentEase.LeaseApplicationLogic >= 1.0.0",
       "System.IdentityModel.Tokens.Jwt >= 8.16.0"
     ]
   },
@@ -6739,9 +6722,6 @@
             "C:\\Users\\User\\source\\repos\\RentEase\\RentEase.API\\RentEase.API.csproj": {
               "projectPath": "C:\\Users\\User\\source\\repos\\RentEase\\RentEase.API\\RentEase.API.csproj",
               "excludeAssets": "contentfiles"
-            },
-            "C:\\Users\\User\\source\\repos\\RentEase\\RentEase.LeaseApplicationLogic\\RentEase.LeaseApplicationLogic.csproj": {
-              "projectPath": "C:\\Users\\User\\source\\repos\\RentEase\\RentEase.LeaseApplicationLogic\\RentEase.LeaseApplicationLogic.csproj"
             }
           }
         }

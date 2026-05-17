@@ -4,7 +4,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using PropertyLeasing.API.Data;
 using PropertyLeasing.API.Models;
-using PropertyLeasing.LeaseApplicationLogic;
+using PropertyLeasing.BusinessLogic;
 
 namespace PropertyLeasing.API.Data;
 
