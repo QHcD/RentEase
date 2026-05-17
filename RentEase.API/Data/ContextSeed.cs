@@ -46,14 +46,24 @@ public static class ContextSeed
             await SeedUser(userManager, db, "staff9@propleasing.com",  "Saeed Al-Qassim",     "Staff@123", "MaintenanceStaff", "+97333446666", logger); // General
             await SeedUser(userManager, db, "staff10@propleasing.com", "Reem Al-Madani",      "Staff@123", "MaintenanceStaff", "+97333447777", logger); // General
 
-            // ── Reset current business data then reseed ──
-            await ResetBusinessDataAsync(db, logger);
-
-            // ── Staff profiles (idempotent/upsert) ──
+            // ── Staff profiles (idempotent/upsert — always safe to run) ──
             await SeedStaffProfilesAsync(db);
 
-            // ── Business data ──
-            await SeedBusinessDataAsync(db, logger);
+            // ── Business data: only seed on first run (skip if data already exists) ──
+            bool hasData = await db.Properties.AnyAsync();
+            if (!hasData)
+            {
+                logger.LogInformation("[Seed] No business data found — seeding from scratch.");
+                await SeedBusinessDataAsync(db, logger);
+            }
+            else
+            {
+                logger.LogInformation("[Seed] Business data already exists — skipping reset/reseed to preserve live changes.");
+            }
+
+            // ── Patches — idempotent, run every startup ──
+            await PatchMurtadhaSecondLeaseAsync(db, userManager, logger);
+            await PatchMurtadhaExtraLeasesAsync(db, userManager, logger);
         }
         catch (Exception ex) { logger.LogError(ex, "[Seed] Top-level failure."); }
     }
@@ -121,6 +131,9 @@ public static class ContextSeed
         logger.LogInformation("[Seed] Clearing existing business data...");
 
         await db.Database.ExecuteSqlRawAsync(@"
+-- Break circular FK: LeaseApplication.ParentLeaseID ↔ Lease.RenewLeaseApplicationID
+UPDATE [Lease]            SET RenewLeaseApplicationID = NULL WHERE RenewLeaseApplicationID IS NOT NULL;
+UPDATE [LeaseApplication] SET ParentLeaseID           = NULL WHERE ParentLeaseID           IS NOT NULL;
 DELETE FROM [LeaseLog];
 DELETE FROM [MaintenanceStatusHistory];
 IF OBJECT_ID('MaintenanceRequestLog') IS NOT NULL DELETE FROM [MaintenanceRequestLog];
@@ -762,6 +775,118 @@ DELETE FROM [MaintenanceStaff];
         );
         await db.SaveChangesAsync();
 
+        // ── Murtadha — Active lease expiring in 6 days ───────────────────────
+        var tM = await db.Users.FirstOrDefaultAsync(u => u.Email == "murtadhaahss05@gmail.com");
+        if (tM != null)
+        {
+            var leaseStart = DateTime.Today.AddMonths(-6);
+            var leaseEnd   = DateTime.Today.AddDays(6);
+
+            // Dedicated 2BR unit in Juffair Bay for Murtadha
+            var mUnit = new Unit
+            {
+                PropertyId         = juffair.PropertyId,
+                UnitNumber         = "J205",
+                UnitType           = "2BR Apartment",
+                Sizesqm            = 118,
+                MonthlyRent        = 280m,
+                AvailabilityStatus = "Occupied",
+                Amenities          = "Sea View, Balcony, Parking x2, Gym, Central AC"
+            };
+            db.Units.Add(mUnit);
+            await db.SaveChangesAsync();
+
+            // Lease application
+            var appM = new LeaseApplication
+            {
+                UserId             = tM.UserId,
+                UnitId             = mUnit.UnitId,
+                RequestedStartDate = leaseStart,
+                RequestedEndDate   = leaseEnd,
+                Status             = "Approved",
+                Notes              = "Sea view unit, 6-month stay. Paid upfront in cash.",
+                CreatedAt          = leaseStart.AddDays(-14)
+            };
+            db.LeaseApplications.Add(appM);
+            await db.SaveChangesAsync();
+
+            db.LeaseApplicationLogs.AddRange(
+                new LeaseApplicationLog { ApplicationId = appM.ApplicationId, Status = "Pending",   ChangedByUserId = tM.UserId,  CreatedAt = appM.CreatedAt },
+                new LeaseApplicationLog { ApplicationId = appM.ApplicationId, Status = "Screening", ChangedByUserId = mgr.UserId, CreatedAt = appM.CreatedAt.AddDays(2) },
+                new LeaseApplicationLog { ApplicationId = appM.ApplicationId, Status = "Approved",  ChangedByUserId = mgr.UserId, CreatedAt = appM.CreatedAt.AddDays(5) }
+            );
+            await db.SaveChangesAsync();
+
+            // Active lease — ends in 6 days
+            var leaseM = new Lease
+            {
+                ApplicationId   = appM.ApplicationId,
+                LeaseStartDate  = leaseStart,
+                LeaseEndDate    = leaseEnd,
+                MonthlyRent     = 280m,
+                SecurityDeposit = 560m,
+                PaymentPlanType = "Cash",
+                Status          = "Active",
+                CreatedAt       = leaseStart
+            };
+            db.Leases.Add(leaseM);
+            await db.SaveChangesAsync();
+
+            db.LeaseLogs.Add(new LeaseLog
+            {
+                LeaseId         = leaseM.LeaseId,
+                Status          = "Active",
+                ChangedByUserId = mgr.UserId,
+                Notes           = "Lease approved and activated. Payment plan: Cash.",
+                CreatedAt       = leaseStart
+            });
+
+            // 6 monthly cash payments — all paid
+            for (int m = 0; m < 6; m++)
+            {
+                db.PaymentRecords.Add(new PaymentRecord
+                {
+                    LeaseId       = leaseM.LeaseId,
+                    AmountDue     = 280m,
+                    AmountPaid    = 280m,
+                    DueDate       = leaseStart.AddMonths(m),
+                    PaidDate      = leaseStart.AddMonths(m).AddDays(1),
+                    PaymentStatus = "Paid",
+                    Notes         = "Cash"
+                });
+            }
+            await db.SaveChangesAsync();
+
+            // Notifications
+            db.Notifications.AddRange(
+                new Notification
+                {
+                    UserId           = tM.UserId,
+                    Message          = "Your lease application for unit J205 has been approved. Welcome!",
+                    NotificationType = "LeaseUpdate",
+                    Status           = "Read",
+                    CreatedAt        = appM.CreatedAt.AddDays(5)
+                },
+                new Notification
+                {
+                    UserId           = tM.UserId,
+                    Message          = $"Reminder: Your lease for unit J205 expires on {leaseEnd:dd MMM yyyy} (6 days remaining).",
+                    NotificationType = "LeaseUpdate",
+                    Status           = "Unread",
+                    CreatedAt        = DateTime.Today
+                },
+                new Notification
+                {
+                    UserId           = mgr.UserId,
+                    Message          = $"⚠️ Unit J205 (Murtadha) lease expires in 6 days — {leaseEnd:dd MMM yyyy}. Consider scheduling pre-tenancy maintenance.",
+                    NotificationType = "LeaseUpdate",
+                    Status           = "Unread",
+                    CreatedAt        = DateTime.Today
+                }
+            );
+            await db.SaveChangesAsync();
+        }
+
         // ── Notifications ─────────────────────────────────────────────────────
         db.Notifications.AddRange(
             Notif(t1.UserId,  "Your lease application for unit S101 has been approved. Welcome!",              "LeaseUpdate"),
@@ -829,4 +954,360 @@ DELETE FROM [MaintenanceStaff];
 
     private static Notification Notif(int userId, string message, string type) =>
         new Notification { UserId = userId, Message = message, NotificationType = type, Status = "Unread", CreatedAt = DateTime.Now };
+
+    // ── Helper: get the correct User record linked to an Identity account ────
+    private static async Task<User?> GetLinkedUserAsync(
+        UserManager<AppUser> userManager,
+        PropertyLeasingDbContext db,
+        string email)
+    {
+        var identity = await userManager.FindByEmailAsync(email);
+        if (identity == null) return null;
+
+        // Prefer the record linked via IdentityUserId (what GetAppUserAsync uses at login)
+        return await db.Users.FirstOrDefaultAsync(u => u.IdentityUserId == identity.Id)
+            ?? await db.Users.FirstOrDefaultAsync(u => u.Email == email);
+    }
+
+    // ── Patch: Murtadha second expiring lease (unit AM305 — Amwaj) ───────────
+    // Idempotent: skipped if unit already exists.
+    private static async Task PatchMurtadhaSecondLeaseAsync(
+        PropertyLeasingDbContext db,
+        UserManager<AppUser> userManager,
+        ILogger logger)
+    {
+        // Use identity-linked user to match what GetAppUserAsync returns at login
+        var tM  = await GetLinkedUserAsync(userManager, db, "murtadhaahss05@gmail.com");
+        var mgr = await db.Users.FirstOrDefaultAsync(u => u.Role == "PropertyManager");
+        var amwaj = await db.Properties.FirstOrDefaultAsync(p => p.Name == "Amwaj Waterfront Living");
+
+        if (tM == null || mgr == null || amwaj == null)
+        {
+            logger.LogWarning("[Patch] Cannot patch Murtadha second lease — required users or property not found.");
+            return;
+        }
+
+        // Skip only if AM305 already exists AND is linked to the correct user
+        var existingAM305 = await db.Units.FirstOrDefaultAsync(u => u.UnitNumber == "AM305");
+        if (existingAM305 != null)
+        {
+            bool linkedCorrectly = await db.LeaseApplications
+                .AnyAsync(a => a.UnitId == existingAM305.UnitId && a.UserId == tM.UserId);
+            if (linkedCorrectly)
+            {
+                logger.LogInformation("[Patch] AM305 already exists and correctly linked — skipping.");
+                return;
+            }
+            // Wrong user linked — remove and recreate
+            logger.LogInformation("[Patch] AM305 linked to wrong user — recreating.");
+            var oldApps = await db.LeaseApplications
+                .Include(a => a.Leases).ThenInclude(l => l.PaymentRecords)
+                .Include(a => a.Leases).ThenInclude(l => l.LeaseLogs)
+                .Include(a => a.ApplicationLogs)
+                .Where(a => a.UnitId == existingAM305.UnitId)
+                .ToListAsync();
+            foreach (var oldApp in oldApps)
+            {
+                foreach (var oldLease in oldApp.Leases)
+                {
+                    db.PaymentRecords.RemoveRange(oldLease.PaymentRecords);
+                    db.LeaseLogs.RemoveRange(oldLease.LeaseLogs);
+                }
+                db.Leases.RemoveRange(oldApp.Leases);
+                db.LeaseApplicationLogs.RemoveRange(oldApp.ApplicationLogs);
+            }
+            db.LeaseApplications.RemoveRange(oldApps);
+            db.Units.Remove(existingAM305);
+            await db.SaveChangesAsync();
+        }
+
+        var leaseStart = DateTime.Today.AddMonths(-4);
+        var leaseEnd   = DateTime.Today.AddDays(3); // expires in 3 days
+
+        var unit2 = new Unit
+        {
+            PropertyId         = amwaj.PropertyId,
+            UnitNumber         = "AM305",
+            UnitType           = "1BR Apartment",
+            Sizesqm            = 75,
+            MonthlyRent        = 200m,
+            AvailabilityStatus = "Occupied",
+            Amenities          = "Gym, Pool, Parking, Sea View"
+        };
+        db.Units.Add(unit2);
+        await db.SaveChangesAsync();
+
+        var app2 = new LeaseApplication
+        {
+            UserId             = tM.UserId,
+            UnitId             = unit2.UnitId,
+            RequestedStartDate = leaseStart,
+            RequestedEndDate   = leaseEnd,
+            Status             = "Approved",
+            Notes              = "Second unit — Amwaj. Monthly payment.",
+            CreatedAt          = leaseStart.AddDays(-7)
+        };
+        db.LeaseApplications.Add(app2);
+        await db.SaveChangesAsync();
+
+        var lease2 = new Lease
+        {
+            ApplicationId   = app2.ApplicationId,
+            LeaseStartDate  = leaseStart,
+            LeaseEndDate    = leaseEnd,
+            MonthlyRent     = 200m,
+            SecurityDeposit = 400m,
+            Status          = "Active",
+            PaymentPlanType = "Monthly",
+            CreatedAt       = leaseStart
+        };
+        db.Leases.Add(lease2);
+        await db.SaveChangesAsync();
+
+        // 4 monthly payments
+        for (int i = 0; i < 4; i++)
+        {
+            db.PaymentRecords.Add(new PaymentRecord
+            {
+                LeaseId       = lease2.LeaseId,
+                AmountDue     = 200m,
+                AmountPaid    = 200m,
+                DueDate       = leaseStart.AddMonths(i),
+                PaidDate      = leaseStart.AddMonths(i).AddDays(1),
+                PaymentStatus = "Paid",
+                Notes         = "Monthly payment"
+            });
+        }
+
+        db.Notifications.AddRange(
+            new Notification
+            {
+                UserId           = tM.UserId,
+                Message          = $"Reminder: Your lease for unit AM305 expires on {leaseEnd:dd MMM yyyy} (3 days remaining).",
+                NotificationType = "LeaseUpdate",
+                Status           = "Unread",
+                CreatedAt        = DateTime.Today
+            },
+            new Notification
+            {
+                UserId           = mgr.UserId,
+                Message          = $"⚠️ Unit AM305 (Murtadha) lease expires in 3 days — {leaseEnd:dd MMM yyyy}. Consider scheduling pre-tenancy maintenance.",
+                NotificationType = "LeaseUpdate",
+                Status           = "Unread",
+                CreatedAt        = DateTime.Today
+            }
+        );
+
+        await db.SaveChangesAsync();
+        logger.LogInformation("[Patch] Murtadha second lease (AM305 — Amwaj) created successfully.");
+    }
+
+    // ── Patch: Murtadha extra expiring leases for testing ─────────────────────
+    private static async Task PatchMurtadhaExtraLeasesAsync(
+        PropertyLeasingDbContext db,
+        UserManager<AppUser> userManager,
+        ILogger logger)
+    {
+        var tM  = await GetLinkedUserAsync(userManager, db, "murtadhaahss05@gmail.com");
+        var mgr = await db.Users.FirstOrDefaultAsync(u => u.Role == "PropertyManager");
+
+        if (tM == null || mgr == null)
+        {
+            logger.LogWarning("[Patch] Cannot patch extra leases — users not found.");
+            return;
+        }
+
+        // Check if R205 exists and is linked to the correct user
+        var existingR205 = await db.Units.FirstOrDefaultAsync(u => u.UnitNumber == "R205");
+        if (existingR205 != null)
+        {
+            bool linkedCorrectly = await db.LeaseApplications
+                .AnyAsync(a => a.UnitId == existingR205.UnitId && a.UserId == tM.UserId);
+            if (linkedCorrectly)
+            {
+                logger.LogInformation("[Patch] Extra Murtadha leases already exist and correctly linked — skipping.");
+                return;
+            }
+            // Remove wrong data — loop handled per-unit below
+        }
+
+        var riffa      = await db.Properties.FirstOrDefaultAsync(p => p.Name.Contains("Riffa"));
+        var seef       = await db.Properties.FirstOrDefaultAsync(p => p.Name.Contains("Seef"));
+        var diplomatic = await db.Properties.FirstOrDefaultAsync(p => p.Name.Contains("Diplomatic"));
+
+        if (riffa == null || seef == null || diplomatic == null)
+        {
+            logger.LogWarning("[Patch] Cannot patch extra leases — properties not found.");
+            return;
+        }
+
+        var extras = new[]
+        {
+            (prop: riffa,      unitNo: "R205",  type: "Studio",        sqm: 45.0,  rent: 150m, daysLeft: 1, plan: "Full",    months: 5),
+            (prop: seef,       unitNo: "S305",  type: "1BR Apartment", sqm: 68.0,  rent: 220m, daysLeft: 4, plan: "Monthly", months: 5),
+            (prop: diplomatic, unitNo: "DQ305", type: "2BR Apartment", sqm: 110.0, rent: 350m, daysLeft: 7, plan: "Monthly", months: 5),
+        };
+
+        foreach (var e in extras)
+        {
+            var leaseStart   = DateTime.Today.AddMonths(-e.months);
+            var leaseEnd     = DateTime.Today.AddDays(e.daysLeft);
+            var submittedAt  = leaseStart.AddDays(-10);
+            var screenedAt   = leaseStart.AddDays(-7);
+            var approvedAt   = leaseStart.AddDays(-5);
+
+            // Remove existing unit if linked to wrong user
+            var existingUnit = await db.Units.FirstOrDefaultAsync(u => u.UnitNumber == e.unitNo);
+            if (existingUnit != null)
+            {
+                bool ok = await db.LeaseApplications
+                    .AnyAsync(a => a.UnitId == existingUnit.UnitId && a.UserId == tM!.UserId);
+                if (ok)
+                {
+                    logger.LogInformation("[Patch] Unit {U} already correctly linked — skipping.", e.unitNo);
+                    continue;
+                }
+                var oldApps = await db.LeaseApplications
+                    .Include(a => a.Leases).ThenInclude(l => l.PaymentRecords)
+                    .Include(a => a.Leases).ThenInclude(l => l.LeaseLogs)
+                    .Include(a => a.ApplicationLogs)
+                    .Where(a => a.UnitId == existingUnit.UnitId)
+                    .ToListAsync();
+                foreach (var oa in oldApps)
+                {
+                    foreach (var ol in oa.Leases)
+                    {
+                        db.PaymentRecords.RemoveRange(ol.PaymentRecords);
+                        db.LeaseLogs.RemoveRange(ol.LeaseLogs);
+                    }
+                    db.Leases.RemoveRange(oa.Leases);
+                    db.LeaseApplicationLogs.RemoveRange(oa.ApplicationLogs);
+                }
+                db.LeaseApplications.RemoveRange(oldApps);
+                db.Units.Remove(existingUnit);
+                await db.SaveChangesAsync();
+                logger.LogInformation("[Patch] Removed wrong-user data for unit {U}.", e.unitNo);
+            }
+
+            // Unit
+            var unit = new Unit
+            {
+                PropertyId         = e.prop.PropertyId,
+                UnitNumber         = e.unitNo,
+                UnitType           = e.type,
+                Sizesqm            = e.sqm,
+                MonthlyRent        = e.rent,
+                AvailabilityStatus = "Occupied",
+                Amenities          = "Parking, Gym, 24h Security"
+            };
+            db.Units.Add(unit);
+            await db.SaveChangesAsync();
+
+            // Application
+            var app = new LeaseApplication
+            {
+                UserId             = tM.UserId,
+                UnitId             = unit.UnitId,
+                RequestedStartDate = leaseStart,
+                RequestedEndDate   = leaseEnd,
+                Status             = "Approved",
+                Notes              = $"{e.type} unit. {(e.plan == "Full" ? "Full upfront payment." : "Monthly installments.")}",
+                CreatedAt          = submittedAt
+            };
+            db.LeaseApplications.Add(app);
+            await db.SaveChangesAsync();
+
+            // Application status logs
+            db.LeaseApplicationLogs.AddRange(
+                new LeaseApplicationLog { ApplicationId = app.ApplicationId, Status = "Pending",   ChangedByUserId = tM.UserId,  CreatedAt = submittedAt },
+                new LeaseApplicationLog { ApplicationId = app.ApplicationId, Status = "Screening", ChangedByUserId = mgr.UserId, CreatedAt = screenedAt },
+                new LeaseApplicationLog { ApplicationId = app.ApplicationId, Status = "Approved",  ChangedByUserId = mgr.UserId, CreatedAt = approvedAt }
+            );
+
+            // Lease
+            var lease = new Lease
+            {
+                ApplicationId   = app.ApplicationId,
+                LeaseStartDate  = leaseStart,
+                LeaseEndDate    = leaseEnd,
+                MonthlyRent     = e.rent,
+                SecurityDeposit = e.rent * 2,
+                Status          = "Active",
+                PaymentPlanType = e.plan,
+                CreatedAt       = approvedAt
+            };
+            db.Leases.Add(lease);
+            await db.SaveChangesAsync();
+
+            // Lease logs
+            db.LeaseLogs.AddRange(
+                new LeaseLog { LeaseId = lease.LeaseId, Status = "PendingPayment", ChangedByUserId = mgr.UserId,  Notes = "Lease created upon approval. Awaiting payment.", CreatedAt = approvedAt },
+                new LeaseLog { LeaseId = lease.LeaseId, Status = "Active",         ChangedByUserId = tM.UserId,   Notes = $"Lease activated after {e.plan.ToLower()} payment.", CreatedAt = leaseStart }
+            );
+
+            // Payment records — all months paid
+            if (e.plan == "Full")
+            {
+                db.PaymentRecords.Add(new PaymentRecord
+                {
+                    LeaseId       = lease.LeaseId,
+                    AmountDue     = e.rent * e.months,
+                    AmountPaid    = e.rent * e.months,
+                    DueDate       = leaseStart,
+                    PaidDate      = leaseStart,
+                    PaymentStatus = "Paid",
+                    Notes         = "Full upfront payment at activation."
+                });
+            }
+            else
+            {
+                for (int i = 0; i < e.months; i++)
+                {
+                    db.PaymentRecords.Add(new PaymentRecord
+                    {
+                        LeaseId       = lease.LeaseId,
+                        AmountDue     = e.rent,
+                        AmountPaid    = e.rent,
+                        DueDate       = leaseStart.AddMonths(i),
+                        PaidDate      = leaseStart.AddMonths(i).AddDays(2),
+                        PaymentStatus = "Paid",
+                        Notes         = i == 0 ? "First installment paid at activation." : $"Month {i + 1} installment paid."
+                    });
+                }
+            }
+
+            // Notifications
+            db.Notifications.AddRange(
+                new Notification
+                {
+                    UserId           = tM.UserId,
+                    Message          = $"Your lease application for unit {e.unitNo} has been approved. Welcome!",
+                    NotificationType = "LeaseUpdate",
+                    Status           = "Read",
+                    CreatedAt        = approvedAt
+                },
+                new Notification
+                {
+                    UserId           = tM.UserId,
+                    Message          = $"Reminder: Your lease for unit {e.unitNo} expires on {leaseEnd:dd MMM yyyy} ({e.daysLeft} day(s) remaining).",
+                    NotificationType = "LeaseUpdate",
+                    Status           = "Unread",
+                    CreatedAt        = DateTime.Today
+                },
+                new Notification
+                {
+                    UserId           = mgr.UserId,
+                    Message          = $"⚠️ Unit {e.unitNo} ({e.prop.Name}) — Murtadha's lease expires in {e.daysLeft} day(s) on {leaseEnd:dd MMM yyyy}.",
+                    NotificationType = "LeaseUpdate",
+                    Status           = "Unread",
+                    CreatedAt        = DateTime.Today
+                }
+            );
+
+            await db.SaveChangesAsync();
+            logger.LogInformation("[Patch] Created expiring lease for unit {Unit} — expires in {Days} day(s).", e.unitNo, e.daysLeft);
+        }
+
+        logger.LogInformation("[Patch] All extra Murtadha leases created (R205, S305, DQ305).");
+    }
 }

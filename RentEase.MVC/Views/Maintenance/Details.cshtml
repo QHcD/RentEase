@@ -9,6 +9,7 @@
         "InProgress" => "primary",
         "Resolved"   => "success",
         "Closed"     => "dark",
+        "Cancelled"  => "danger",
         _            => "secondary"
     };
     string PriorityColor(string p) => p switch {
@@ -25,9 +26,16 @@
         _            => "🔨"
     };
 
-    bool canUpdate = (role == "PropertyManager" || role == "MaintenanceStaff")
-                  && Model.Status != "Resolved"
-                  && Model.Status != "Closed";
+    bool isCancelled = Model.Status == "Cancelled";
+    bool canUpdate   = (role == "PropertyManager" || role == "MaintenanceStaff")
+                    && Model.Status != "Resolved"
+                    && Model.Status != "Closed"
+                    && !isCancelled;
+
+    // Pre-tenancy lock: staff cannot resolve before the scheduled date
+    bool resolvedLocked = role == "MaintenanceStaff"
+                       && Model.ScheduledDate.HasValue
+                       && DateTime.Today < Model.ScheduledDate.Value.Date;
 
     var skillIcons = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
@@ -109,6 +117,21 @@
         <i class="fa fa-clipboard-list me-2 text-warning"></i>Request Details
     </h4>
 </div>
+
+@* ── Cancelled banner ─────────────────────────────────────────────────────── *@
+@if (isCancelled)
+{
+    <div class="alert alert-danger d-flex align-items-start gap-3 shadow-sm mb-3">
+        <i class="fa fa-ban fa-lg mt-1"></i>
+        <div>
+            <strong>This request has been cancelled</strong>
+            @if (!string.IsNullOrEmpty(Model.CancellationReason))
+            {
+                <div class="mt-1">Reason: <strong>@Model.CancellationReason</strong></div>
+            }
+        </div>
+    </div>
+}
 
 @* ── Not-assigned notice for MaintenanceStaff viewing someone else's request ── *@
 @if (ViewBag.NotAssigned == true)
@@ -242,6 +265,13 @@ else
                     <span class="info-label"><i class="fa fa-calendar me-1"></i>Submitted</span>
                     <span class="info-value">@Model.SubmittedAt.ToString("dd MMMM yyyy, hh:mm tt")</span>
                 </div>
+                @if (Model.ScheduledDate.HasValue)
+                {
+                    <div class="info-row">
+                        <span class="info-label"><i class="fa fa-calendar-check me-1 text-warning"></i>Scheduled</span>
+                        <span class="info-value text-warning fw-semibold">@Model.ScheduledDate.Value.ToString("dd MMMM yyyy")</span>
+                    </div>
+                }
                 @if (Model.ResolvedAt.HasValue)
                 {
                     <div class="info-row">
@@ -254,6 +284,13 @@ else
                     <div class="info-row">
                         <span class="info-label"><i class="fa fa-note-sticky me-1"></i>Resolution</span>
                         <span class="info-value">@Model.ResolutionNotes</span>
+                    </div>
+                }
+                @if (!string.IsNullOrEmpty(Model.CancellationReason))
+                {
+                    <div class="info-row">
+                        <span class="info-label"><i class="fa fa-ban me-1 text-danger"></i>Cancelled</span>
+                        <span class="info-value text-danger">@Model.CancellationReason</span>
                     </div>
                 }
 
@@ -301,12 +338,13 @@ else
                         {
                             var dotColor = h.NewStatus switch
                             {
-                                "Submitted" => "#6c757d",
-                                "Assigned" => "#0dcaf0",
+                                "Submitted"  => "#6c757d",
+                                "Assigned"   => "#0dcaf0",
                                 "InProgress" => "#0d6efd",
-                                "Resolved" => "#198754",
-                                "Closed" => "#212529",
-                                _ => "#adb5bd"
+                                "Resolved"   => "#198754",
+                                "Closed"     => "#212529",
+                                "Cancelled"  => "#dc3545",
+                                _            => "#adb5bd"
                             };
                             <div class="timeline-item">
                                 <div class="timeline-dot" style="background:@dotColor; box-shadow:0 0 0 2px @dotColor;"></div>
@@ -345,7 +383,18 @@ else
                 </div>
                 <div class="card-body p-4">
 
-                    @if (Model.Status == "Resolved" || Model.Status == "Closed")
+                    @if (isCancelled)
+                    {
+                        <div class="alert alert-danger mb-0">
+                            <i class="fa fa-ban me-2"></i>
+                            This request has been <strong>Cancelled</strong> and cannot be modified.
+                            @if (!string.IsNullOrEmpty(Model.CancellationReason))
+                            {
+                                <div class="small mt-1">Reason: <strong>@Model.CancellationReason</strong></div>
+                            }
+                        </div>
+                    }
+                    else if (Model.Status == "Resolved" || Model.Status == "Closed")
                     {
                         <div class="alert alert-success mb-0">
                             <i class="fa fa-lock me-2"></i>
@@ -474,10 +523,26 @@ else
                                     }
                                     else if (Model.Status == "InProgress")
                                     {
-                                        <button type="submit" class="btn btn-success btn-lg flex-fill"
-                                                onclick="showResProof(); document.getElementById('newStatusInput').value='Resolved'">
-                                            <i class="fa fa-check me-2"></i>Resolved
-                                        </button>
+                                        if (resolvedLocked)
+                                        {
+                                            <div class="w-100">
+                                                <button type="button" class="btn btn-success btn-lg flex-fill w-100" disabled>
+                                                    <i class="fa fa-lock me-2"></i>Resolved
+                                                </button>
+                                                <div class="alert alert-warning mt-2 mb-0 py-2 px-3 small">
+                                                    <i class="fa fa-clock me-1"></i>
+                                                    <strong>Available from @Model.ScheduledDate!.Value.ToString("dd MMM yyyy")</strong>
+                                                    — this pre-tenancy request cannot be resolved before the scheduled work date.
+                                                </div>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <button type="submit" class="btn btn-success btn-lg flex-fill"
+                                                    onclick="showResProof(); document.getElementById('newStatusInput').value='Resolved'">
+                                                <i class="fa fa-check me-2"></i>Resolved
+                                            </button>
+                                        }
                                     }
                                     else
                                     {

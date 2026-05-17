@@ -46,6 +46,44 @@ public class LeaseApplicationsController : Controller
         return appUser;
     }
 
+    // ── Cancel open pre-tenancy maintenance for a unit ────────────────────────
+    // Does NOT call SaveChangesAsync — caller is responsible for saving.
+    private async Task CancelPreTenancyMaintenanceAsync(int unitId, string reason, int changedByUserId)
+    {
+        var openRequests = await _db.MaintenanceRequests
+            .Where(r => r.UnitId == unitId &&
+                        r.ScheduledDate.HasValue &&
+                        r.Status != "Cancelled" && r.Status != "Resolved" && r.Status != "Closed")
+            .ToListAsync();
+
+        var now = DateTime.Now;
+        foreach (var req in openRequests)
+        {
+            var oldStatus      = req.Status;
+            req.Status             = "Cancelled";
+            req.CancellationReason = reason;
+
+            _db.MaintenanceStatusHistories.Add(new MaintenanceStatusHistory
+            {
+                RequestId       = req.RequestId,
+                OldStatus       = oldStatus,
+                NewStatus       = "Cancelled",
+                Notes           = reason,
+                ChangedAt       = now,
+                ChangedByUserId = changedByUserId
+            });
+
+            _db.MaintenanceRequestLogs.Add(new MaintenanceRequestLog
+            {
+                RequestId         = req.RequestId,
+                Action            = "Cancelled",
+                Details           = $"Pre-tenancy maintenance auto-cancelled. Reason: {reason}",
+                PerformedByUserId = changedByUserId,
+                PerformedAt       = now
+            });
+        }
+    }
+
     // ── Auto-transition lease statuses based on date ──────────────────────────
     private async Task UpdateLeaseStatusesAsync()
     {
@@ -96,6 +134,11 @@ public class LeaseApplicationsController : Controller
                                       $"{lease.Termination.TerminationDate:dd MMM yyyy}.",
                     CreatedAt       = DateTime.Now
                 });
+
+                // Cancel any pending pre-tenancy maintenance for this unit
+                await CancelPreTenancyMaintenanceAsync(
+                    lease.Application.UnitId, "Lease Terminated", lease.Application.UserId);
+
                 changed = true;
             }
         }
@@ -122,6 +165,10 @@ public class LeaseApplicationsController : Controller
                     Notes           = "Lease marked Renewed — renewal application is approved.",
                     CreatedAt       = DateTime.Now
                 });
+
+                // Cancel any pending pre-tenancy maintenance — tenant renewed, no turnover needed
+                await CancelPreTenancyMaintenanceAsync(
+                    lease.Application.UnitId, "Lease Renewed", lease.Application.UserId);
             }
             else
             {
@@ -137,6 +184,10 @@ public class LeaseApplicationsController : Controller
                     Notes           = "Lease terminated — end date passed without an approved renewal.",
                     CreatedAt       = DateTime.Now
                 });
+
+                // Cancel any pending pre-tenancy maintenance
+                await CancelPreTenancyMaintenanceAsync(
+                    lease.Application.UnitId, "Lease Terminated", lease.Application.UserId);
 
                 // Reject any non-approved renewal application
                 if (lease.RenewLeaseApplication != null &&
@@ -662,6 +713,19 @@ public class LeaseApplicationsController : Controller
                 $"Renewal application submitted by {appUser.FullName} for unit {lease.Application.Unit.UnitNumber}.",
                 "LeaseUpdate");
 
+        // Email confirmation to tenant
+        try
+        {
+            await _emailService.SendRenewalSubmittedAsync(
+                toEmail:     appUser.Email,
+                toName:      appUser.FullName,
+                unitNumber:  lease.Application.Unit.UnitNumber,
+                propertyName: lease.Application.Unit.Property?.Name ?? "",
+                newEndDate:  model.RequestedEndDate,
+                applicationId: application.ApplicationId);
+        }
+        catch { /* email failure must not block the flow */ }
+
         TempData["Success"] = "Renewal application submitted successfully. Status: Pending.";
         return RedirectToAction("LeaseDetails", new { id = model.LeaseId });
     }
@@ -1056,6 +1120,9 @@ public class LeaseApplicationsController : Controller
             application.Unit.UnitNumber, application.Unit.Property?.Name ?? "",
             application.ApplicationId); }
         catch { /* email failure should not block the flow */ }
+
+        // Pre-tenancy maintenance cancellation happens at payment confirmation, not here.
+        // (Tenant must pay first to confirm renewal before we cancel the maintenance.)
 
         TempData["Success"] =
             $"Application approved. Lease created. {conflicting.Count} conflicting application(s) auto-rejected.";

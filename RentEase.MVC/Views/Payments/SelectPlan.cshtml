@@ -25,20 +25,53 @@
             <div class="row text-center">
                 <div class="col-4 border-end">
                     <div class="text-muted small">Lease Period</div>
-                    <div class="fw-bold">@Model.TotalMonths months</div>
-                    <div class="text-muted small">@Model.LeaseStartDate.ToString("dd MMM yyyy") – @Model.LeaseEndDate.ToString("dd MMM yyyy")</div>
+                    @if (Model.IsPartialMonth)
+                    {
+                        <div class="fw-bold text-warning">@Model.ActualDays days</div>
+                        <div class="badge bg-warning text-dark mt-1" style="font-size:.72rem;">
+                            Pro-rated
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="fw-bold">@Model.TotalMonths month@(Model.TotalMonths > 1 ? "s" : "")</div>
+                    }
+                    <div class="text-muted small mt-1">
+                        @Model.LeaseStartDate.ToString("dd MMM yyyy") – @Model.LeaseEndDate.ToString("dd MMM yyyy")
+                    </div>
                 </div>
                 <div class="col-4 border-end">
                     <div class="text-muted small">Monthly Rent</div>
                     <div class="fw-bold text-success fs-5">BD @Model.MonthlyRent.ToString("N2")</div>
+                    @if (Model.IsPartialMonth)
+                    {
+                        <div class="text-muted" style="font-size:.75rem;">
+                            (@Model.ActualDays/30 days)
+                        </div>
+                    }
                 </div>
                 <div class="col-4">
-                    <div class="text-muted small">Total Amount</div>
+                    <div class="text-muted small">
+                        @(Model.IsPartialMonth ? "Pro-rated Amount" : "Total Amount")
+                    </div>
                     <div class="fw-bold text-primary fs-5">BD @Model.TotalAmount.ToString("N2")</div>
                 </div>
             </div>
         </div>
     </div>
+
+    @* Partial-month info banner *@
+    @if (Model.IsPartialMonth)
+    {
+        <div class="alert alert-warning d-flex gap-2 align-items-center mb-4 py-2">
+            <i class="fa fa-circle-info fa-lg text-warning"></i>
+            <div>
+                <strong>Short-term lease (@Model.ActualDays days)</strong> — amount is calculated proportionally:
+                <strong>BD @Model.MonthlyRent.ToString("N2") × @Model.ActualDays / 30 = BD @Model.TotalAmount.ToString("N2")</strong>.
+                Only a single full payment is available for leases under one month.
+            </div>
+        </div>
+    }
 
     <form asp-action="SelectPlan" method="post">
         <input type="hidden" asp-for="LeaseId" />
@@ -50,53 +83,69 @@
         <input type="hidden" asp-for="SecurityDeposit" />
         <input type="hidden" asp-for="TotalMonths" />
         <input type="hidden" asp-for="TotalAmount" />
+        <input type="hidden" asp-for="ActualDays" />
+        <input type="hidden" asp-for="IsPartialMonth" />
 
-        <div class="row g-3 mb-4">
+        <div class="row g-3 mb-4 @(Model.IsPartialMonth ? "justify-content-center" : "")">
+
             <!-- Full Payment Card -->
-            <div class="col-md-6">
+            <div class="@(Model.IsPartialMonth ? "col-md-6" : "col-md-6")">
                 <label class="w-100 h-100" style="cursor:pointer;">
-                    <input type="radio" asp-for="SelectedPlan" value="Full" class="d-none plan-radio" id="planFull" />
-                    <div class="card h-100 border-2 plan-card" id="cardFull">
+                    <input type="radio" asp-for="SelectedPlan" value="Full"
+                           class="d-none plan-radio" id="planFull" />
+                    <div class="card h-100 border-2 plan-card @(Model.IsPartialMonth ? "border-success shadow" : "")"
+                         id="cardFull">
                         <div class="card-body text-center p-4">
                             <div class="mb-3">
                                 <i class="fa fa-money-bill-wave fa-3x text-success"></i>
                             </div>
                             <h5 class="fw-bold">Pay in Full</h5>
-                            <p class="text-muted small mb-3">Pay the entire lease amount now and enjoy peace of mind.</p>
+                            <p class="text-muted small mb-3">
+                                @if (Model.IsPartialMonth)
+                                { <span>Pro-rated payment for @Model.ActualDays days.</span> }
+                                else
+                                { <span>Pay the entire lease amount now and enjoy peace of mind.</span> }
+                            </p>
                             <div class="bg-success bg-opacity-10 rounded p-2">
                                 <div class="text-muted small">Total Due Now</div>
                                 <div class="fs-4 fw-bold text-success">BD @Model.TotalAmount.ToString("N2")</div>
                             </div>
                             <div class="mt-2">
-                                <span class="badge bg-success">One-time payment</span>
+                                <span class="badge bg-success">
+                                    @(Model.IsPartialMonth ? "One-time pro-rated payment" : "One-time payment")
+                                </span>
                             </div>
                         </div>
                     </div>
                 </label>
             </div>
 
-            <!-- Monthly Installments Card -->
-            <div class="col-md-6">
-                <label class="w-100 h-100" style="cursor:pointer;">
-                    <input type="radio" asp-for="SelectedPlan" value="Monthly" class="d-none plan-radio" id="planMonthly" />
-                    <div class="card h-100 border-2 plan-card" id="cardMonthly">
-                        <div class="card-body text-center p-4">
-                            <div class="mb-3">
-                                <i class="fa fa-calendar-alt fa-3x text-primary"></i>
-                            </div>
-                            <h5 class="fw-bold">Monthly Installments</h5>
-                            <p class="text-muted small mb-3">Pay month by month. First installment is due today.</p>
-                            <div class="bg-primary bg-opacity-10 rounded p-2">
-                                <div class="text-muted small">Per Month</div>
-                                <div class="fs-4 fw-bold text-primary">BD @Model.MonthlyRent.ToString("N2")</div>
-                            </div>
-                            <div class="mt-2">
-                                <span class="badge bg-primary">@Model.TotalMonths installments</span>
+            @* Monthly Installments — hidden for partial-month leases *@
+            @if (!Model.IsPartialMonth)
+            {
+                <div class="col-md-6">
+                    <label class="w-100 h-100" style="cursor:pointer;">
+                        <input type="radio" asp-for="SelectedPlan" value="Monthly"
+                               class="d-none plan-radio" id="planMonthly" />
+                        <div class="card h-100 border-2 plan-card" id="cardMonthly">
+                            <div class="card-body text-center p-4">
+                                <div class="mb-3">
+                                    <i class="fa fa-calendar-alt fa-3x text-primary"></i>
+                                </div>
+                                <h5 class="fw-bold">Monthly Installments</h5>
+                                <p class="text-muted small mb-3">Pay month by month. First installment is due today.</p>
+                                <div class="bg-primary bg-opacity-10 rounded p-2">
+                                    <div class="text-muted small">Per Month</div>
+                                    <div class="fs-4 fw-bold text-primary">BD @Model.MonthlyRent.ToString("N2")</div>
+                                </div>
+                                <div class="mt-2">
+                                    <span class="badge bg-primary">@Model.TotalMonths installments</span>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                </label>
-            </div>
+                    </label>
+                </div>
+            }
         </div>
 
         <div class="d-flex justify-content-between">
@@ -104,7 +153,8 @@
                class="btn btn-outline-secondary">
                 <i class="fa fa-arrow-left me-1"></i>Back
             </a>
-            <button type="submit" class="btn btn-primary px-4" id="proceedBtn" disabled>
+            <button type="submit" class="btn btn-primary px-4" id="proceedBtn"
+                    @(Model.IsPartialMonth ? "" : "disabled")>
                 <i class="fa fa-arrow-right me-1"></i>Proceed to Checkout
             </button>
         </div>
@@ -113,15 +163,26 @@
 
 @section Scripts {
 <script>
-    const radios = document.querySelectorAll('.plan-radio');
+    const radios     = document.querySelectorAll('.plan-radio');
     const proceedBtn = document.getElementById('proceedBtn');
+
+    // For partial month: Full is already pre-selected — mark card immediately
+    document.addEventListener('DOMContentLoaded', () => {
+        const checked = document.querySelector('.plan-radio:checked');
+        if (checked) {
+            const card = document.getElementById('card' + (checked.value === 'Full' ? 'Full' : 'Monthly'));
+            if (card) {
+                card.classList.add(checked.value === 'Full' ? 'border-success' : 'border-primary', 'shadow');
+                proceedBtn.disabled = false;
+            }
+        }
+    });
 
     radios.forEach(radio => {
         radio.addEventListener('change', function () {
-            document.querySelectorAll('.plan-card').forEach(c => {
-                c.classList.remove('border-primary', 'border-success', 'shadow');
-            });
-            const card = document.getElementById('card' + (this.value === 'Full' ? 'Full' : 'Monthly'));
+            document.querySelectorAll('.plan-card').forEach(c =>
+                c.classList.remove('border-primary', 'border-success', 'shadow'));
+            const card  = document.getElementById('card' + (this.value === 'Full' ? 'Full' : 'Monthly'));
             const color = this.value === 'Full' ? 'border-success' : 'border-primary';
             card.classList.add(color, 'shadow');
             proceedBtn.disabled = false;

@@ -38,15 +38,31 @@
 <div class="row g-3">
     @foreach (var u in Model)
     {
-        var statusColor = u.AvailabilityStatus == "Available" ? "success"
-                        : u.AvailabilityStatus == "Occupied" ? "danger" : "warning";
+        var isMaintenance = u.AvailabilityStatus == "UnderMaintenance";
+        var statusColor   = u.AvailabilityStatus == "Available"        ? "success"
+                          : u.AvailabilityStatus == "Occupied"          ? "danger"
+                          : isMaintenance                               ? "warning"
+                          :                                               "secondary";
+        var statusIcon    = u.AvailabilityStatus == "Available"        ? "fa-check-circle"
+                          : u.AvailabilityStatus == "Occupied"          ? "fa-user"
+                          : isMaintenance                               ? "fa-wrench"
+                          :                                               "fa-circle";
+        var statusLabel   = isMaintenance ? "Under Maintenance" : u.AvailabilityStatus;
 
         <div class="col-md-4">
-            <div class="card h-100 shadow-sm">
+            <div class="card h-100 shadow-sm @(isMaintenance ? "border-warning border-2" : "")">
+                @if (isMaintenance)
+                {
+                    <div class="card-img-top d-flex align-items-center justify-content-center"
+                         style="height:6px; background:repeating-linear-gradient(45deg,#ffc107,#ffc107 6px,#fff3cd 6px,#fff3cd 12px);">
+                    </div>
+                }
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start mb-2">
                         <h5 class="card-title mb-0">Unit @u.UnitNumber</h5>
-                        <span class="badge bg-@statusColor">@u.AvailabilityStatus</span>
+                        <span class="badge bg-@statusColor">
+                            <i class="fa @statusIcon me-1"></i>@statusLabel
+                        </span>
                     </div>
                     <span class="badge bg-secondary mb-2">@u.UnitType</span>
                     <div class="mb-2">
@@ -81,6 +97,12 @@
                            class="btn btn-success btn-sm flex-fill">
                             <i class="fa fa-file-alt me-1"></i> Apply
                         </a>
+                    }
+                    else if (isMaintenance)
+                    {
+                        <span class="btn btn-warning btn-sm flex-fill disabled" style="cursor:not-allowed; opacity:.85;">
+                            <i class="fa fa-wrench me-1"></i>Under Maintenance
+                        </span>
                     }
                 </div>
             </div>

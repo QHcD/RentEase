@@ -8,7 +8,11 @@
       "PowerShell(Get-Process dotnet -ErrorAction SilentlyContinue)",
       "Bash(dotnet ef *)",
       "Bash(cd /tmp)",
-      "Bash(python3 -c ' *)"
+      "Bash(python3 -c ' *)",
+      "Bash(git show *)",
+      "Read(//tmp/**)",
+      "Bash(git checkout *)",
+      "Bash(dir \"C:\\\\Users\\\\murta\\\\Desktop\\\\RentEase\\\\RentEase.MVC\\\\Controllers\\\\\" /b)"
     ]
   }
 }

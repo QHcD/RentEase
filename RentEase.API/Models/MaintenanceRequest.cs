@@ -50,8 +50,15 @@ public partial class MaintenanceRequest
     [Column(TypeName = "datetime")]
     public DateTime? ResolvedAt { get; set; }
 
+    // For pre-tenancy requests: earliest date staff can mark as Resolved
+    [Column(TypeName = "datetime")]
+    public DateTime? ScheduledDate { get; set; }
+
     [StringLength(500)]
     public string? ResolutionNotes { get; set; }
+
+    [StringLength(200)]
+    public string? CancellationReason { get; set; }
 
     // Optional photo uploaded by tenant when submitting
     [StringLength(300)]

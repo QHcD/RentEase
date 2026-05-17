@@ -196,6 +196,22 @@ public class PaymentsController : Controller
         _emailService = emailService;
     }
 
+    // ── Lease duration helper ─────────────────────────────────────────────────
+    // < 30 days  → pro-rated single payment, isPartialMonth = true
+    // >= 30 days → ceiling months × monthly rent
+    private static (int months, decimal total, bool isPartial, int days)
+        CalcLease(DateTime start, DateTime end, decimal monthlyRent)
+    {
+        int days = (int)(end - start).TotalDays;
+        if (days < 30)
+        {
+            decimal prorated = Math.Round(monthlyRent * days / 30m, 3);
+            return (1, prorated, true, days);
+        }
+        int months = (int)Math.Ceiling(days / 30.44);
+        return (months, monthlyRent * months, false, days);
+    }
+
     private async Task<User?> GetAppUserAsync()
     {
         var identity = await _userManager.GetUserAsync(User);
@@ -535,7 +551,9 @@ public class PaymentsController : Controller
             return RedirectToAction("Index", "LeaseApplications", new { tab = "leases" });
         }
 
-        int totalMonths = (int)Math.Ceiling((lease.LeaseEndDate - lease.LeaseStartDate).TotalDays / 30.44);
+        var (months, total, isPartial, days) =
+            CalcLease(lease.LeaseStartDate, lease.LeaseEndDate, lease.MonthlyRent);
+
         return View(new SelectPlanViewModel
         {
             LeaseId         = lease.LeaseId,
@@ -545,8 +563,11 @@ public class PaymentsController : Controller
             LeaseEndDate    = lease.LeaseEndDate,
             MonthlyRent     = lease.MonthlyRent,
             SecurityDeposit = lease.SecurityDeposit,
-            TotalMonths     = totalMonths,
-            TotalAmount     = lease.MonthlyRent * totalMonths
+            TotalMonths     = months,
+            TotalAmount     = total,
+            ActualDays      = days,
+            IsPartialMonth  = isPartial,
+            SelectedPlan    = isPartial ? "Full" : null   // auto-select Full for partial
         });
     }
 
@@ -563,9 +584,11 @@ public class PaymentsController : Controller
                 .FirstOrDefaultAsync(l => l.LeaseId == vm.LeaseId);
             if (lease != null)
             {
-                int m = (int)Math.Ceiling((lease.LeaseEndDate - lease.LeaseStartDate).TotalDays / 30.44);
-                vm.TotalMonths = m; vm.TotalAmount = lease.MonthlyRent * m;
-                vm.MonthlyRent = lease.MonthlyRent; vm.SecurityDeposit = lease.SecurityDeposit;
+                var (m, tot, partial, d) = CalcLease(lease.LeaseStartDate, lease.LeaseEndDate, lease.MonthlyRent);
+                vm.TotalMonths    = m;   vm.TotalAmount   = tot;
+                vm.ActualDays     = d;   vm.IsPartialMonth = partial;
+                vm.MonthlyRent    = lease.MonthlyRent;
+                vm.SecurityDeposit = lease.SecurityDeposit;
             }
             return View(vm);
         }
@@ -588,7 +611,9 @@ public class PaymentsController : Controller
         if (lease.Status != "PendingPayment")
             return RedirectToAction("Index", "LeaseApplications", new { tab = "leases" });
 
-        int totalMonths = (int)Math.Ceiling((lease.LeaseEndDate - lease.LeaseStartDate).TotalDays / 30.44);
+        var (totalMonths, totalAmount, isPartial, _) =
+            CalcLease(lease.LeaseStartDate, lease.LeaseEndDate, lease.MonthlyRent);
+
         return View(new CheckoutViewModel
         {
             LeaseId         = lease.LeaseId,
@@ -597,9 +622,10 @@ public class PaymentsController : Controller
             PlanType        = plan,
             MonthlyRent     = lease.MonthlyRent,
             TotalMonths     = totalMonths,
-            AmountToPay     = plan == "Full" ? lease.MonthlyRent * totalMonths : lease.MonthlyRent,
+            AmountToPay     = plan == "Full" ? totalAmount : lease.MonthlyRent,
             PlanDescription = plan == "Full"
-                ? $"Full payment for {totalMonths} months"
+                ? (isPartial ? $"Pro-rated payment ({(int)(lease.LeaseEndDate - lease.LeaseStartDate).TotalDays} days)"
+                             : $"Full payment for {totalMonths} month{(totalMonths > 1 ? "s" : "")}")
                 : $"Installment 1 of {totalMonths}"
         });
     }
@@ -628,19 +654,22 @@ public class PaymentsController : Controller
         }
 
         var now = DateTime.Now;
-        int totalMonths = (int)Math.Ceiling((lease.LeaseEndDate - lease.LeaseStartDate).TotalDays / 30.44);
+        var (totalMonths, totalAmount, isPartial, actualDays) =
+            CalcLease(lease.LeaseStartDate, lease.LeaseEndDate, lease.MonthlyRent);
 
         if (vm.PlanType == "Full")
         {
             _db.PaymentRecords.Add(new PaymentRecord
             {
                 LeaseId       = lease.LeaseId,
-                AmountDue     = lease.MonthlyRent * totalMonths,
-                AmountPaid    = lease.MonthlyRent * totalMonths,
+                AmountDue     = totalAmount,
+                AmountPaid    = totalAmount,
                 DueDate       = lease.LeaseStartDate,
                 PaidDate      = now,
                 PaymentStatus = "Paid",
-                Notes         = "Full payment at lease activation."
+                Notes         = isPartial
+                    ? $"Pro-rated payment for {actualDays} days at lease activation."
+                    : "Full payment at lease activation."
             });
         }
         else
@@ -676,6 +705,41 @@ public class PaymentsController : Controller
                 : $"Lease activated after {vm.PlanType} payment.",
             CreatedAt       = now
         });
+
+        // Renewal payment confirmed → cancel any open pre-tenancy maintenance for this unit
+        // (tenant is staying, no unit turnover needed)
+        if (lease.Application.ParentLeaseId.HasValue)
+        {
+            var openPreTenancy = await _db.MaintenanceRequests
+                .Where(r => r.UnitId == lease.Application.UnitId &&
+                            r.ScheduledDate.HasValue &&
+                            r.Status != "Cancelled" && r.Status != "Resolved" && r.Status != "Closed")
+                .ToListAsync();
+
+            foreach (var req in openPreTenancy)
+            {
+                var oldStatus = req.Status;
+                req.Status            = "Cancelled";
+                req.CancellationReason = "Lease Renewed";
+                _db.MaintenanceStatusHistories.Add(new MaintenanceStatusHistory
+                {
+                    RequestId       = req.RequestId,
+                    OldStatus       = oldStatus,
+                    NewStatus       = "Cancelled",
+                    Notes           = "Lease renewal payment confirmed — unit turnover maintenance no longer needed.",
+                    ChangedAt       = now,
+                    ChangedByUserId = appUser.UserId
+                });
+                _db.MaintenanceRequestLogs.Add(new MaintenanceRequestLog
+                {
+                    RequestId         = req.RequestId,
+                    Action            = "Cancelled",
+                    Details           = $"Auto-cancelled: tenant confirmed lease renewal for unit {lease.Application.Unit.UnitNumber}.",
+                    PerformedByUserId = appUser.UserId,
+                    PerformedAt       = now
+                });
+            }
+        }
 
         await _db.SaveChangesAsync();
 
