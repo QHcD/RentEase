@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PropertyLeasing.API.Data;
 using PropertyLeasing.API.Models;
+using PropertyLeasing.LeaseApplicationLogic;
 using PropertyLeasing.MVC.Services;
 using PropertyLeasing.MVC.ViewModels;
 
@@ -224,10 +225,15 @@ public class LeaseApplicationsController : Controller
 
         bool isManager = appUser.Role == "PropertyManager";
 
+        tab = tab.Equals("leases", StringComparison.OrdinalIgnoreCase) ? "leases"
+            : tab.Equals("renewals", StringComparison.OrdinalIgnoreCase) ? "renewals"
+            : "applications";
+
         // ── Load applications ─────────────────────────────────────────────
         var appQuery = _db.LeaseApplications
             .Include(a => a.Unit).ThenInclude(u => u.Property)
             .Include(a => a.User)
+            .Include(a => a.Leases)
             .AsQueryable();
 
         if (!isManager)
@@ -235,21 +241,37 @@ public class LeaseApplicationsController : Controller
 
         var allApps = await appQuery.OrderByDescending(a => a.CreatedAt).ToListAsync();
 
-        var appCounts = new Dictionary<string, int>
-        {
-            ["All"]       = allApps.Count,
-            ["Pending"]   = allApps.Count(a => a.Status == "Pending"),
-            ["Screening"] = allApps.Count(a => a.Status == "Screening"),
-            ["Approved"]  = allApps.Count(a => a.Status == "Approved"),
-            ["Rejected"]  = allApps.Count(a => a.Status == "Rejected"),
-            ["Canceled"]  = allApps.Count(a => a.Status == "Canceled")
-        };
+        var (regularApps, renewalApps) =
+            LeaseApplicationIndexPartitioner.PartitionByRenewal(allApps, a => a.ParentLeaseId);
 
-        var filteredApps = appStatus == "All"
-            ? allApps
-            : allApps.Where(a => a.Status == appStatus).ToList();
+        bool ShowOnPipelineTab(LeaseApplication a) =>
+            LeaseApplicationSeedRules.ShowOnLeaseApplicationPipelineTabs(
+                a.Status,
+                a.Leases.Select(l => l.Status));
 
-        var appListVms = filteredApps.Select(a => new LeaseApplicationListViewModel
+        regularApps = regularApps.Where(ShowOnPipelineTab).ToList();
+        renewalApps = renewalApps.Where(ShowOnPipelineTab).ToList();
+
+        var statusKeys = ApplicationsAndLeasesViewModel.AppStatuses;
+
+        var appCounts = LeaseApplicationIndexPartitioner.BuildStatusCounts(
+            regularApps, a => a.Status, statusKeys);
+        var renewalAppCounts = LeaseApplicationIndexPartitioner.BuildStatusCounts(
+            renewalApps, a => a.Status, statusKeys);
+
+        // "All" excludes terminal outcomes — avoids e.g. Rejected rows stacked under Occupied units in the default view
+        appCounts["All"] = regularApps.Count(a => !LeaseApplicationSeedRules.HiddenFromLeaseApplicationAllFilter(a.Status));
+        renewalAppCounts["All"] = renewalApps.Count(a => !LeaseApplicationSeedRules.HiddenFromLeaseApplicationAllFilter(a.Status));
+
+        var filteredRegular = appStatus == "All"
+            ? regularApps.Where(a => !LeaseApplicationSeedRules.HiddenFromLeaseApplicationAllFilter(a.Status)).ToList()
+            : regularApps.Where(a => a.Status == appStatus).ToList();
+
+        var filteredRenewals = appStatus == "All"
+            ? renewalApps.Where(a => !LeaseApplicationSeedRules.HiddenFromLeaseApplicationAllFilter(a.Status)).ToList()
+            : renewalApps.Where(a => a.Status == appStatus).ToList();
+
+        LeaseApplicationListViewModel MapListVm(LeaseApplication a) => new()
         {
             ApplicationId      = a.ApplicationId,
             UnitNumber         = a.Unit.UnitNumber,
@@ -261,12 +283,15 @@ public class LeaseApplicationsController : Controller
             Notes              = a.Notes,
             CreatedAt          = a.CreatedAt,
             ParentLeaseId      = a.ParentLeaseId
-        }).ToList();
+        };
+
+        var appListVms = filteredRegular.Select(MapListVm).ToList();
 
         var appGroups = new List<UnitApplicationGroupViewModel>();
+        var renewalAppGroups = new List<UnitApplicationGroupViewModel>();
         if (isManager)
         {
-            appGroups = filteredApps
+            appGroups = filteredRegular
                 .GroupBy(a => a.UnitId)
                 .Select(g => new UnitApplicationGroupViewModel
                 {
@@ -275,21 +300,23 @@ public class LeaseApplicationsController : Controller
                     PropertyName       = g.First().Unit.Property.Name,
                     AvailabilityStatus = g.First().Unit.AvailabilityStatus,
                     ApplicationCount   = g.Count(),
-                    Applications       = g.Select(a => new LeaseApplicationListViewModel
-                    {
-                        ApplicationId      = a.ApplicationId,
-                        UnitNumber         = a.Unit.UnitNumber,
-                        PropertyName       = a.Unit.Property.Name,
-                        TenantName         = a.User.FullName,
-                        RequestedStartDate = a.RequestedStartDate,
-                        RequestedEndDate   = a.RequestedEndDate,
-                        Status             = a.Status,
-                        Notes              = a.Notes,
-                        CreatedAt          = a.CreatedAt,
-                        ParentLeaseId      = a.ParentLeaseId
-                    }).ToList()
+                    Applications       = g.Select(MapListVm).ToList()
+                }).ToList();
+
+            renewalAppGroups = filteredRenewals
+                .GroupBy(a => a.UnitId)
+                .Select(g => new UnitApplicationGroupViewModel
+                {
+                    UnitId             = g.Key,
+                    UnitNumber         = g.First().Unit.UnitNumber,
+                    PropertyName       = g.First().Unit.Property.Name,
+                    AvailabilityStatus = g.First().Unit.AvailabilityStatus,
+                    ApplicationCount   = g.Count(),
+                    Applications       = g.Select(MapListVm).ToList()
                 }).ToList();
         }
+
+        var renewalAppListVms = filteredRenewals.Select(MapListVm).ToList();
 
         // ── Load leases ───────────────────────────────────────────────────
         var leaseQuery = _db.Leases
@@ -354,15 +381,18 @@ public class LeaseApplicationsController : Controller
 
         var vm = new ApplicationsAndLeasesViewModel
         {
-            IsManager         = isManager,
-            ActiveTab         = tab,
-            AppStatusFilter   = appStatus,
-            AppCounts         = appCounts,
-            Applications      = appListVms,
-            ApplicationGroups = appGroups,
-            LeaseStatusFilter = leaseStatus,
-            LeaseCounts       = leaseCounts,
-            Leases            = leaseVms
+            IsManager                = isManager,
+            ActiveTab                = tab,
+            AppStatusFilter          = appStatus,
+            AppCounts                = appCounts,
+            Applications             = appListVms,
+            ApplicationGroups        = appGroups,
+            RenewalApplications      = renewalAppListVms,
+            RenewalApplicationGroups = renewalAppGroups,
+            RenewalAppCounts         = renewalAppCounts,
+            LeaseStatusFilter        = leaseStatus,
+            LeaseCounts              = leaseCounts,
+            Leases                   = leaseVms
         };
 
         return View(vm);

@@ -21,12 +21,16 @@
         _                => "secondary"
     };
 
-    string AppUrl(string status)   => $"?tab=applications&appStatus={status}&leaseStatus={Model.LeaseStatusFilter}";
-    string LeaseUrl(string status) => $"?tab=leases&appStatus={Model.AppStatusFilter}&leaseStatus={status}";
+    string AppUrl(string status)     => $"?tab=applications&appStatus={status}&leaseStatus={Model.LeaseStatusFilter}";
+    string RenewalUrl(string status) => $"?tab=renewals&appStatus={status}&leaseStatus={Model.LeaseStatusFilter}";
+    string LeaseUrl(string status)   => $"?tab=leases&appStatus={Model.AppStatusFilter}&leaseStatus={status}";
 
-    int appRowCount   = Model.IsManager
+    int appRowCount = Model.IsManager
         ? Model.ApplicationGroups.Sum(g => g.ApplicationCount)
         : Model.Applications.Count;
+    int renewalRowCount = Model.IsManager
+        ? Model.RenewalApplicationGroups.Sum(g => g.ApplicationCount)
+        : Model.RenewalApplications.Count;
     int leaseRowCount = Model.Leases.Count;
 }
 
@@ -83,6 +87,14 @@
             <i class="fa fa-file-alt me-1"></i>
             @(Model.IsManager ? "Applications" : "My Applications")
             <span class="badge bg-dark ms-1">@Model.AppCounts["All"]</span>
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link @(Model.ActiveTab == "renewals" ? "active fw-semibold" : "")"
+           href="?tab=renewals&appStatus=@Model.AppStatusFilter&leaseStatus=@Model.LeaseStatusFilter">
+            <i class="fa fa-sync me-1"></i>
+            Renewal applications
+            <span class="badge bg-info text-dark ms-1">@Model.RenewalAppCounts["All"]</span>
         </a>
     </li>
     <li class="nav-item">
@@ -161,7 +173,6 @@
                                             <td class="ps-3 text-muted small">@a.ApplicationId</td>
                                             <td>
                                                 @a.TenantName
-                                                @if (a.IsRenewal) { <span class="badge bg-info ms-1">Renewal</span> }
                                             </td>
                                             <td>@(a.RequestedStartDate?.ToString("dd MMM yyyy") ?? "-")</td>
                                             <td>@(a.RequestedEndDate?.ToString("dd MMM yyyy") ?? "-")</td>
@@ -205,7 +216,6 @@
                                     <td class="text-muted small">@a.ApplicationId</td>
                                     <td>
                                         @a.UnitNumber
-                                        @if (a.IsRenewal) { <span class="badge bg-info ms-1">Renewal</span> }
                                     </td>
                                     <td>@a.PropertyName</td>
                                     <td>@(a.RequestedStartDate?.ToString("dd MMM yyyy") ?? "-")</td>
@@ -223,6 +233,155 @@
                                                     onclick="showCancelApp(@a.ApplicationId)"
                                                     title="Cancel this application"> 
                                                 <i class="fa fa-times"></i> 
+                                            </button>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+    </div>
+
+    <!-- ══ RENEWAL APPLICATIONS PANEL ═══════════════════════════════════════ -->
+    <div class="@(Model.ActiveTab == "renewals" ? "" : "d-none")">
+
+        <ul class="nav nav-pills mb-3 flex-wrap gap-1">
+            @foreach (var s in ApplicationsAndLeasesViewModel.AppStatuses)
+            {
+                bool isActive = Model.AppStatusFilter == s;
+                <li class="nav-item">
+                    <a class="nav-link py-1 px-3 @(isActive ? "active" : "text-dark border")"
+                       href="@RenewalUrl(s)">@s</a>
+                </li>
+            }
+        </ul>
+
+        @if (renewalRowCount == 0)
+        {
+            <div class="alert alert-info mb-0">
+                <i class="fa fa-info-circle me-2"></i>
+                No @(Model.AppStatusFilter == "All" ? "" : Model.AppStatusFilter.ToLower() + " ")renewal applications found.
+            </div>
+        }
+        else
+        {
+            <p class="text-muted small mb-2">
+                Showing <strong>@renewalRowCount</strong>
+                @(Model.AppStatusFilter == "All" ? "" : Model.AppStatusFilter.ToLower() + " ")
+                renewal application@(renewalRowCount == 1 ? "" : "s")
+            </p>
+
+            @if (Model.IsManager)
+            {
+                @foreach (var group in Model.RenewalApplicationGroups)
+                {
+                    string unitBadge = group.AvailabilityStatus == "Available" ? "success" : "secondary";
+                    <div class="card mb-3 shadow-sm border-info">
+                        <div class="card-header d-flex justify-content-between align-items-center bg-light">
+                            <div>
+                                <i class="fa fa-sync me-2 text-info"></i>
+                                <strong>@group.UnitNumber</strong>
+                                <span class="text-muted ms-1">— @group.PropertyName</span>
+                                <span class="badge bg-@unitBadge ms-2">@group.AvailabilityStatus</span>
+                            </div>
+                            <span class="badge bg-info text-dark">@group.ApplicationCount renewal application(s)</span>
+                        </div>
+                        <div class="card-body p-0">
+                            <table class="table table-hover mb-0 align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="ps-3">#</th>
+                                        <th>Tenant</th>
+                                        <th>Parent lease</th>
+                                        <th>Start Date</th>
+                                        <th>End Date</th>
+                                        <th>Status</th>
+                                        <th>Applied</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var a in group.Applications)
+                                    {
+                                        <tr>
+                                            <td class="ps-3 text-muted small">@a.ApplicationId</td>
+                                            <td>@a.TenantName</td>
+                                            <td>
+                                                @if (a.ParentLeaseId.HasValue)
+                                                {
+                                                    <a asp-action="LeaseDetails" asp-route-id="@a.ParentLeaseId.Value"
+                                                       class="small">Lease #@a.ParentLeaseId.Value</a>
+                                                }
+                                                else { <span class="text-muted">—</span> }
+                                            </td>
+                                            <td>@(a.RequestedStartDate?.ToString("dd MMM yyyy") ?? "-")</td>
+                                            <td>@(a.RequestedEndDate?.ToString("dd MMM yyyy") ?? "-")</td>
+                                            <td><span class="badge bg-@AppBadge(a.Status)">@a.Status</span></td>
+                                            <td class="text-muted small">@a.CreatedAt.ToString("dd MMM yyyy")</td>
+                                            <td>
+                                                <a asp-action="Details" asp-route-id="@a.ApplicationId"
+                                                   class="btn btn-outline-primary btn-sm">
+                                                    <i class="fa fa-eye me-1"></i>View
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>#</th>
+                                <th>Unit</th>
+                                <th>Property</th>
+                                <th>Parent lease</th>
+                                <th>Start Date</th>
+                                <th>End Date</th>
+                                <th>Status</th>
+                                <th>Applied</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var a in Model.RenewalApplications)
+                            {
+                                <tr>
+                                    <td class="text-muted small">@a.ApplicationId</td>
+                                    <td>@a.UnitNumber</td>
+                                    <td>@a.PropertyName</td>
+                                    <td>
+                                        @if (a.ParentLeaseId.HasValue)
+                                        {
+                                            <a asp-action="LeaseDetails" asp-route-id="@a.ParentLeaseId.Value"
+                                               class="small">Lease #@a.ParentLeaseId.Value</a>
+                                        }
+                                        else { <span class="text-muted">—</span> }
+                                    </td>
+                                    <td>@(a.RequestedStartDate?.ToString("dd MMM yyyy") ?? "-")</td>
+                                    <td>@(a.RequestedEndDate?.ToString("dd MMM yyyy") ?? "-")</td>
+                                    <td><span class="badge bg-@AppBadge(a.Status)">@a.Status</span></td>
+                                    <td class="text-muted small">@a.CreatedAt.ToString("dd MMM yyyy")</td>
+                                    <td class="d-flex gap-1">
+                                        <a asp-action="Details" asp-route-id="@a.ApplicationId"
+                                           class="btn btn-outline-primary btn-sm">
+                                            <i class="fa fa-eye me-1"></i>View
+                                        </a>
+                                        @if (a.CanCancel)
+                                        {
+                                            <button type="button" class="btn btn-outline-secondary btn-sm"
+                                                    onclick="showCancelApp(@a.ApplicationId)"
+                                                    title="Cancel this renewal application">
+                                                <i class="fa fa-times"></i>
                                             </button>
                                         }
                                     </td>
@@ -300,10 +459,6 @@
                                 <td>BD @l.MonthlyRent.ToString("N0")</td>
                                 <td>
                                     <span class="badge bg-@LeaseBadge(l.Status)">@l.Status</span>
-                                    @if (l.RenewLeaseApplicationId.HasValue)
-                                    {
-                                        <br /><small class="text-info"><i class="fa fa-sync me-1"></i>Renewal: @(l.RenewApplicationStatus ?? "...")</small>
-                                    }
                                 </td>
                                 <td class="d-flex gap-1 flex-wrap">
                                     <a asp-action="LeaseDetails" asp-route-id="@l.LeaseId"

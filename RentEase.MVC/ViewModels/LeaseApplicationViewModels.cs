@@ -190,10 +190,10 @@ public class ApplicationsAndLeasesViewModel
 {
     public bool   IsManager { get; set; }
 
-    // ── Active tab: "applications" or "leases" ────────────────────────────
+    // ── Active tab: "applications", "renewals", or "leases" ───────────────
     public string ActiveTab { get; set; } = "applications";
 
-    // ── Applications tab ─────────────────────────────────────────────────
+    // ── Applications tab (non-renewal only) ──────────────────────────────
     public string AppStatusFilter { get; set; } = "All";
 
     // All statuses shown as sub-tabs (including new Canceled)
@@ -209,6 +209,13 @@ public class ApplicationsAndLeasesViewModel
 
     /// Count of applications per status (used for badge counts on sub-tabs)
     public Dictionary<string, int> AppCounts { get; set; } = new();
+
+    // ── Renewal applications tab (ParentLeaseId set) ─────────────────────
+    public List<LeaseApplicationListViewModel> RenewalApplications { get; set; } = new();
+
+    public List<UnitApplicationGroupViewModel> RenewalApplicationGroups { get; set; } = new();
+
+    public Dictionary<string, int> RenewalAppCounts { get; set; } = new();
 
     // ── Leases tab ────────────────────────────────────────────────────────
     public string LeaseStatusFilter { get; set; } = "All";

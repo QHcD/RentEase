@@ -12,6 +12,7 @@
 		<ProjectReference Include="..\RentEase.API\RentEase.API.csproj">
 			<ExcludeAssets>contentFiles</ExcludeAssets>
 		</ProjectReference>
+		<ProjectReference Include="..\RentEase.LeaseApplicationLogic\RentEase.LeaseApplicationLogic.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>

@@ -35,6 +35,14 @@ SQL/02_PropertyLeasingDB_SeedData.sql ← Inserts test data
 
 The Identity database is auto-created on first run via EF Migrations.
 
+### Step 1b — Fresh demo business data (optional)
+
+The MVC **Applications** tab lists only applications that are still part of the leasing pipeline (Pending, Screening, etc.). Approved applications that already have an active lease appear under **Leases** only.
+
+When you use **local development** (`RentEase.API/appsettings.Development.json`), `Seed:ResetBusinessDataOnStartup` defaults to **true**, so each API start clears business tables (units, applications, leases, maintenance seed rows, etc.) and reapplies the built-in EF seed. Set it to **false** once you want to keep data between runs.
+
+For Azure or shared servers, keep `Seed:ResetBusinessDataOnStartup` **false** in `appsettings.json` unless you intentionally want a one-time wipe.
+
 ### Step 2 — Connection Strings
 
 Update `appsettings.json` in both `PropertyLeasing.API` and `PropertyLeasing.MVC`:

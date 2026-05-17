@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using PropertyLeasing.API.Data;
 using PropertyLeasing.API.Models;
+using PropertyLeasing.LeaseApplicationLogic;
 
 namespace PropertyLeasing.API.Data;
 
@@ -49,21 +51,32 @@ public static class ContextSeed
             // ── Staff profiles (idempotent/upsert — always safe to run) ──
             await SeedStaffProfilesAsync(db);
 
-            // ── Business data: only seed on first run (skip if data already exists) ──
+            var configuration = serviceProvider.GetRequiredService<IConfiguration>();
+            var resetBusinessData = configuration.GetValue("Seed:ResetBusinessDataOnStartup", false);
+
+            // ── Business data ────────────────────────────────────────────────────
             bool hasData = await db.Properties.AnyAsync();
+            if (resetBusinessData && hasData)
+            {
+                logger.LogWarning("[Seed] Seed:ResetBusinessDataOnStartup=true — clearing business tables and reseeding.");
+                await ResetBusinessDataAsync(db, logger);
+                hasData = false;
+            }
+
             if (!hasData)
             {
-                logger.LogInformation("[Seed] No business data found — seeding from scratch.");
+                logger.LogInformation("[Seed] Seeding business data (properties, units, applications, leases, …).");
                 await SeedBusinessDataAsync(db, logger);
             }
             else
             {
-                logger.LogInformation("[Seed] Business data already exists — skipping reset/reseed to preserve live changes.");
+                logger.LogInformation("[Seed] Business data already exists — skipping full seed (set Seed:ResetBusinessDataOnStartup=true to wipe & reseed).");
             }
 
             // ── Patches — idempotent, run every startup ──
             await PatchMurtadhaSecondLeaseAsync(db, userManager, logger);
             await PatchMurtadhaExtraLeasesAsync(db, userManager, logger);
+            await PatchRegularApplicationsOffOccupiedUnitsAsync(db, logger);
         }
         catch (Exception ex) { logger.LogError(ex, "[Seed] Top-level failure."); }
     }
@@ -552,23 +565,23 @@ DELETE FROM [MaintenanceStaff];
         var app10 = App(t5.UserId, busaiteen_units[5].UnitId, DateTime.Today.AddMonths(-4), DateTime.Today.AddMonths(8), "Approved", DateTime.Today.AddMonths(-5), "Near airport.");
         var app11 = App(t1.UserId, muharraqUnits[0].UnitId,   DateTime.Today.AddMonths(-10), DateTime.Today.AddMonths(-4), "Approved", DateTime.Today.AddMonths(-11), "Heritage home fan.");
 
-        // Screening
-        var app12 = App(t2.UserId, seefUnits[4].UnitId,     DateTime.Today.AddDays(10), DateTime.Today.AddDays(10).AddMonths(10), "Screening", DateTime.Today.AddDays(-5), "Prefer high floor.");
-        var app13 = App(t3.UserId, adliyaUnits[5].UnitId,   DateTime.Today.AddDays(14), DateTime.Today.AddDays(14).AddMonths(8),  "Screening", DateTime.Today.AddDays(-3), null);
-        var app14 = App(t5.UserId, riffa.PropertyId == riffa.PropertyId ? riffaUnits[12].UnitId : 0, DateTime.Today.AddDays(7), DateTime.Today.AddDays(7).AddMonths(11), "Screening", DateTime.Today.AddDays(-7), "Family of five.");
-        var app15 = App(t4.UserId, amwajUnits[9].UnitId,    DateTime.Today.AddDays(20), DateTime.Today.AddDays(20).AddMonths(9),  "Screening", DateTime.Today.AddDays(-2), "Sea view essential.");
+        // Screening — only on Available units (non-renewal applications)
+        var app12 = App(t2.UserId, seefUnits[5].UnitId,     DateTime.Today.AddDays(10), DateTime.Today.AddDays(10).AddMonths(10), "Screening", DateTime.Today.AddDays(-5), "Prefer high floor.");
+        var app13 = App(t3.UserId, adliyaUnits[6].UnitId,   DateTime.Today.AddDays(14), DateTime.Today.AddDays(14).AddMonths(8),  "Screening", DateTime.Today.AddDays(-3), null);
+        var app14 = App(t5.UserId, riffaUnits[13].UnitId, DateTime.Today.AddDays(7), DateTime.Today.AddDays(7).AddMonths(11), "Screening", DateTime.Today.AddDays(-7), "Family of five.");
+        var app15 = App(t4.UserId, amwajUnits[11].UnitId,    DateTime.Today.AddDays(20), DateTime.Today.AddDays(20).AddMonths(9),  "Screening", DateTime.Today.AddDays(-2), "Sea view essential.");
 
-        // Pending
+        // Pending — only on Available units (non-renewal applications)
         var app16 = App(t1.UserId, juffairUnits[1].UnitId,  DateTime.Today.AddDays(5),  DateTime.Today.AddDays(5).AddMonths(6),  "Pending", DateTime.Today.AddDays(-1), null);
-        var app17 = App(t3.UserId, seefUnits[9].UnitId,     DateTime.Today.AddDays(8),  DateTime.Today.AddDays(8).AddMonths(12), "Pending", DateTime.Today.AddDays(-1), "Large family.");
-        var app18 = App(t4.UserId, budaiyaUnits[5].UnitId,  DateTime.Today.AddDays(12), DateTime.Today.AddDays(12).AddMonths(9), "Pending", DateTime.Today,           null);
-        var app19 = App(t5.UserId, muharraqUnits[5].UnitId, DateTime.Today.AddDays(15), DateTime.Today.AddDays(15).AddMonths(8), "Pending", DateTime.Today,           "Heritage area preferred.");
-        var app20 = App(t2.UserId, diplomaticUnits[9].UnitId,DateTime.Today.AddDays(10),DateTime.Today.AddDays(10).AddMonths(11),"Pending", DateTime.Today.AddDays(-1),"Office needed urgently.");
+        var app17 = App(t3.UserId, seefUnits[10].UnitId,     DateTime.Today.AddDays(8),  DateTime.Today.AddDays(8).AddMonths(12), "Pending", DateTime.Today.AddDays(-1), "Large family.");
+        var app18 = App(t4.UserId, budaiyaUnits[6].UnitId,  DateTime.Today.AddDays(12), DateTime.Today.AddDays(12).AddMonths(9), "Pending", DateTime.Today,           null);
+        var app19 = App(t5.UserId, muharraqUnits[6].UnitId, DateTime.Today.AddDays(15), DateTime.Today.AddDays(15).AddMonths(8), "Pending", DateTime.Today,           "Heritage area preferred.");
+        var app20 = App(t2.UserId, diplomaticUnits[10].UnitId,DateTime.Today.AddDays(10),DateTime.Today.AddDays(10).AddMonths(11),"Pending", DateTime.Today.AddDays(-1),"Office needed urgently.");
         var app21 = App(t1.UserId, amwajUnits[10].UnitId,   DateTime.Today.AddDays(6),  DateTime.Today.AddDays(6).AddMonths(7),  "Pending", DateTime.Today,           "Waterfront view.");
         var app22 = App(t5.UserId, busaiteen_units[12].UnitId,DateTime.Today.AddDays(9),DateTime.Today.AddDays(9).AddMonths(10), "Pending", DateTime.Today.AddDays(-1),null);
 
-        // Rejected
-        var app23 = App(t3.UserId, seefUnits[14].UnitId,    DateTime.Today.AddDays(3), DateTime.Today.AddDays(3).AddMonths(8),  "Rejected", DateTime.Today.AddDays(-15),"References unverified.");
+        // Rejected — keep on an Available unit (C101 is Occupied in seed)
+        var app23 = App(t3.UserId, seefUnits[15].UnitId,    DateTime.Today.AddDays(3), DateTime.Today.AddDays(3).AddMonths(8),  "Rejected", DateTime.Today.AddDays(-15),"References unverified.");
         var app24 = App(t2.UserId, amwajUnits[14].UnitId,   DateTime.Today.AddDays(5), DateTime.Today.AddDays(5).AddMonths(6),  "Rejected", DateTime.Today.AddDays(-20),"Income documents missing.");
         var app25 = App(t1.UserId, diplomaticUnits[10].UnitId,DateTime.Today.AddDays(2),DateTime.Today.AddDays(2).AddMonths(5), "Rejected", DateTime.Today.AddDays(-10),"Did not pass screening.");
 
@@ -630,6 +643,28 @@ DELETE FROM [MaintenanceStaff];
         var lease11 = Lease(app10.ApplicationId, busaiteen_units[5].UnitId,app10.RequestedStartDate!.Value,app10.RequestedEndDate!.Value, 240m,  "Active");
 
         db.Leases.AddRange(lease1, lease2, lease3, lease4, lease5, lease6, lease7, lease8, lease9, lease10, lease11);
+        await db.SaveChangesAsync();
+
+        // Renewal application for BU101 (lease9, tenant t3) — shows under Renewal applications tab only
+        var renewStartBu101 = lease9.LeaseEndDate.AddDays(1);
+        var appRenewBu101 = new LeaseApplication
+        {
+            UserId             = t3.UserId,
+            UnitId             = budaiyaUnits[0].UnitId,
+            RequestedStartDate = renewStartBu101,
+            RequestedEndDate   = renewStartBu101.AddMonths(9),
+            Status             = "Screening",
+            Notes              = "Seed renewal request following renewed lease on BU101.",
+            ParentLeaseId      = lease9.LeaseId,
+            CreatedAt          = DateTime.Today.AddDays(-3)
+        };
+        db.LeaseApplications.Add(appRenewBu101);
+        await db.SaveChangesAsync();
+
+        db.LeaseApplicationLogs.AddRange(
+            new LeaseApplicationLog { ApplicationId = appRenewBu101.ApplicationId, Status = "Pending",   ChangedByUserId = t3.UserId, CreatedAt = appRenewBu101.CreatedAt },
+            new LeaseApplicationLog { ApplicationId = appRenewBu101.ApplicationId, Status = "Screening", ChangedByUserId = mgr.UserId, CreatedAt = appRenewBu101.CreatedAt.AddDays(1) });
+        lease9.RenewLeaseApplicationId = appRenewBu101.ApplicationId;
         await db.SaveChangesAsync();
 
         // ── Lease Logs ────────────────────────────────────────────────────────
@@ -1309,5 +1344,54 @@ DELETE FROM [MaintenanceStaff];
         }
 
         logger.LogInformation("[Patch] All extra Murtadha leases created (R205, S305, DQ305).");
+    }
+
+    /// <summary>
+    /// Moves non-renewal Pending/Screening applications off Occupied units onto an Available unit in the same property.
+    /// Fixes legacy seed data without requiring a full database reset.
+    /// </summary>
+    private static async Task PatchRegularApplicationsOffOccupiedUnitsAsync(
+        PropertyLeasingDbContext db,
+        ILogger logger)
+    {
+        var candidates = await db.LeaseApplications
+            .Include(a => a.Unit)
+            .Where(a => a.ParentLeaseId == null &&
+                        (a.Status == "Pending" || a.Status == "Screening"))
+            .ToListAsync();
+
+        var changed = 0;
+        foreach (var app in candidates)
+        {
+            if (!LeaseApplicationSeedRules.RegularPendingOrScreeningOnOccupiedUnit(
+                    app.ParentLeaseId, app.Status, app.Unit.AvailabilityStatus))
+                continue;
+
+            var replacement = await db.Units
+                .Where(u =>
+                    u.PropertyId == app.Unit.PropertyId &&
+                    string.Equals(u.AvailabilityStatus, "Available", StringComparison.Ordinal) &&
+                    u.UnitId != app.UnitId)
+                .OrderBy(u => u.UnitNumber)
+                .FirstOrDefaultAsync();
+
+            if (replacement == null)
+            {
+                logger.LogWarning(
+                    "[Patch] Application {AppId}: no Available unit in property {PropId} — cannot move off Occupied unit {UnitNo}.",
+                    app.ApplicationId, app.Unit.PropertyId, app.Unit.UnitNumber);
+                continue;
+            }
+
+            logger.LogInformation(
+                "[Patch] Application {AppId}: moved from Occupied {OldNo} → Available {NewNo} (same property).",
+                app.ApplicationId, app.Unit.UnitNumber, replacement.UnitNumber);
+
+            app.UnitId = replacement.UnitId;
+            changed++;
+        }
+
+        if (changed > 0)
+            await db.SaveChangesAsync();
     }
 }

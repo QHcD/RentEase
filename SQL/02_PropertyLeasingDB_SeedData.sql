@@ -42,7 +42,7 @@ INSERT INTO [User] (FullName, Email, Phone, [Role], SkillProfile, AvailabilitySt
 -- =============================================
 INSERT INTO LeaseApplication (UserID, UnitID, RequestedStartDate, RequestedEndDate, Notes, Status, CreatedAt) VALUES
 (2, 1, '2026-04-01', '2027-03-31', 'Looking for long term lease', 'Approved',  GETDATE()),
-(3, 3, '2026-03-15', '2027-03-14', 'Need parking space',          'Screening', GETDATE()),
+(3, 1, '2026-03-15', '2027-03-14', 'Need parking space',          'Screening', GETDATE()),
 (6, 6, '2026-05-01', '2027-04-30', NULL,                          'Pending',   GETDATE()),
 (2, 4, '2026-02-01', '2027-01-31', 'Office for small business',   'Rejected',  GETDATE());
 

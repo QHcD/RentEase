@@ -2412,6 +2412,16 @@
             "rid": "win"
           }
         }
+      },
+      "RentEase.LeaseApplicationLogic/1.0.0": {
+        "type": "project",
+        "framework": ".NETCoreApp,Version=v9.0",
+        "compile": {
+          "bin/placeholder/RentEase.LeaseApplicationLogic.dll": {}
+        },
+        "runtime": {
+          "bin/placeholder/RentEase.LeaseApplicationLogic.dll": {}
+        }
       }
     }
   },
@@ -6438,6 +6448,11 @@
         "system.windows.extensions.nuspec",
         "useSharedDesignerContext.txt"
       ]
+    },
+    "RentEase.LeaseApplicationLogic/1.0.0": {
+      "type": "project",
+      "path": "../RentEase.LeaseApplicationLogic/RentEase.LeaseApplicationLogic.csproj",
+      "msbuildProject": "../RentEase.LeaseApplicationLogic/RentEase.LeaseApplicationLogic.csproj"
     }
   },
   "projectFileDependencyGroups": {
@@ -6448,6 +6463,7 @@
       "Microsoft.AspNetCore.SignalR >= 1.2.9",
       "Microsoft.EntityFrameworkCore.SqlServer >= 9.0.0",
       "Microsoft.EntityFrameworkCore.Tools >= 9.0.0",
+      "RentEase.LeaseApplicationLogic >= 1.0.0",
       "Swashbuckle.AspNetCore >= 6.6.2",
       "System.IdentityModel.Tokens.Jwt >= 8.16.0"
     ]
@@ -6459,9 +6475,9 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\User\\Source\\Repos\\RentEase\\RentEase.API\\RentEase.API.csproj",
+      "projectUniqueName": "C:\\Users\\User\\source\\repos\\RentEase\\RentEase.API\\RentEase.API.csproj",
       "projectName": "RentEase.API",
-      "projectPath": "C:\\Users\\User\\Source\\Repos\\RentEase\\RentEase.API\\RentEase.API.csproj",
+      "projectPath": "C:\\Users\\User\\source\\repos\\RentEase\\RentEase.API\\RentEase.API.csproj",
       "packagesPath": "C:\\Users\\User\\.nuget\\packages\\",
       "outputPath": "C:\\Users\\User\\source\\repos\\RentEase\\RentEase.API\\obj\\",
       "projectStyle": "PackageReference",
@@ -6483,7 +6499,11 @@
       "frameworks": {
         "net9.0": {
           "targetAlias": "net9.0",
-          "projectReferences": {}
+          "projectReferences": {
+            "C:\\Users\\User\\source\\repos\\RentEase\\RentEase.LeaseApplicationLogic\\RentEase.LeaseApplicationLogic.csproj": {
+              "projectPath": "C:\\Users\\User\\source\\repos\\RentEase\\RentEase.LeaseApplicationLogic\\RentEase.LeaseApplicationLogic.csproj"
+            }
+          }
         }
       },
       "warningProperties": {
