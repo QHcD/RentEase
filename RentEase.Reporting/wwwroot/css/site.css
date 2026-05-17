@@ -1,0 +1,58 @@
+/* ── General ─────────────────────────────────────── */
+body {
+    background-color: #f8f9fa;
+}
+
+/* ── Navbar ──────────────────────────────────────── */
+.navbar-brand {
+    font-size: 1.3rem;
+    letter-spacing: 0.5px;
+}
+
+/* ── Cards ───────────────────────────────────────── */
+.card {
+    border-radius: 10px;
+}
+
+.card-header {
+    border-radius: 10px 10px 0 0 !important;
+}
+
+/* ── Reporting extras (charts / KPIs) ────────────── */
+.kpi-card {
+    border-radius: 10px;
+}
+
+.stat-num {
+    font-size: 1.9rem;
+    font-weight: 700;
+}
+
+.chart-container {
+    position: relative;
+}
+
+/* ── Tables ──────────────────────────────────────── */
+.table th {
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: #6c757d;
+}
+
+/* ── Footer ──────────────────────────────────────── */
+.footer {
+    font-size: 0.85rem;
+}
+
+/* ── Form focus ──────────────────────────────────── */
+.form-control:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.15);
+}
+
+/* ── Progress bars ───────────────────────────────── */
+.progress {
+    border-radius: 50px;
+}

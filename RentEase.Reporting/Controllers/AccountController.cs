@@ -21,8 +21,19 @@ public class AccountController : Controller
     public IActionResult Login()
     {
         if (User.Identity?.IsAuthenticated == true)
-            return RedirectToAction("Index", "Reports");
+            return RedirectToAction("Occupancy", "Reports");
         return View();
+    }
+
+    /// <summary>Same login page with manager demo fields pre-filled (like a quick-entry bookmark).</summary>
+    // GET /Account/LoginMac
+    [HttpGet]
+    public IActionResult LoginMac()
+    {
+        if (User.Identity?.IsAuthenticated == true)
+            return RedirectToAction("Occupancy", "Reports");
+        ViewBag.PrefillManagerDemo = true;
+        return View("Login", new LoginViewModel());
     }
 
     // POST /Account/Login
@@ -68,7 +79,7 @@ public class AccountController : Controller
 
         await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
 
-        return RedirectToAction("Index", "Reports");
+        return RedirectToAction("Occupancy", "Reports");
     }
 
     // POST /Account/Logout

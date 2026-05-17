@@ -1,4 +1,3 @@
-@* ── Payments.cshtml ── *@
 @model PropertyLeasing.Reporting.ViewModels.PaymentReportItem
 @{
     ViewData["Title"] = "Payment Report";
@@ -6,57 +5,181 @@
 
 @if (Model == null)
 {
-    <div class="alert alert-warning">No payment data available.</div>
+    <div class="alert alert-warning"><i class="fa fa-exclamation-triangle me-2"></i>No payment data available.</div>
 }
 else
 {
-    var collectionRate = Model.TotalDue > 0
-        ? Math.Round((double)(Model.TotalPaid / Model.TotalDue) * 100, 1) : 0;
-    var outstanding = Model.TotalDue - Model.TotalPaid;
+    var collectionRate  = Model.TotalDue > 0 ? Math.Round((double)(Model.TotalPaid / Model.TotalDue) * 100, 1) : 0.0;
+    var outstandingAmt  = Model.TotalDue - Model.TotalPaid;
+    var outstandingRate = 100.0 - collectionRate;
 
+    <!-- ── KPI Cards ──────────────────────────────────────────────── -->
     <div class="row g-3 mb-4">
-        <div class="col-md-3">
-            <div class="card kpi-card border-primary text-center">
-                <div class="card-body">
-                    <div class="stat-num text-primary">BD @Model.TotalDue.ToString("N2")</div>
-                    <div class="text-muted small">Total Due</div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card kpi-card border-primary h-100">
+                <div class="card-body d-flex align-items-center gap-3">
+                    <div class="rounded-circle bg-primary bg-opacity-10 p-3 text-primary fs-4"><i class="fa fa-file-invoice-dollar"></i></div>
+                    <div>
+                        <div class="stat-num text-primary">BD @Model.TotalDue.ToString("N2")</div>
+                        <div class="text-muted small">Total Due</div>
+                    </div>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card kpi-card border-success text-center">
-                <div class="card-body">
-                    <div class="stat-num text-success">BD @Model.TotalPaid.ToString("N2")</div>
-                    <div class="text-muted small">Total Collected</div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card kpi-card border-success h-100">
+                <div class="card-body d-flex align-items-center gap-3">
+                    <div class="rounded-circle bg-success bg-opacity-10 p-3 text-success fs-4"><i class="fa fa-coins"></i></div>
+                    <div>
+                        <div class="stat-num text-success">BD @Model.TotalPaid.ToString("N2")</div>
+                        <div class="text-muted small">Total Collected</div>
+                    </div>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card kpi-card border-danger text-center">
-                <div class="card-body">
-                    <div class="stat-num text-danger">BD @Model.TotalOverdue.ToString("N2")</div>
-                    <div class="text-muted small">Overdue Amount</div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card kpi-card border-danger h-100">
+                <div class="card-body d-flex align-items-center gap-3">
+                    <div class="rounded-circle bg-danger bg-opacity-10 p-3 text-danger fs-4"><i class="fa fa-exclamation-circle"></i></div>
+                    <div>
+                        <div class="stat-num text-danger">BD @Model.TotalOverdue.ToString("N2")</div>
+                        <div class="text-muted small">Overdue Amount</div>
+                    </div>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card kpi-card border-warning text-center">
-                <div class="card-body">
-                    <div class="stat-num text-warning">@Model.OverdueCount</div>
-                    <div class="text-muted small">Overdue Payments</div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card kpi-card border-warning h-100">
+                <div class="card-body d-flex align-items-center gap-3">
+                    <div class="rounded-circle bg-warning bg-opacity-10 p-3 text-warning fs-4"><i class="fa fa-calendar-times"></i></div>
+                    <div>
+                        <div class="stat-num text-warning">@Model.OverdueCount</div>
+                        <div class="text-muted small">Overdue Payments</div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="card">
-        <div class="card-body">
-            <h6>Collection Rate</h6>
-            <div class="progress mt-2 mb-3" style="height:24px;">
-                <div class="progress-bar bg-success fs-6" style="width:@collectionRate%">@collectionRate% Collected</div>
-                <div class="progress-bar bg-danger fs-6" style="width:@(100 - collectionRate)%">@(100 - collectionRate)% Outstanding</div>
+    <!-- ── Charts Row ─────────────────────────────────────────────── -->
+    <div class="row g-3 mb-4">
+        <!-- Doughnut breakdown -->
+        <div class="col-lg-5">
+            <div class="card h-100">
+                <div class="card-header fw-semibold py-3">
+                    <i class="fa fa-chart-pie me-2 text-success"></i>Payment Breakdown
+                </div>
+                <div class="card-body d-flex flex-column align-items-center justify-content-center">
+                    <div class="chart-container mb-3" style="height:240px;width:240px;">
+                        <canvas id="paymentDoughnut"></canvas>
+                    </div>
+                    <div class="d-flex gap-2 flex-wrap justify-content-center">
+                        <span class="badge bg-success fs-6">BD @Model.TotalPaid.ToString("N0") Collected</span>
+                        <span class="badge bg-danger fs-6">BD @Model.TotalOverdue.ToString("N0") Overdue</span>
+                        <span class="badge bg-secondary fs-6">BD @outstandingAmt.ToString("N0") Outstanding</span>
+                    </div>
+                </div>
             </div>
-            <p class="text-muted small">Outstanding balance: <strong>BD @outstanding.ToString("N2")</strong></p>
+        </div>
+
+        <!-- Collection rate gauge + detail -->
+        <div class="col-lg-7">
+            <div class="card mb-3">
+                <div class="card-header fw-semibold py-3">
+                    <i class="fa fa-chart-bar me-2 text-primary"></i>Collection Rate Breakdown
+                </div>
+                <div class="card-body">
+                    <div class="chart-container" style="height:200px;">
+                        <canvas id="collectionBar"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="card border-success">
+                <div class="card-body d-flex align-items-center gap-3">
+                    <div class="rounded-circle bg-success bg-opacity-15 p-3 text-success fs-3"><i class="fa fa-percentage"></i></div>
+                    <div>
+                        <div class="fs-2 fw-bold text-success">@collectionRate%</div>
+                        <div class="text-muted small">Collection Rate &nbsp;|&nbsp; Outstanding: <strong>BD @outstandingAmt.ToString("N2")</strong></div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
+
+    <!-- ── Progress bars ──────────────────────────────────────────── -->
+    <div class="card">
+        <div class="card-header fw-semibold py-3">
+            <i class="fa fa-tasks me-2 text-secondary"></i>Collection Progress
+        </div>
+        <div class="card-body">
+            <div class="mb-3">
+                <div class="d-flex justify-content-between mb-1">
+                    <span class="small fw-semibold text-success">Collected</span>
+                    <span class="small text-muted">@collectionRate%</span>
+                </div>
+                <div class="progress" style="height:18px;border-radius:6px;">
+                    <div class="progress-bar bg-success fw-semibold" style="width:@collectionRate%;border-radius:6px;">@collectionRate%</div>
+                </div>
+            </div>
+            <div>
+                <div class="d-flex justify-content-between mb-1">
+                    <span class="small fw-semibold text-danger">Outstanding / Overdue</span>
+                    <span class="small text-muted">@outstandingRate%</span>
+                </div>
+                <div class="progress" style="height:18px;border-radius:6px;">
+                    <div class="progress-bar bg-danger fw-semibold" style="width:@outstandingRate%;border-radius:6px;">@outstandingRate%</div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@section Scripts {
+@if (Model != null)
+{
+    var outstandingAmt2 = Model.TotalDue - Model.TotalPaid;
+    <text>
+<script>
+Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
+Chart.defaults.plugins.legend.labels.usePointStyle = true;
+
+new Chart(document.getElementById('paymentDoughnut'), {
+    type: 'doughnut',
+    data: {
+        labels: ['Collected', 'Overdue', 'Outstanding'],
+        datasets: [{
+            data: [@Model.TotalPaid, @Model.TotalOverdue, @outstandingAmt2],
+            backgroundColor: ['#198754', '#dc3545', '#6c757d'],
+            borderWidth: 2, borderColor: '#fff', hoverOffset: 10
+        }]
+    },
+    options: {
+        cutout: '68%', responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom' } }
+    }
+});
+
+new Chart(document.getElementById('collectionBar'), {
+    type: 'bar',
+    data: {
+        labels: ['Collected', 'Overdue', 'Outstanding'],
+        datasets: [{
+            label: 'Amount (BD)',
+            data: [@Model.TotalPaid, @Model.TotalOverdue, @outstandingAmt2],
+            backgroundColor: ['#198754', '#dc3545', '#6c757d'],
+            borderRadius: 6
+        }]
+    },
+    options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+            x: { grid: { display: false } },
+            y: { beginAtZero: true, ticks: { callback: v => 'BD ' + v.toLocaleString() } }
+        }
+    }
+});
+</script>
+    </text>
+}
 }

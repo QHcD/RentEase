@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PropertyLeasing.Reporting.Services;
-using PropertyLeasing.Reporting.ViewModels;
 using System.Security.Claims;
 
 namespace PropertyLeasing.Reporting.Controllers;
@@ -30,30 +29,6 @@ public class ReportsController : Controller
 
         if (!string.IsNullOrEmpty(token))
             _api.SetToken(token);
-    }
-
-    // GET /Reports — main dashboard with all reports
-    public async Task<IActionResult> Index()
-    {
-        SetApiToken();
-
-        // Call all API endpoints in parallel for speed
-        var occupancyTask    = _api.GetOccupancyReportAsync();
-        var maintenanceTask  = _api.GetMaintenanceReportAsync();
-        var paymentTask      = _api.GetPaymentReportAsync();
-        var applicationsTask = _api.GetApplicationsReportAsync();
-
-        await Task.WhenAll(occupancyTask, maintenanceTask, paymentTask, applicationsTask);
-
-        var model = new ReportDashboardViewModel
-        {
-            OccupancyReport   = await occupancyTask,
-            MaintenanceReport = await maintenanceTask,
-            PaymentReport     = await paymentTask,
-            Applications      = await applicationsTask
-        };
-
-        return View(model);
     }
 
     // GET /Reports/Occupancy

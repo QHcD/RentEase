@@ -62,13 +62,3 @@ public class ApplicationReportItem
     public string?  Notes               { get; set; }
     public DateTime CreatedAt           { get; set; }
 }
-
-// ── Combined Dashboard ────────────────────────────────
-public class ReportDashboardViewModel
-{
-    public List<OccupancyReportItem>  OccupancyReport    { get; set; } = new();
-    public MaintenanceReportItem?     MaintenanceReport  { get; set; }
-    public PaymentReportItem?         PaymentReport      { get; set; }
-    public List<ApplicationReportItem> Applications      { get; set; } = new();
-    public string? ErrorMessage { get; set; }
-}

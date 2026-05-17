@@ -1,40 +1,201 @@
-@* ── Occupancy.cshtml ── *@
 @model List<PropertyLeasing.Reporting.ViewModels.OccupancyReportItem>
 @{
     ViewData["Title"] = "Occupancy Report";
+    var totalUnits    = Model.Sum(o => o.TotalUnits);
+    var occupiedUnits = Model.Sum(o => o.OccupiedUnits);
+    var vacantUnits   = Model.Sum(o => o.AvailableUnits);
+    var overallRate   = totalUnits > 0 ? Math.Round((double)occupiedUnits / totalUnits * 100, 1) : 0.0;
 }
 
+<!-- ── Summary KPIs ──────────────────────────────────────────────── -->
+<div class="row g-3 mb-4">
+    <div class="col-sm-4">
+        <div class="card kpi-card border-primary text-center">
+            <div class="card-body">
+                <div class="stat-num text-primary">@totalUnits</div>
+                <div class="text-muted small">Total Units</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-4">
+        <div class="card kpi-card border-success text-center">
+            <div class="card-body">
+                <div class="stat-num text-success">@occupiedUnits</div>
+                <div class="text-muted small">Occupied</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-4">
+        <div class="card kpi-card border-secondary text-center">
+            <div class="card-body">
+                <div class="stat-num text-secondary">@vacantUnits</div>
+                <div class="text-muted small">Vacant</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Charts Row ───────────────────────────────────────────────── -->
+<div class="row g-3 mb-4">
+    <!-- Grouped bar: occupied vs vacant per property -->
+    <div class="col-lg-8">
+        <div class="card h-100">
+            <div class="card-header fw-semibold py-3">
+                <i class="fa fa-chart-bar me-2 text-primary"></i>Units by Property
+            </div>
+            <div class="card-body">
+                <div class="chart-container" style="height:300px;">
+                    <canvas id="occupancyBarChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Doughnut: overall occupied vs vacant -->
+    <div class="col-lg-4">
+        <div class="card h-100">
+            <div class="card-header fw-semibold py-3">
+                <i class="fa fa-chart-pie me-2 text-success"></i>Overall Occupancy
+            </div>
+            <div class="card-body d-flex flex-column align-items-center justify-content-center">
+                <div class="chart-container mb-3" style="height:200px;width:200px;">
+                    <canvas id="occupancyDoughnut"></canvas>
+                </div>
+                <div class="text-center">
+                    <div class="fs-2 fw-bold text-success">@overallRate%</div>
+                    <div class="text-muted small">Occupancy Rate</div>
+                    <div class="d-flex gap-2 justify-content-center mt-2">
+                        <span class="badge bg-success">@occupiedUnits Occupied</span>
+                        <span class="badge bg-secondary">@vacantUnits Vacant</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Occupancy Rate Bar Chart (rate %) ────────────────────────── -->
+<div class="card mb-4">
+    <div class="card-header fw-semibold py-3">
+        <i class="fa fa-percentage me-2 text-info"></i>Occupancy Rate per Property
+    </div>
+    <div class="card-body">
+        <div class="chart-container" style="height:220px;">
+            <canvas id="occupancyRateChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- ── Per-property detail cards ────────────────────────────────── -->
 <div class="card">
-    <div class="card-header fw-bold"><i class="fa fa-building me-1"></i> Occupancy by Property</div>
+    <div class="card-header fw-semibold py-3">
+        <i class="fa fa-list me-2 text-secondary"></i>Property Detail
+    </div>
     <div class="card-body">
         @foreach (var item in Model)
         {
-            <div class="mb-4 p-3 border rounded">
-                <h6 class="fw-bold">@item.PropertyName</h6>
-                <div class="row g-2 mb-2">
-                    <div class="col-3 text-center">
-                        <div class="fs-4 fw-bold">@item.TotalUnits</div>
-                        <small class="text-muted">Total</small>
+            var barClass = item.OccupancyRate >= 80 ? "bg-success" : item.OccupancyRate >= 50 ? "bg-warning" : "bg-danger";
+            <div class="mb-4 pb-3 border-bottom last-no-border">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="fw-bold mb-0">@item.PropertyName</h6>
+                    <span class="badge @barClass fs-6">@item.OccupancyRate% occupied</span>
+                </div>
+                <div class="row g-2 mb-2 text-center">
+                    <div class="col-4">
+                        <div class="p-2 bg-light rounded">
+                            <div class="fs-5 fw-bold">@item.TotalUnits</div>
+                            <small class="text-muted">Total</small>
+                        </div>
                     </div>
-                    <div class="col-3 text-center">
-                        <div class="fs-4 fw-bold text-success">@item.OccupiedUnits</div>
-                        <small class="text-muted">Occupied</small>
+                    <div class="col-4">
+                        <div class="p-2 bg-light rounded">
+                            <div class="fs-5 fw-bold text-success">@item.OccupiedUnits</div>
+                            <small class="text-muted">Occupied</small>
+                        </div>
                     </div>
-                    <div class="col-3 text-center">
-                        <div class="fs-4 fw-bold text-primary">@item.AvailableUnits</div>
-                        <small class="text-muted">Available</small>
-                    </div>
-                    <div class="col-3 text-center">
-                        <div class="fs-4 fw-bold text-info">@item.OccupancyRate%</div>
-                        <small class="text-muted">Rate</small>
+                    <div class="col-4">
+                        <div class="p-2 bg-light rounded">
+                            <div class="fs-5 fw-bold text-secondary">@item.AvailableUnits</div>
+                            <small class="text-muted">Available</small>
+                        </div>
                     </div>
                 </div>
-                <div class="progress" style="height:14px;">
-                    <div class="progress-bar bg-success fw-bold" style="width:@item.OccupancyRate%">
-                        @item.OccupancyRate%
-                    </div>
+                <div class="progress" style="height:10px;border-radius:6px;">
+                    <div class="progress-bar @barClass" style="width:@item.OccupancyRate%;border-radius:6px;"></div>
                 </div>
             </div>
         }
     </div>
 </div>
+
+@section Scripts {
+<script>
+Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
+Chart.defaults.plugins.legend.labels.usePointStyle = true;
+
+var labels   = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Select(o => o.PropertyName)));
+var occupied = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Select(o => o.OccupiedUnits)));
+var vacant   = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Select(o => o.AvailableUnits)));
+var rates    = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Select(o => o.OccupancyRate)));
+
+// Grouped bar
+new Chart(document.getElementById('occupancyBarChart'), {
+    type: 'bar',
+    data: {
+        labels: labels,
+        datasets: [
+            { label: 'Occupied', data: occupied, backgroundColor: 'rgba(25,135,84,.8)',   borderRadius: 6 },
+            { label: 'Vacant',   data: vacant,   backgroundColor: 'rgba(108,117,125,.4)', borderRadius: 6 }
+        ]
+    },
+    options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'top' } },
+        scales: {
+            x: { grid: { display: false } },
+            y: { beginAtZero: true, ticks: { stepSize: 1 } }
+        }
+    }
+});
+
+// Overall doughnut
+new Chart(document.getElementById('occupancyDoughnut'), {
+    type: 'doughnut',
+    data: {
+        labels: ['Occupied', 'Vacant'],
+        datasets: [{
+            data: [@occupiedUnits, @vacantUnits],
+            backgroundColor: ['#198754','#dee2e6'],
+            borderWidth: 2, borderColor: '#fff', hoverOffset: 8
+        }]
+    },
+    options: {
+        cutout: '72%', responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom' } }
+    }
+});
+
+// Occupancy rate horizontal bar
+new Chart(document.getElementById('occupancyRateChart'), {
+    type: 'bar',
+    data: {
+        labels: labels,
+        datasets: [{
+            label: 'Occupancy Rate (%)',
+            data: rates,
+            backgroundColor: rates.map(r => r >= 80 ? 'rgba(25,135,84,.8)' : r >= 50 ? 'rgba(255,193,7,.8)' : 'rgba(220,53,69,.8)'),
+            borderRadius: 6
+        }]
+    },
+    options: {
+        indexAxis: 'y',
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+            x: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' } },
+            y: { grid: { display: false } }
+        }
+    }
+});
+</script>
+}

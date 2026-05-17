@@ -78,8 +78,7 @@
               "RelativeToolTip": "RentEase.MVC\\Views\\Maintenance\\Details.cshtml",
               "ViewState": "AgIAADoBAAAAAAAAAAAUwFEBAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
-              "WhenOpened": "2026-05-13T05:22:01.869Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-05-13T05:22:01.869Z"
             },
             {
               "$type": "Document",
@@ -91,8 +90,7 @@
               "RelativeToolTip": "RentEase.MVC\\Controllers\\MaintenanceController.cs",
               "ViewState": "AgIAAC4BAAAAAAAAAAAAAJEBAAAgAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-05-13T05:24:45.773Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-05-13T05:24:45.773Z"
             },
             {
               "$type": "Document",
@@ -104,8 +102,7 @@
               "RelativeToolTip": "RentEase.MVC\\Views\\Maintenance\\Index.cshtml",
               "ViewState": "AgIAAIkAAAAAAAAAAAAAAI8AAAAYAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
-              "WhenOpened": "2026-05-13T05:20:46.536Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-05-13T05:20:46.536Z"
             },
             {
               "$type": "Document",
@@ -117,8 +114,7 @@
               "RelativeToolTip": "RentEase.MVC\\Controllers\\SupportingControllers.cs",
               "ViewState": "AgIAAOABAAAAAAAAAAAawOwBAAAHAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-05-10T12:57:00.154Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-05-10T12:57:00.154Z"
             },
             {
               "$type": "Document",
@@ -128,7 +124,7 @@
               "RelativeDocumentMoniker": "RentEase.MVC\\Program.cs",
               "ToolTip": "C:\\Users\\User\\source\\repos\\RentEase\\RentEase.MVC\\Program.cs",
               "RelativeToolTip": "RentEase.MVC\\Program.cs",
-              "ViewState": "AgIAAEUAAAAAAAAAAAAswFIAAAAEAAAAAAAAAA==",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAYAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-05-10T12:26:38.156Z",
               "EditorCaption": ""

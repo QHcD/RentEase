@@ -1,4 +1,3 @@
-@* ── Maintenance.cshtml ── *@
 @model PropertyLeasing.Reporting.ViewModels.MaintenanceReportItem
 @{
     ViewData["Title"] = "Maintenance Report";
@@ -6,12 +5,17 @@
 
 @if (Model == null)
 {
-    <div class="alert alert-warning">No data available.</div>
+    <div class="alert alert-warning"><i class="fa fa-exclamation-triangle me-2"></i>No maintenance data available.</div>
 }
 else
 {
+    var backlogRate   = Model.TotalRequests > 0 ? Math.Round((double)Model.PendingRequests    / Model.TotalRequests * 100, 1) : 0.0;
+    var inProgressPct = Model.TotalRequests > 0 ? Math.Round((double)Model.InProgressRequests / Model.TotalRequests * 100, 1) : 0.0;
+    var resolvedPct   = Model.TotalRequests > 0 ? Math.Round((double)Model.ResolvedRequests   / Model.TotalRequests * 100, 1) : 0.0;
+
+    <!-- ── KPI Cards ──────────────────────────────────────────────── -->
     <div class="row g-3 mb-4">
-        <div class="col-md-3">
+        <div class="col-sm-6 col-xl-3">
             <div class="card kpi-card border-primary text-center">
                 <div class="card-body">
                     <div class="stat-num text-primary">@Model.TotalRequests</div>
@@ -19,7 +23,7 @@ else
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-sm-6 col-xl-3">
             <div class="card kpi-card border-danger text-center">
                 <div class="card-body">
                     <div class="stat-num text-danger">@Model.PendingRequests</div>
@@ -27,7 +31,7 @@ else
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-sm-6 col-xl-3">
             <div class="card kpi-card border-warning text-center">
                 <div class="card-body">
                     <div class="stat-num text-warning">@Model.InProgressRequests</div>
@@ -35,7 +39,7 @@ else
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-sm-6 col-xl-3">
             <div class="card kpi-card border-success text-center">
                 <div class="card-body">
                     <div class="stat-num text-success">@Model.ResolvedRequests</div>
@@ -45,22 +49,133 @@ else
         </div>
     </div>
 
-    <div class="card">
-        <div class="card-body">
-            <h6>Average Resolution Time</h6>
-            <div class="display-6 fw-bold text-info">@Model.AvgResolutionHours hours</div>
-            <small class="text-muted">Based on resolved requests</small>
+    <!-- ── Charts Row ─────────────────────────────────────────────── -->
+    <div class="row g-3 mb-4">
+        <!-- Doughnut: status breakdown -->
+        <div class="col-lg-5">
+            <div class="card h-100">
+                <div class="card-header fw-semibold py-3">
+                    <i class="fa fa-chart-pie me-2 text-warning"></i>Request Status Breakdown
+                </div>
+                <div class="card-body d-flex flex-column align-items-center justify-content-center">
+                    <div class="chart-container mb-3" style="height:240px;width:240px;">
+                        <canvas id="maintenanceDoughnut"></canvas>
+                    </div>
+                    <div class="d-flex gap-2 flex-wrap justify-content-center">
+                        <span class="badge bg-danger">@Model.PendingRequests Pending (@backlogRate%)</span>
+                        <span class="badge bg-warning text-dark">@Model.InProgressRequests In Progress (@inProgressPct%)</span>
+                        <span class="badge bg-success">@Model.ResolvedRequests Resolved (@resolvedPct%)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-            <hr/>
-            <h6>Backlog Rate</h6>
-            @{
-                var backlogRate = Model.TotalRequests > 0
-                    ? Math.Round((double)Model.PendingRequests / Model.TotalRequests * 100, 1) : 0;
-            }
-            <div class="progress mt-2" style="height:20px;">
-                <div class="progress-bar bg-danger" style="width:@backlogRate%">@backlogRate% Backlog</div>
-                <div class="progress-bar bg-success" style="width:@(100 - backlogRate)%">@(100 - backlogRate)% Resolved</div>
+        <!-- Bar: counts + Avg resolution card -->
+        <div class="col-lg-7">
+            <div class="card mb-3">
+                <div class="card-header fw-semibold py-3">
+                    <i class="fa fa-chart-bar me-2 text-primary"></i>Requests by Status
+                </div>
+                <div class="card-body">
+                    <div class="chart-container" style="height:190px;">
+                        <canvas id="maintenanceBar"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="card border-info">
+                <div class="card-body d-flex align-items-center gap-3">
+                    <div class="rounded-circle bg-info bg-opacity-15 p-3 text-info fs-3"><i class="fa fa-clock"></i></div>
+                    <div>
+                        <div class="fs-2 fw-bold text-info">@Model.AvgResolutionHours h</div>
+                        <div class="text-muted small">Average Resolution Time (based on resolved requests)</div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
+
+    <!-- ── Backlog progress ────────────────────────────────────────── -->
+    <div class="card">
+        <div class="card-header fw-semibold py-3">
+            <i class="fa fa-tasks me-2 text-secondary"></i>Resolution Progress
+        </div>
+        <div class="card-body">
+            <div class="mb-3">
+                <div class="d-flex justify-content-between mb-1">
+                    <span class="small fw-semibold text-danger">Pending / Assigned</span>
+                    <span class="small text-muted">@backlogRate%</span>
+                </div>
+                <div class="progress" style="height:14px;border-radius:6px;">
+                    <div class="progress-bar bg-danger" style="width:@backlogRate%;border-radius:6px;"></div>
+                </div>
+            </div>
+            <div class="mb-3">
+                <div class="d-flex justify-content-between mb-1">
+                    <span class="small fw-semibold text-warning">In Progress</span>
+                    <span class="small text-muted">@inProgressPct%</span>
+                </div>
+                <div class="progress" style="height:14px;border-radius:6px;">
+                    <div class="progress-bar bg-warning" style="width:@inProgressPct%;border-radius:6px;"></div>
+                </div>
+            </div>
+            <div>
+                <div class="d-flex justify-content-between mb-1">
+                    <span class="small fw-semibold text-success">Resolved / Closed</span>
+                    <span class="small text-muted">@resolvedPct%</span>
+                </div>
+                <div class="progress" style="height:14px;border-radius:6px;">
+                    <div class="progress-bar bg-success" style="width:@resolvedPct%;border-radius:6px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@section Scripts {
+@if (Model != null)
+{
+    <text>
+<script>
+Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
+Chart.defaults.plugins.legend.labels.usePointStyle = true;
+
+new Chart(document.getElementById('maintenanceDoughnut'), {
+    type: 'doughnut',
+    data: {
+        labels: ['Pending / Assigned', 'In Progress', 'Resolved / Closed'],
+        datasets: [{
+            data: [@Model.PendingRequests, @Model.InProgressRequests, @Model.ResolvedRequests],
+            backgroundColor: ['#dc3545', '#ffc107', '#198754'],
+            borderWidth: 2, borderColor: '#fff', hoverOffset: 10
+        }]
+    },
+    options: {
+        cutout: '68%', responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom' } }
+    }
+});
+
+new Chart(document.getElementById('maintenanceBar'), {
+    type: 'bar',
+    data: {
+        labels: ['Pending / Assigned', 'In Progress', 'Resolved / Closed'],
+        datasets: [{
+            label: 'Requests',
+            data: [@Model.PendingRequests, @Model.InProgressRequests, @Model.ResolvedRequests],
+            backgroundColor: ['#dc3545', '#ffc107', '#198754'],
+            borderRadius: 6
+        }]
+    },
+    options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+            x: { grid: { display: false } },
+            y: { beginAtZero: true, ticks: { stepSize: 1 } }
+        }
+    }
+});
+</script>
+    </text>
+}
 }

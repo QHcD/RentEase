@@ -1,54 +1,109 @@
 @model PropertyLeasing.Reporting.ViewModels.LoginViewModel
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 @{
     ViewData["Title"] = "Login";
-    Layout = null;
+    ViewData["HidePageTitle"] = true;
+    var demoEmail = Configuration["DemoManagerLogin:Email"] ?? "manager@propleasing.com";
+    var demoPassword = Configuration["DemoManagerLogin:Password"] ?? "Manager@123";
 }
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8"/>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>Reporting Portal — Login</title>
-    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css"/>
-    <style>
-        body { background: #1a1a2e; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
-        .login-card { background: #fff; border-radius: 12px; padding: 2.5rem; width: 100%; max-width: 420px; }
-        .brand { color: #e94560; font-weight: 700; font-size: 1.4rem; }
-    </style>
-</head>
-<body>
-<div class="login-card shadow-lg">
-    <div class="text-center mb-4">
-        <div class="brand"><i class="fa fa-chart-pie me-2"></i>Reporting Portal</div>
-        <p class="text-muted small mt-1">Property Manager access only</p>
+
+<div class="row justify-content-center g-4">
+
+    <div class="col-md-5">
+        <div class="card shadow-sm">
+            <div class="card-header bg-dark text-white">
+                <h4 class="mb-0"><i class="fa fa-lock me-2"></i>Reporting login</h4>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-3">Property managers only. Credentials are validated against the RentEase API.</p>
+                <form asp-action="Login" method="post" id="loginForm">
+                    @Html.AntiForgeryToken()
+                    <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2 small"></div>
+
+                    <div class="mb-3">
+                        <label asp-for="Email" class="form-label">Email</label>
+                        <input asp-for="Email" id="loginEmail" class="form-control" placeholder="manager@propleasing.com" autocomplete="username" />
+                        <span asp-validation-for="Email" class="text-danger small"></span>
+                    </div>
+                    <div class="mb-4">
+                        <label asp-for="Password" class="form-label">Password</label>
+                        <input asp-for="Password" id="loginPassword" class="form-control" autocomplete="current-password" />
+                        <span asp-validation-for="Password" class="text-danger small"></span>
+                    </div>
+                    <button type="submit" class="btn btn-dark w-100">
+                        <i class="fa fa-sign-in-alt me-1"></i> Sign in
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary w-100 mt-2" id="btnFillManager" title="Fill demo manager email and password">
+                        <i class="fa fa-bolt me-1"></i> Fill manager credentials
+                    </button>
+                </form>
+            </div>
+            <div class="card-footer text-center text-muted small">
+                <a href="@Url.Action("LoginMac", "Account")" class="text-decoration-none">
+                    <i class="fa fa-magic me-1"></i>Open pre-filled (LoginMac)
+                </a>
+            </div>
+        </div>
     </div>
 
-    <form asp-action="Login" method="post">
-        @Html.AntiForgeryToken()
-        <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2 small" style="display:@(ViewData.ModelState.ErrorCount > 0 ? "block" : "none")"></div>
-
-        <div class="mb-3">
-            <label asp-for="Email" class="form-label">Email</label>
-            <input asp-for="Email" class="form-control" placeholder="manager@propleasing.com" />
-            <span asp-validation-for="Email" class="text-danger small"></span>
+    <div class="col-md-5">
+        <div class="card shadow-sm border-info">
+            <div class="card-header bg-info text-white">
+                <i class="fa fa-bolt me-2"></i><strong>Quick access — demo manager</strong>
+                <small class="d-block mt-1 opacity-75">Click to sign in with the demo manager account</small>
+            </div>
+            <div class="card-body p-2">
+                <button type="button"
+                        class="btn btn-outline-dark w-100 text-start mb-2 demo-btn"
+                        data-email="@demoEmail"
+                        data-password="@demoPassword">
+                    <div class="d-flex align-items-center gap-3">
+                        <span class="fa-stack" style="font-size:.75em;">
+                            <i class="fa fa-circle fa-stack-2x text-dark opacity-10"></i>
+                            <i class="fa fa-user-tie fa-stack-1x"></i>
+                        </span>
+                        <div>
+                            <span class="fw-semibold d-block">Property manager (demo)</span>
+                            <small class="text-muted">@demoEmail</small>
+                        </div>
+                        <i class="fa fa-arrow-right ms-auto opacity-50"></i>
+                    </div>
+                </button>
+            </div>
+            <div class="card-footer text-muted small text-center">
+                Password: <code>@demoPassword</code>
+            </div>
         </div>
-        <div class="mb-4">
-            <label asp-for="Password" class="form-label">Password</label>
-            <input asp-for="Password" class="form-control" placeholder="••••••••" />
-            <span asp-validation-for="Password" class="text-danger small"></span>
-        </div>
-        <button type="submit" class="btn btn-danger w-100">
-            <i class="fa fa-sign-in-alt me-1"></i> Sign In
-        </button>
-    </form>
-
-    <div class="text-center mt-3">
-        <small class="text-muted">Demo: manager@propleasing.com / Manager@123</small>
     </div>
+
 </div>
 
-<script src="~/lib/jquery/dist/jquery.min.js"></script>
-<script src="~/lib/jquery-validation/dist/jquery.validate.min.js"></script>
-<script src="~/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.min.js"></script>
-</body>
-</html>
+@section Scripts {
+    @{ await Html.RenderPartialAsync("_ValidationScriptsPartial"); }
+    <script>
+        var demoEmail = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(demoEmail));
+        var demoPassword = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(demoPassword));
+        var prefill = @(ViewBag.PrefillManagerDemo == true ? "true" : "false");
+
+        function fillManagerFields() {
+            var email = document.getElementById('loginEmail');
+            var password = document.getElementById('loginPassword');
+            if (email) email.value = demoEmail;
+            if (password) password.value = demoPassword;
+        }
+
+        document.getElementById('btnFillManager').addEventListener('click', fillManagerFields);
+
+        document.querySelectorAll('.demo-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                document.getElementById('loginEmail').value = this.dataset.email;
+                document.getElementById('loginPassword').value = this.dataset.password;
+                document.querySelectorAll('.demo-btn').forEach(function (b) { b.classList.remove('active'); });
+                this.classList.add('active');
+                document.getElementById('loginForm').submit();
+            });
+        });
+
+        if (prefill) fillManagerFields();
+    </script>
+}
