@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PropertyLeasing.Reporting.Services;
+using PropertyLeasing.Reporting.ViewModels;
 using System.Security.Claims;
 
 namespace PropertyLeasing.Reporting.Controllers;
@@ -56,15 +57,28 @@ public class ReportsController : Controller
     }
 
     // GET /Reports/Applications
-    public async Task<IActionResult> Applications(string? status)
+    public async Task<IActionResult> Applications(string? status, string? leaseStatus, string? tab)
     {
         SetApiToken();
-        var data = await _api.GetApplicationsReportAsync();
+        var applications = await _api.GetApplicationsReportAsync();
+        var leases = await _api.GetLeasesReportAsync();
 
         if (!string.IsNullOrWhiteSpace(status))
-            data = data.Where(a => a.Status == status).ToList();
+            applications = applications.Where(a => a.Status == status).ToList();
+
+        if (!string.IsNullOrWhiteSpace(leaseStatus))
+            leases = leases.Where(l => l.Status == leaseStatus).ToList();
 
         ViewBag.Status = status;
-        return View(data);
+        ViewBag.LeaseStatus = leaseStatus;
+        ViewBag.ActiveTab = string.Equals(tab, "leases", StringComparison.OrdinalIgnoreCase)
+            ? "leases"
+            : "applications";
+
+        return View(new ApplicationsLeasesReportViewModel
+        {
+            Applications = applications,
+            Leases = leases
+        });
     }
 }

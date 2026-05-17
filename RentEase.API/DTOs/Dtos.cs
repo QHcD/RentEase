@@ -100,6 +100,20 @@ public class LeaseApplicationDto
     public DateTime CreatedAt           { get; set; }
 }
 
+public class LeaseReportDto
+{
+    public int       LeaseId         { get; set; }
+    public int       ApplicationId   { get; set; }
+    public string    TenantName      { get; set; } = string.Empty;
+    public string    UnitNumber      { get; set; } = string.Empty;
+    public string    PropertyName    { get; set; } = string.Empty;
+    public DateTime  LeaseStartDate  { get; set; }
+    public DateTime  LeaseEndDate    { get; set; }
+    public decimal   MonthlyRent     { get; set; }
+    public string    Status          { get; set; } = string.Empty;
+    public DateTime  CreatedAt       { get; set; }
+}
+
 // ── Reports (for Reporting App) ───────────────────────
 public class OccupancyReportDto
 {

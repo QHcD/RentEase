@@ -109,4 +109,28 @@ public class ReportsController : ControllerBase
 
         return Ok(apps);
     }
+
+    // GET api/reports/leases
+    [HttpGet("leases")]
+    public async Task<IActionResult> GetLeasesReport()
+    {
+        var leases = await _db.Leases
+            .OrderByDescending(l => l.CreatedAt)
+            .Select(l => new LeaseReportDto
+            {
+                LeaseId        = l.LeaseId,
+                ApplicationId  = l.ApplicationId,
+                TenantName     = l.Application.User.FullName,
+                UnitNumber     = l.Application.Unit.UnitNumber,
+                PropertyName   = l.Application.Unit.Property.Name,
+                LeaseStartDate = l.LeaseStartDate,
+                LeaseEndDate   = l.LeaseEndDate,
+                MonthlyRent    = l.MonthlyRent,
+                Status         = l.Status,
+                CreatedAt      = l.CreatedAt
+            })
+            .ToListAsync();
+
+        return Ok(leases);
+    }
 }

@@ -115,4 +115,21 @@ public class ApiClient
             return new();
         }
     }
+
+    // GET /api/reports/leases
+    public async Task<List<LeaseReportItem>> GetLeasesReportAsync()
+    {
+        try
+        {
+            var response = await _http.GetAsync("/api/reports/leases");
+            if (!response.IsSuccessStatusCode) return new();
+            var json = await response.Content.ReadAsStringAsync();
+            return JsonSerializer.Deserialize<List<LeaseReportItem>>(json, _json) ?? new();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "GetLeasesReport failed");
+            return new();
+        }
+    }
 }

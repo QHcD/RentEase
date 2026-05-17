@@ -1,147 +1,348 @@
-@model List<PropertyLeasing.Reporting.ViewModels.ApplicationReportItem>
+@model PropertyLeasing.Reporting.ViewModels.ApplicationsLeasesReportViewModel
 @{
-    ViewData["Title"] = "Lease Applications Report";
-    var statuses = new[] { "Pending", "Screening", "Approved", "Rejected" };
+    ViewData["Title"] = "Applications & Leases Report";
+    var activeTab = ViewBag.ActiveTab as string ?? "applications";
 
-    var countApproved  = Model.Count(a => a.Status == "Approved");
-    var countPending   = Model.Count(a => a.Status == "Pending");
-    var countScreening = Model.Count(a => a.Status == "Screening");
-    var countRejected  = Model.Count(a => a.Status == "Rejected");
-    var total          = Model.Count;
+    var appStatuses = new[] { "Pending", "Screening", "Approved", "Rejected" };
+    var apps = Model.Applications;
+    var countAppApproved = apps.Count(a => a.Status == "Approved");
+    var countAppPending = apps.Count(a => a.Status == "Pending");
+    var countAppScreening = apps.Count(a => a.Status == "Screening");
+    var countAppRejected = apps.Count(a => a.Status == "Rejected");
+    var totalApps = apps.Count;
+
+    string AppBadge(string s) => s switch
+    {
+        "Approved" => "success",
+        "Rejected" => "danger",
+        "Screening" => "info",
+        _ => "warning"
+    };
+
+    var leaseStatuses = new[] { "PendingPayment", "Approved", "Active", "Terminated", "Renewed" };
+    var leases = Model.Leases;
+    int CountLease(string s) => leases.Count(l => l.Status == s);
+    var countPendingPayment = CountLease("PendingPayment");
+    var countLeaseApproved = CountLease("Approved");
+    var countActive = CountLease("Active");
+    var countTerminated = CountLease("Terminated");
+    var countRenewed = CountLease("Renewed");
+    var totalLeases = leases.Count;
+
+    string LeaseBadge(string s) => s switch
+    {
+        "Active" => "success",
+        "Renewed" => "primary",
+        "Approved" => "info",
+        "Terminated" => "danger",
+        "PendingPayment" => "warning",
+        _ => "secondary"
+    };
+
+    string LeaseLabel(string s) => s switch
+    {
+        "PendingPayment" => "Pending payment",
+        _ => s
+    };
 }
 
-<!-- ── KPI Cards ──────────────────────────────────────────────────── -->
-<div class="row g-3 mb-4">
-    <div class="col-sm-6 col-xl-3">
-        <div class="card kpi-card border-secondary text-center">
-            <div class="card-body">
-                <div class="stat-num text-secondary">@total</div>
-                <div class="text-muted small">Total Applications</div>
-            </div>
-        </div>
-    </div>
-    <div class="col-sm-6 col-xl-3">
-        <div class="card kpi-card border-success text-center">
-            <div class="card-body">
-                <div class="stat-num text-success">@countApproved</div>
-                <div class="text-muted small">Approved</div>
-            </div>
-        </div>
-    </div>
-    <div class="col-sm-6 col-xl-3">
-        <div class="card kpi-card border-warning text-center">
-            <div class="card-body">
-                <div class="stat-num text-warning">@countPending</div>
-                <div class="text-muted small">Pending</div>
-            </div>
-        </div>
-    </div>
-    <div class="col-sm-6 col-xl-3">
-        <div class="card kpi-card border-danger text-center">
-            <div class="card-body">
-                <div class="stat-num text-danger">@countRejected</div>
-                <div class="text-muted small">Rejected</div>
-            </div>
-        </div>
-    </div>
-</div>
+<ul class="nav nav-tabs mb-4" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button type="button" class="nav-link @(activeTab == "applications" ? "active" : "")"
+                id="tab-apps-trigger" data-bs-toggle="tab" data-bs-target="#pane-apps"
+                role="tab" aria-controls="pane-apps" aria-selected="@(activeTab == "applications" ? "true" : "false")">
+            <i class="fa fa-file-signature me-2"></i>Lease applications
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button type="button" class="nav-link @(activeTab == "leases" ? "active" : "")"
+                id="tab-leases-trigger" data-bs-toggle="tab" data-bs-target="#pane-leases"
+                role="tab" aria-controls="pane-leases" aria-selected="@(activeTab == "leases" ? "true" : "false")">
+            <i class="fa fa-key me-2"></i>Leases
+        </button>
+    </li>
+</ul>
 
-<!-- ── Charts Row ────────────────────────────────────────────────── -->
-<div class="row g-3 mb-4">
-    <!-- Doughnut: status split -->
-    <div class="col-lg-5">
-        <div class="card h-100">
-            <div class="card-header fw-semibold py-3">
-                <i class="fa fa-chart-pie me-2 text-info"></i>Applications by Status
-            </div>
-            <div class="card-body d-flex flex-column align-items-center justify-content-center">
-                <div class="chart-container mb-3" style="height:240px;width:240px;">
-                    <canvas id="appDoughnut"></canvas>
+<div class="tab-content">
+    <!-- ── Lease applications ───────────────────────────────────── -->
+    <div class="tab-pane fade @(activeTab == "applications" ? "show active" : "")" id="pane-apps" role="tabpanel" aria-labelledby="tab-apps-trigger">
+        <div class="row g-3 mb-4">
+            <div class="col-sm-6 col-xl-3">
+                <div class="card kpi-card border-secondary text-center">
+                    <div class="card-body">
+                        <div class="stat-num text-secondary">@totalApps</div>
+                        <div class="text-muted small">Total applications</div>
+                    </div>
                 </div>
-                <div class="d-flex gap-2 flex-wrap justify-content-center">
-                    <span class="badge bg-success">@countApproved Approved</span>
-                    <span class="badge bg-warning text-dark">@countPending Pending</span>
-                    <span class="badge bg-info text-dark">@countScreening Screening</span>
-                    <span class="badge bg-danger">@countRejected Rejected</span>
+            </div>
+            <div class="col-sm-6 col-xl-3">
+                <div class="card kpi-card border-success text-center">
+                    <div class="card-body">
+                        <div class="stat-num text-success">@countAppApproved</div>
+                        <div class="text-muted small">Approved</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-sm-6 col-xl-3">
+                <div class="card kpi-card border-warning text-center">
+                    <div class="card-body">
+                        <div class="stat-num text-warning">@countAppPending</div>
+                        <div class="text-muted small">Pending</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-sm-6 col-xl-3">
+                <div class="card kpi-card border-danger text-center">
+                    <div class="card-body">
+                        <div class="stat-num text-danger">@countAppRejected</div>
+                        <div class="text-muted small">Rejected</div>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- Bar: counts per status -->
-    <div class="col-lg-7">
-        <div class="card h-100">
-            <div class="card-header fw-semibold py-3">
-                <i class="fa fa-chart-bar me-2 text-primary"></i>Status Distribution
+        <div class="row g-3 mb-4">
+            <div class="col-lg-5">
+                <div class="card h-100">
+                    <div class="card-header fw-semibold py-3">
+                        <i class="fa fa-chart-pie me-2 text-info"></i>Applications by status
+                    </div>
+                    <div class="card-body d-flex flex-column align-items-center justify-content-center">
+                        <div class="chart-container mb-3" style="height:240px;width:240px;">
+                            <canvas id="appDoughnut"></canvas>
+                        </div>
+                        <div class="d-flex gap-2 flex-wrap justify-content-center">
+                            <span class="badge bg-success">@countAppApproved Approved</span>
+                            <span class="badge bg-warning text-dark">@countAppPending Pending</span>
+                            <span class="badge bg-info text-dark">@countAppScreening Screening</span>
+                            <span class="badge bg-danger">@countAppRejected Rejected</span>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="card-body">
-                <div class="chart-container" style="height:260px;">
-                    <canvas id="appBar"></canvas>
+            <div class="col-lg-7">
+                <div class="card h-100">
+                    <div class="card-header fw-semibold py-3">
+                        <i class="fa fa-chart-bar me-2 text-primary"></i>Status distribution
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container" style="height:260px;">
+                            <canvas id="appBar"></canvas>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
-</div>
 
-<!-- ── Filters + Table ───────────────────────────────────────────── -->
-<div class="card mb-3">
-    <div class="card-body py-2">
-        <div class="d-flex gap-2 flex-wrap align-items-center">
-            <strong class="me-1 text-muted small">Filter:</strong>
-            <a asp-action="Applications" class="btn btn-sm @(ViewBag.Status == null ? "btn-dark" : "btn-outline-dark")">All (@total)</a>
-            @foreach (var s in statuses)
-            {
-                var color = s switch { "Approved" => "success", "Rejected" => "danger", "Screening" => "info", _ => "warning" };
-                var cnt   = s switch { "Approved" => countApproved, "Rejected" => countRejected, "Screening" => countScreening, _ => countPending };
-                <a asp-action="Applications" asp-route-status="@s"
-                   class="btn btn-sm @(ViewBag.Status == s ? $"btn-{color}" : $"btn-outline-{color}")">@s (@cnt)</a>
-            }
-        </div>
-    </div>
-</div>
-
-<div class="card">
-    <div class="card-header fw-semibold py-3">
-        <i class="fa fa-file-alt me-2"></i> @Model.Count application(s)
-        @if (ViewBag.Status != null) { <span class="badge bg-secondary ms-2">@ViewBag.Status</span> }
-    </div>
-    <div class="table-responsive">
-        <table class="table table-hover mb-0 align-middle">
-            <thead class="table-light">
-                <tr>
-                    <th>#</th>
-                    <th>Tenant</th>
-                    <th>Unit</th>
-                    <th>Property</th>
-                    <th>Start Date</th>
-                    <th>End Date</th>
-                    <th>Status</th>
-                    <th>Applied</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var a in Model)
-                {
-                    var badgeColor = a.Status switch
+        <div class="card mb-3">
+            <div class="card-body py-2">
+                <div class="d-flex gap-2 flex-wrap align-items-center">
+                    <strong class="me-1 text-muted small">Filter:</strong>
+                    <a asp-action="Applications" asp-route-tab="applications" asp-route-leaseStatus="@ViewBag.LeaseStatus"
+                       class="btn btn-sm @(ViewBag.Status == null ? "btn-dark" : "btn-outline-dark")">All (@totalApps)</a>
+                    @foreach (var s in appStatuses)
                     {
-                        "Approved"  => "success",
-                        "Rejected"  => "danger",
-                        "Screening" => "info",
-                        _           => "warning"
-                    };
-                    <tr>
-                        <td class="text-muted small">@a.ApplicationId</td>
-                        <td class="fw-semibold">@a.TenantName</td>
-                        <td>@a.UnitNumber</td>
-                        <td>@a.PropertyName</td>
-                        <td>@(a.RequestedStartDate?.ToString("dd MMM yyyy") ?? "—")</td>
-                        <td>@(a.RequestedEndDate?.ToString("dd MMM yyyy") ?? "—")</td>
-                        <td><span class="badge bg-@badgeColor">@a.Status</span></td>
-                        <td class="text-muted small">@a.CreatedAt.ToString("dd MMM yyyy")</td>
-                    </tr>
+                        var color = s switch { "Approved" => "success", "Rejected" => "danger", "Screening" => "info", _ => "warning" };
+                        var cnt = s switch { "Approved" => countAppApproved, "Rejected" => countAppRejected, "Screening" => countAppScreening, _ => countAppPending };
+                        <a asp-action="Applications" asp-route-status="@s" asp-route-tab="applications" asp-route-leaseStatus="@ViewBag.LeaseStatus"
+                           class="btn btn-sm @(ViewBag.Status == s ? $"btn-{color}" : $"btn-outline-{color}")">@s (@cnt)</a>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header fw-semibold py-3">
+                <i class="fa fa-file-alt me-2"></i>@apps.Count application(s)
+                @if (ViewBag.Status != null)
+                {
+                    <span class="badge bg-secondary ms-2">@ViewBag.Status</span>
                 }
-            </tbody>
-        </table>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>#</th>
+                            <th>Tenant</th>
+                            <th>Unit</th>
+                            <th>Property</th>
+                            <th>Start date</th>
+                            <th>End date</th>
+                            <th>Status</th>
+                            <th>Applied</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var a in apps)
+                        {
+                            var badgeColor = AppBadge(a.Status);
+                            <tr>
+                                <td class="text-muted small">@a.ApplicationId</td>
+                                <td class="fw-semibold">@a.TenantName</td>
+                                <td>@a.UnitNumber</td>
+                                <td>@a.PropertyName</td>
+                                <td>@(a.RequestedStartDate?.ToString("dd MMM yyyy") ?? "—")</td>
+                                <td>@(a.RequestedEndDate?.ToString("dd MMM yyyy") ?? "—")</td>
+                                <td><span class="badge bg-@badgeColor">@a.Status</span></td>
+                                <td class="text-muted small">@a.CreatedAt.ToString("dd MMM yyyy")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Leases ───────────────────────────────────────────────── -->
+    <div class="tab-pane fade @(activeTab == "leases" ? "show active" : "")" id="pane-leases" role="tabpanel" aria-labelledby="tab-leases-trigger">
+        <div class="row g-3 mb-4">
+            <div class="col-6 col-lg-4 col-xl-2">
+                <div class="card kpi-card border-secondary text-center">
+                    <div class="card-body">
+                        <div class="stat-num text-secondary">@totalLeases</div>
+                        <div class="text-muted small">Total leases</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-4 col-xl-2">
+                <div class="card kpi-card border-warning text-center">
+                    <div class="card-body">
+                        <div class="stat-num text-warning">@countPendingPayment</div>
+                        <div class="text-muted small">Pending payment</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-4 col-xl-2">
+                <div class="card kpi-card border-info text-center">
+                    <div class="card-body">
+                        <div class="stat-num text-info">@countLeaseApproved</div>
+                        <div class="text-muted small">Approved</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-4 col-xl-2">
+                <div class="card kpi-card border-success text-center">
+                    <div class="card-body">
+                        <div class="stat-num text-success">@countActive</div>
+                        <div class="text-muted small">Active</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-4 col-xl-2">
+                <div class="card kpi-card border-danger text-center">
+                    <div class="card-body">
+                        <div class="stat-num text-danger">@countTerminated</div>
+                        <div class="text-muted small">Terminated</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-4 col-xl-2">
+                <div class="card kpi-card border-primary text-center">
+                    <div class="card-body">
+                        <div class="stat-num text-primary">@countRenewed</div>
+                        <div class="text-muted small">Renewed</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-4">
+            <div class="col-lg-5">
+                <div class="card h-100">
+                    <div class="card-header fw-semibold py-3">
+                        <i class="fa fa-chart-pie me-2 text-info"></i>Leases by status
+                    </div>
+                    <div class="card-body d-flex flex-column align-items-center justify-content-center">
+                        <div class="chart-container mb-3" style="height:240px;width:240px;">
+                            <canvas id="leaseDoughnut"></canvas>
+                        </div>
+                        <div class="d-flex gap-2 flex-wrap justify-content-center">
+                            @foreach (var s in leaseStatuses)
+                            {
+                                var n = CountLease(s);
+                                <span class="badge bg-@LeaseBadge(s)">@LeaseLabel(s): @n</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-7">
+                <div class="card h-100">
+                    <div class="card-header fw-semibold py-3">
+                        <i class="fa fa-chart-bar me-2 text-primary"></i>Status distribution
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container" style="height:260px;">
+                            <canvas id="leaseBar"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body py-2">
+                <div class="d-flex gap-2 flex-wrap align-items-center">
+                    <strong class="me-1 text-muted small">Filter:</strong>
+                    <a asp-action="Applications" asp-route-tab="leases" asp-route-status="@ViewBag.Status"
+                       class="btn btn-sm @(ViewBag.LeaseStatus == null ? "btn-dark" : "btn-outline-dark")">All (@totalLeases)</a>
+                    @foreach (var s in leaseStatuses)
+                    {
+                        var color = LeaseBadge(s);
+                        var cnt = CountLease(s);
+                        <a asp-action="Applications" asp-route-leaseStatus="@s" asp-route-tab="leases" asp-route-status="@ViewBag.Status"
+                           class="btn btn-sm @(ViewBag.LeaseStatus == s ? $"btn-{color}" : $"btn-outline-{color}")">@LeaseLabel(s) (@cnt)</a>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header fw-semibold py-3">
+                <i class="fa fa-key me-2"></i>@leases.Count lease(s)
+                @if (ViewBag.LeaseStatus != null)
+                {
+                    <span class="badge bg-secondary ms-2">@LeaseLabel((string)ViewBag.LeaseStatus)</span>
+                }
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Lease #</th>
+                            <th>Application #</th>
+                            <th>Tenant</th>
+                            <th>Unit</th>
+                            <th>Property</th>
+                            <th>Start</th>
+                            <th>End</th>
+                            <th class="text-end">Rent / mo</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var l in leases)
+                        {
+                            var badgeColor = LeaseBadge(l.Status);
+                            <tr>
+                                <td class="text-muted small">@l.LeaseId</td>
+                                <td class="text-muted small">@l.ApplicationId</td>
+                                <td class="fw-semibold">@l.TenantName</td>
+                                <td>@l.UnitNumber</td>
+                                <td>@l.PropertyName</td>
+                                <td>@l.LeaseStartDate.ToString("dd MMM yyyy")</td>
+                                <td>@l.LeaseEndDate.ToString("dd MMM yyyy")</td>
+                                <td class="text-end">@l.MonthlyRent.ToString("N2")</td>
+                                <td><span class="badge bg-@badgeColor">@LeaseLabel(l.Status)</span></td>
+                                <td class="text-muted small">@l.CreatedAt.ToString("dd MMM yyyy")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -155,7 +356,7 @@ new Chart(document.getElementById('appDoughnut'), {
     data: {
         labels: ['Approved', 'Pending', 'Screening', 'Rejected'],
         datasets: [{
-            data: [@countApproved, @countPending, @countScreening, @countRejected],
+            data: [@countAppApproved, @countAppPending, @countAppScreening, @countAppRejected],
             backgroundColor: ['#198754', '#ffc107', '#0dcaf0', '#dc3545'],
             borderWidth: 2, borderColor: '#fff', hoverOffset: 10
         }]
@@ -172,8 +373,45 @@ new Chart(document.getElementById('appBar'), {
         labels: ['Approved', 'Pending', 'Screening', 'Rejected'],
         datasets: [{
             label: 'Applications',
-            data: [@countApproved, @countPending, @countScreening, @countRejected],
+            data: [@countAppApproved, @countAppPending, @countAppScreening, @countAppRejected],
             backgroundColor: ['#198754', '#ffc107', '#0dcaf0', '#dc3545'],
+            borderRadius: 6
+        }]
+    },
+    options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+            x: { grid: { display: false } },
+            y: { beginAtZero: true, ticks: { stepSize: 1 } }
+        }
+    }
+});
+
+new Chart(document.getElementById('leaseDoughnut'), {
+    type: 'doughnut',
+    data: {
+        labels: ['Pending payment', 'Approved', 'Active', 'Terminated', 'Renewed'],
+        datasets: [{
+            data: [@countPendingPayment, @countLeaseApproved, @countActive, @countTerminated, @countRenewed],
+            backgroundColor: ['#ffc107', '#0dcaf0', '#198754', '#dc3545', '#0d6efd'],
+            borderWidth: 2, borderColor: '#fff', hoverOffset: 10
+        }]
+    },
+    options: {
+        cutout: '68%', responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom' } }
+    }
+});
+
+new Chart(document.getElementById('leaseBar'), {
+    type: 'bar',
+    data: {
+        labels: ['Pending payment', 'Approved', 'Active', 'Terminated', 'Renewed'],
+        datasets: [{
+            label: 'Leases',
+            data: [@countPendingPayment, @countLeaseApproved, @countActive, @countTerminated, @countRenewed],
+            backgroundColor: ['#ffc107', '#0dcaf0', '#198754', '#dc3545', '#0d6efd'],
             borderRadius: 6
         }]
     },
