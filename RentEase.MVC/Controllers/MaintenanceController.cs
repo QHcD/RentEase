@@ -162,19 +162,8 @@ public class MaintenanceController : Controller
                 })
                 .ToList();
 
-            ViewBag.GeneralStaff = await _db.Users
-                .Include(u => u.StaffProfile)
-                .Where(u => u.Role == "MaintenanceStaff" &&
-                            u.StaffProfile != null &&
-                            u.StaffProfile.SkillProfile == "General")
-                .Select(u => new StaffSelectItem
-                {
-                    UserId             = u.UserId,
-                    FullName           = u.FullName,
-                    SkillProfile       = u.StaffProfile != null ? u.StaffProfile.SkillProfile       : null,
-                    AvailabilityStatus = u.StaffProfile != null ? u.StaffProfile.AvailabilityStatus : null
-                })
-                .ToListAsync();
+            var indexStaff = await LoadMaintenanceStaffAsync();
+            ViewBag.GeneralStaff = FilterStaffByCategory(indexStaff, "General");
         }
 
         ViewBag.CurrentStatus = status;
@@ -236,34 +225,12 @@ public class MaintenanceController : Controller
             .Where(u => changerIds.Contains(u.UserId))
             .ToDictionaryAsync(u => u.UserId, u => u.FullName);
 
-        // Load all staff then filter by request category.
-        // "General" requests are open to every staff member.
-        // Any other category only shows staff whose SkillProfile contains that category.
-        var allStaff = appUser.Role != "Tenant"
-            ? await _db.Users
-                .Include(u => u.StaffProfile)
-                .Where(u => u.Role == "MaintenanceStaff")
-                .Select(u => new StaffSelectItem
-                {
-                    UserId             = u.UserId,
-                    FullName           = u.FullName,
-                    SkillProfile       = u.StaffProfile != null ? u.StaffProfile.SkillProfile       : null,
-                    AvailabilityStatus = u.StaffProfile != null ? u.StaffProfile.AvailabilityStatus : null
-                })
-                .ToListAsync()
-            : new List<StaffSelectItem>();
-
-        var isGeneralOrUnset = string.IsNullOrEmpty(request.RequestType) ||
-                               request.RequestType.Equals("General", StringComparison.OrdinalIgnoreCase);
-
-        var staffList = isGeneralOrUnset
-            ? allStaff
-            : allStaff
-                .Where(s => !string.IsNullOrEmpty(s.SkillProfile) &&
-                            s.SkillProfile
-                             .Split(',', StringSplitOptions.RemoveEmptyEntries)
-                             .Any(skill => skill.Trim().Equals(request.RequestType, StringComparison.OrdinalIgnoreCase)))
-                .ToList();
+        var allStaff  = appUser.Role != "Tenant" ? await LoadMaintenanceStaffAsync() : new List<StaffSelectItem>();
+        var staffList = FilterStaffByCategory(allStaff, request.RequestType);
+        ViewBag.StaffFilterRelaxed = staffList.Count > 0
+            && !string.IsNullOrEmpty(request.RequestType)
+            && !request.RequestType.Equals("General", StringComparison.OrdinalIgnoreCase)
+            && !allStaff.Any(s => StaffMatchesCategory(s, request.RequestType));
 
         var vm = new MaintenanceDetailViewModel
         {
@@ -519,8 +486,22 @@ public class MaintenanceController : Controller
         // Manager flow: assigning staff auto-moves Submitted -> Assigned
         if (appUser.Role == "PropertyManager")
         {
+            if (request.Status == "Submitted" && !model.AssignedStaffId.HasValue)
+            {
+                TempData["Error"] = "Please select a maintenance staff member to assign this request.";
+                return RedirectToAction("Details", new { id = request.RequestId });
+            }
+
             if (model.AssignedStaffId.HasValue)
             {
+                var staffUser = await _db.Users.FirstOrDefaultAsync(u =>
+                    u.UserId == model.AssignedStaffId.Value && u.Role == "MaintenanceStaff");
+                if (staffUser == null)
+                {
+                    TempData["Error"] = "The selected staff member could not be found.";
+                    return RedirectToAction("Details", new { id = request.RequestId });
+                }
+
                 request.AssignedStaffId = model.AssignedStaffId.Value;
                 model.NewStatus = request.Status == "Submitted" ? "Assigned" : request.Status;
             }
@@ -673,8 +654,53 @@ public class MaintenanceController : Controller
             catch { /* email failure must not block the flow */ }
         }
 
-        TempData["Success"] = "Maintenance request updated successfully.";
+        TempData["Success"] = assignedChanged
+            ? $"Staff assigned successfully. Status is now {request.Status}."
+            : "Maintenance request updated successfully.";
         return RedirectToAction("Details", new { id = request.RequestId });
+    }
+
+    private async Task<List<StaffSelectItem>> LoadMaintenanceStaffAsync()
+    {
+        return await _db.Users
+            .AsNoTracking()
+            .Where(u => u.Role == "MaintenanceStaff")
+            .Select(u => new StaffSelectItem
+            {
+                UserId             = u.UserId,
+                FullName           = u.FullName,
+                SkillProfile       = u.StaffProfile != null ? u.StaffProfile.SkillProfile       : null,
+                AvailabilityStatus = u.StaffProfile != null ? u.StaffProfile.AvailabilityStatus : null
+            })
+            .ToListAsync();
+    }
+
+    private static bool StaffMatchesCategory(StaffSelectItem staff, string category)
+    {
+        if (string.IsNullOrEmpty(staff.SkillProfile)) return false;
+        return staff.SkillProfile
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Any(skill => skill.Trim().Equals(category, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// General requests: all staff. Category requests: matching specialists + generalists;
+    /// if none match, show all staff so managers can always assign.
+    /// </summary>
+    private static List<StaffSelectItem> FilterStaffByCategory(
+        List<StaffSelectItem> allStaff, string? requestType)
+    {
+        if (allStaff.Count == 0) return allStaff;
+
+        var isGeneralOrUnset = string.IsNullOrEmpty(requestType) ||
+                               requestType.Equals("General", StringComparison.OrdinalIgnoreCase);
+        if (isGeneralOrUnset) return allStaff;
+
+        var matched = allStaff
+            .Where(s => StaffMatchesCategory(s, requestType) || StaffMatchesCategory(s, "General"))
+            .ToList();
+
+        return matched.Count > 0 ? matched : allStaff;
     }
 
     // POST /Maintenance/ScheduleUnitMaintenance

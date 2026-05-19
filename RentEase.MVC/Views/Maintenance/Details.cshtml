@@ -410,7 +410,8 @@ else
                     }
                     else
                     {
-                        <form asp-action="Update" method="post" enctype="multipart/form-data">
+                        <form asp-action="Update" method="post" enctype="multipart/form-data"
+                              onsubmit="return validateManagerAssignment(event)">
                             @Html.AntiForgeryToken()
                             <input type="hidden" name="RequestId"     value="@Model.RequestId" />
                             <input type="hidden" name="Title"         value="@Model.Title" />
@@ -435,6 +436,14 @@ else
                                     <input type="hidden" name="AssignedStaffId" id="assignedStaffIdInput"
                                            value="@(Model.AssignedStaffId?.ToString() ?? "")" />
 
+                                    @if (ViewBag.StaffFilterRelaxed == true)
+                                    {
+                                        <div class="alert alert-warning py-2 small mb-2">
+                                            <i class="fa fa-info-circle me-1"></i>
+                                            No <strong>@Model.RequestType</strong> specialists were found.
+                                            Showing other available staff so you can still assign someone.
+                                        </div>
+                                    }
                                     @if (Model.StaffList.Any())
                                     {
                                         @foreach (var s in Model.StaffList)
@@ -573,6 +582,19 @@ else
 
 @section Scripts {
 <script>
+    const isManagerAssigning = @(role == "PropertyManager" && Model.Status == "Submitted" && !Model.AssignedStaffId.HasValue ? "true" : "false");
+
+    function validateManagerAssignment(e) {
+        if (!isManagerAssigning) return true;
+        const staffId = document.getElementById('assignedStaffIdInput')?.value?.trim();
+        if (!staffId) {
+            e.preventDefault();
+            alert('Please select a maintenance staff member before saving.');
+            return false;
+        }
+        return true;
+    }
+
     function selStaff(el, userId) {
         document.querySelectorAll('.staff-card').forEach(c => c.classList.remove('sel'));
         el.classList.add('sel');

@@ -50,6 +50,7 @@ public static class ContextSeed
 
             // ── Staff profiles (idempotent/upsert — always safe to run) ──
             await SeedStaffProfilesAsync(db);
+            await PatchMissingStaffProfilesAsync(db, logger);
 
             var configuration = serviceProvider.GetRequiredService<IConfiguration>();
             var resetBusinessData = configuration.GetValue("Seed:ResetBusinessDataOnStartup", false);
@@ -205,6 +206,34 @@ DELETE FROM [MaintenanceStaff];
             }
         }
         await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Ensures every MaintenanceStaff user has a profile row so category filters can match skills.
+    /// </summary>
+    private static async Task PatchMissingStaffProfilesAsync(PropertyLeasingDbContext db, ILogger logger)
+    {
+        var staffUserIds = await db.Users
+            .Where(u => u.Role == "MaintenanceStaff")
+            .Select(u => u.UserId)
+            .ToListAsync();
+
+        var profileUserIds = await db.MaintenanceStaffs.Select(s => s.UserId).ToListAsync();
+        var missing = staffUserIds.Except(profileUserIds).ToList();
+        if (missing.Count == 0) return;
+
+        foreach (var userId in missing)
+        {
+            db.MaintenanceStaffs.Add(new MaintenanceStaff
+            {
+                UserId             = userId,
+                SkillProfile       = "General",
+                AvailabilityStatus = "Available"
+            });
+        }
+
+        await db.SaveChangesAsync();
+        logger.LogInformation("[Seed] Created {Count} missing maintenance staff profile(s).", missing.Count);
     }
 
     // ── Business data (skips if 10+ properties already exist) ────────────────
