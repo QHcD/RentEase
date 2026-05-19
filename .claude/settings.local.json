@@ -12,7 +12,9 @@
       "Bash(git show *)",
       "Read(//tmp/**)",
       "Bash(git checkout *)",
-      "Bash(dir \"C:\\\\Users\\\\murta\\\\Desktop\\\\RentEase\\\\RentEase.MVC\\\\Controllers\\\\\" /b)"
+      "Bash(dir \"C:\\\\Users\\\\murta\\\\Desktop\\\\RentEase\\\\RentEase.MVC\\\\Controllers\\\\\" /b)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
     ]
   }
 }
