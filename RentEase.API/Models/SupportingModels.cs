@@ -147,6 +147,13 @@ public partial class Document
     [Column(TypeName = "datetime")]
     public DateTime UploadedAt { get; set; } = DateTime.Now;
 
+    // Submitted / Rejected
+    [StringLength(50)]
+    public string Status { get; set; } = "Submitted";
+
+    [StringLength(500)]
+    public string? RejectionReason { get; set; }
+
     [ForeignKey("UserId")]
     [InverseProperty("Documents")]
     public virtual User? User { get; set; }

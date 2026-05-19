@@ -22,7 +22,7 @@
                     <strong>Rent:</strong> BD @Model.MonthlyRent?.ToString("N0") /month
                 </div>
 
-                <form asp-action="Apply" method="post" id="applyForm">
+                <form asp-action="Apply" method="post" id="applyForm" enctype="multipart/form-data">
                     @Html.AntiForgeryToken()
                     <input asp-for="UnitId"       type="hidden" />
                     <input asp-for="UnitNumber"   type="hidden" />
@@ -57,6 +57,27 @@
                             </div>
                             <span asp-validation-for="RequestedEndDate" class="text-danger small"></span>
                             <div id="endDateError" class="text-danger small d-none"></div>
+                        </div>
+                    </div>
+
+                    <div asp-validation-summary="ModelOnly" class="alert alert-danger small py-2"></div>
+
+                    <div class="mb-4 p-3 border rounded bg-light">
+                        <h6 class="fw-semibold mb-3">
+                            <i class="fa fa-file-upload me-2 text-success"></i>Required Documents
+                        </h6>
+                        <p class="small text-muted mb-3">
+                            Upload clear PDF copies of your ID and proof of income (max 10 MB each).
+                        </p>
+                        <div class="mb-3">
+                            <label asp-for="NationalIdFile" class="form-label fw-semibold"></label>
+                            <input asp-for="NationalIdFile" type="file" class="form-control" accept=".pdf,application/pdf" required />
+                            <span asp-validation-for="NationalIdFile" class="text-danger small"></span>
+                        </div>
+                        <div class="mb-0">
+                            <label asp-for="SalaryIncomeFile" class="form-label fw-semibold"></label>
+                            <input asp-for="SalaryIncomeFile" type="file" class="form-control" accept=".pdf,application/pdf" required />
+                            <span asp-validation-for="SalaryIncomeFile" class="text-danger small"></span>
                         </div>
                     </div>
 

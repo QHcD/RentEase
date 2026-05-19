@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -13,21 +14,35 @@ namespace PropertyLeasing.MVC.Controllers;
 [Authorize]
 public class LeaseApplicationsController : Controller
 {
-    private readonly PropertyLeasingDbContext _db;
-    private readonly UserManager<AppUser>     _userManager;
-    private readonly NotificationService      _notifier;
-    private readonly EmailService             _emailService;
+    private readonly PropertyLeasingDbContext          _db;
+    private readonly UserManager<AppUser>              _userManager;
+    private readonly NotificationService               _notifier;
+    private readonly EmailService                      _emailService;
+    private readonly LeaseApplicationDocumentService   _documents;
 
     public LeaseApplicationsController(
         PropertyLeasingDbContext db,
-        UserManager<AppUser>     userManager,
-        NotificationService      notifier,
-        EmailService             emailService)
+        UserManager<AppUser> userManager,
+        NotificationService notifier,
+        EmailService emailService,
+        LeaseApplicationDocumentService documents)
     {
         _db           = db;
         _userManager  = userManager;
         _notifier     = notifier;
         _emailService = emailService;
+        _documents    = documents;
+    }
+
+    private async Task ReloadApplyUnitSummaryAsync(CreateLeaseApplicationViewModel model)
+    {
+        var unit = await _db.Units
+            .Include(u => u.Property)
+            .FirstOrDefaultAsync(u => u.UnitId == model.UnitId);
+        if (unit == null) return;
+        model.UnitNumber   = unit.UnitNumber;
+        model.PropertyName = unit.Property.Name;
+        model.MonthlyRent  = unit.MonthlyRent;
     }
 
     private async Task<User?> GetAppUserAsync()
@@ -38,13 +53,45 @@ public class LeaseApplicationsController : Controller
         var appUser = await _db.Users.FirstOrDefaultAsync(u => u.IdentityUserId == identity.Id)
                    ?? await _db.Users.FirstOrDefaultAsync(u => u.Email == identity.Email);
 
-        if (appUser != null && appUser.IdentityUserId != identity.Id)
+        if (appUser != null)
         {
-            appUser.IdentityUserId = identity.Id;
-            await _db.SaveChangesAsync();
+            if (appUser.IdentityUserId != identity.Id)
+            {
+                appUser.IdentityUserId = identity.Id;
+                await _db.SaveChangesAsync();
+            }
+
+            if (TenantProfileSync.ApplyIdentityToAppUser(
+                    identity.FullName,
+                    identity.Email!,
+                    identity.Phone,
+                    v => appUser.FullName = v,
+                    v => appUser.Email = v,
+                    v => appUser.Phone = v,
+                    new TenantProfileSync.ProfileSnapshot(appUser.FullName, appUser.Email, appUser.Phone)))
+                await _db.SaveChangesAsync();
         }
 
         return appUser;
+    }
+
+    private async Task SyncLeaseApplicationUserFromIdentityAsync(User tenantUser)
+    {
+        if (string.IsNullOrWhiteSpace(tenantUser.IdentityUserId))
+            return;
+
+        var identity = await _userManager.FindByIdAsync(tenantUser.IdentityUserId);
+        if (identity == null) return;
+
+        if (TenantProfileSync.ApplyIdentityToAppUser(
+                identity.FullName,
+                identity.Email ?? tenantUser.Email,
+                identity.Phone,
+                v => tenantUser.FullName = v,
+                v => tenantUser.Email = v,
+                v => tenantUser.Phone = v,
+                new TenantProfileSync.ProfileSnapshot(tenantUser.FullName, tenantUser.Email, tenantUser.Phone)))
+            await _db.SaveChangesAsync();
     }
 
     // ── Cancel open pre-tenancy maintenance for a unit ────────────────────────
@@ -407,6 +454,7 @@ public class LeaseApplicationsController : Controller
         var application = await _db.LeaseApplications
             .Include(a => a.Unit).ThenInclude(u => u.Property)
             .Include(a => a.User)
+            .Include(a => a.Documents)
             .Include(a => a.ApplicationLogs).ThenInclude(l => l.ChangedByUser)
             .FirstOrDefaultAsync(a => a.ApplicationId == id);
 
@@ -414,6 +462,8 @@ public class LeaseApplicationsController : Controller
 
         if (appUser.Role == "Tenant" && application.UserId != appUser.UserId)
             return Forbid();
+
+        await SyncLeaseApplicationUserFromIdentityAsync(application.User);
 
         var vm = new LeaseApplicationDetailViewModel
         {
@@ -436,10 +486,422 @@ public class LeaseApplicationsController : Controller
                     Status            = l.Status,
                     ChangedByUserName = l.ChangedByUser.FullName,
                     CreatedAt         = l.CreatedAt
-                }).ToList()
+                }).ToList(),
+            Documents = application.Documents
+                .OrderBy(d => d.FileType)
+                .Select(d => new ApplicationDocumentViewModel
+                {
+                    DocumentId      = d.DocumentId,
+                    DocumentType    = d.FileType ?? "",
+                    DisplayName     = LeaseApplicationDocumentRules.GetDisplayName(d.FileType ?? ""),
+                    FileName        = d.FileName,
+                    Status          = d.Status,
+                    RejectionReason = d.RejectionReason,
+                    UploadedAt      = d.UploadedAt
+                }).ToList(),
+            UploadedDocumentCount = application.Documents.Count,
+            CanViewDocumentFiles  = appUser.Role == "Tenant"
+                || (appUser.Role == "PropertyManager"
+                    && LeaseApplicationDocumentRules.ManagerCanViewDocuments(application.Status)),
+            CanReUploadDocuments  = appUser.Role == "Tenant"
+                && LeaseApplicationDocumentRules.TenantCanReUploadDocuments(
+                    application.Status,
+                    application.Documents.Select(d => (d.FileType ?? "", d.Status)))
         };
 
         return View("LeaseApplicationDetails", vm);
+    }
+
+    private async Task<(Document? Document, IActionResult? Error)> GetAccessibleDocumentAsync(
+        int documentId, User appUser)
+    {
+        var document = await _db.Documents
+            .Include(d => d.Application)
+            .FirstOrDefaultAsync(d => d.DocumentId == documentId);
+
+        if (document?.Application == null)
+            return (null, NotFound());
+
+        if (document.Application.ParentLeaseId.HasValue)
+            return (document, NotFound());
+
+        if (appUser.Role == "Tenant")
+        {
+            if (document.Application.UserId != appUser.UserId)
+                return (document, Forbid());
+            return (document, null);
+        }
+
+        if (appUser.Role == "PropertyManager")
+        {
+            if (!LeaseApplicationDocumentRules.ManagerCanViewDocuments(document.Application.Status))
+                return (document, Forbid());
+            return (document, null);
+        }
+
+        return (document, Forbid());
+    }
+
+    // GET /LeaseApplications/ViewDocument/{id} — HTML shell so the browser tab shows the file name
+    public async Task<IActionResult> ViewDocument(int id)
+    {
+        var appUser = await GetAppUserAsync();
+        if (appUser == null) return Unauthorized();
+
+        var (document, error) = await GetAccessibleDocumentAsync(id, appUser);
+        if (error != null) return error;
+        if (document == null) return NotFound();
+
+        if (!LeaseApplicationDocumentRules.IsActiveDocumentStatus(document.Status))
+            return NotFound();
+
+        return View("DocumentViewer", new DocumentViewerViewModel
+        {
+            DocumentId = document.DocumentId,
+            Title      = LeaseApplicationDocumentRules.GetDocumentViewerTitle(
+                document.FileName, document.FileType)
+        });
+    }
+
+    // GET /LeaseApplications/ViewDocumentContent/{id} — raw PDF for iframe
+    public async Task<IActionResult> ViewDocumentContent(int id)
+    {
+        var appUser = await GetAppUserAsync();
+        if (appUser == null) return Unauthorized();
+
+        var (document, error) = await GetAccessibleDocumentAsync(id, appUser);
+        if (error != null) return error;
+        if (document == null) return NotFound();
+
+        if (!LeaseApplicationDocumentRules.IsActiveDocumentStatus(document.Status))
+            return NotFound();
+
+        var absolutePath = _documents.ResolveAbsolutePath(document.StoragePath);
+        if (absolutePath == null) return NotFound();
+
+        Response.Headers.ContentDisposition = $"inline; filename=\"{document.FileName}\"";
+        return PhysicalFile(absolutePath, "application/pdf");
+    }
+
+    // GET /LeaseApplications/DownloadDocument/{id}
+    public async Task<IActionResult> DownloadDocument(int id)
+    {
+        var appUser = await GetAppUserAsync();
+        if (appUser == null) return Unauthorized();
+
+        var (document, error) = await GetAccessibleDocumentAsync(id, appUser);
+        if (error != null) return error;
+        if (document == null) return NotFound();
+
+        var absolutePath = _documents.ResolveAbsolutePath(document.StoragePath);
+        if (absolutePath == null) return NotFound();
+
+        return PhysicalFile(absolutePath, "application/pdf", document.FileName);
+    }
+
+    // GET /LeaseApplications/DownloadAllDocuments/{applicationId}
+    [Authorize(Roles = "PropertyManager")]
+    public async Task<IActionResult> DownloadAllDocuments(int applicationId)
+    {
+        var appUser = await GetAppUserAsync();
+        if (appUser == null) return Unauthorized();
+
+        var application = await _db.LeaseApplications
+            .Include(a => a.Documents)
+            .Include(a => a.User)
+            .FirstOrDefaultAsync(a => a.ApplicationId == applicationId);
+
+        if (application == null) return NotFound();
+        if (application.ParentLeaseId.HasValue) return NotFound();
+
+        if (!LeaseApplicationDocumentRules.ManagerCanViewDocuments(application.Status))
+            return Forbid();
+
+        var files = application.Documents
+            .Where(d => LeaseApplicationDocumentRules.IsActiveDocumentStatus(d.Status))
+            .Select(d => new { d.FileName, d.StoragePath })
+            .ToList();
+
+        if (files.Count == 0)
+        {
+            TempData["Error"] = "No documents available to download.";
+            return RedirectToAction("Details", new { id = applicationId });
+        }
+
+        using var zipStream = new MemoryStream();
+        using (var archive = new ZipArchive(zipStream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var file in files)
+            {
+                var absolutePath = _documents.ResolveAbsolutePath(file.StoragePath);
+                if (absolutePath == null) continue;
+
+                var entry = archive.CreateEntry(file.FileName, CompressionLevel.Fastest);
+                await using var entryStream = entry.Open();
+                await using var fileStream = new FileStream(absolutePath, FileMode.Open, FileAccess.Read);
+                await fileStream.CopyToAsync(entryStream);
+            }
+        }
+
+        zipStream.Position = 0;
+        var safeName = LeaseApplicationDocumentRules.SanitizeApplicantName(application.User.FullName);
+        var zipFileName = $"{applicationId}_{application.UserId}_{safeName}_documents.zip";
+        return File(zipStream.ToArray(), "application/zip", zipFileName);
+    }
+
+    // POST /LeaseApplications/RejectDocument
+    [Authorize(Roles = "PropertyManager")]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RejectDocument(int applicationId, string documentType, string reason)
+    {
+        var appUser = await GetAppUserAsync();
+        if (appUser == null) return Unauthorized();
+
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            TempData["Error"] = "A rejection reason is required.";
+            return RedirectToAction("Details", new { id = applicationId });
+        }
+
+        if (!LeaseApplicationDocumentRules.IsRequiredDocumentType(documentType))
+        {
+            TempData["Error"] = "Invalid document type.";
+            return RedirectToAction("Details", new { id = applicationId });
+        }
+
+        var application = await _db.LeaseApplications
+            .Include(a => a.Unit).ThenInclude(u => u.Property)
+            .Include(a => a.User)
+            .Include(a => a.Documents)
+            .FirstOrDefaultAsync(a => a.ApplicationId == applicationId);
+
+        if (application == null) return NotFound();
+        if (application.ParentLeaseId.HasValue)
+        {
+            TempData["Error"] = "Document review does not apply to renewal applications.";
+            return RedirectToAction("Details", new { id = applicationId });
+        }
+
+        if (application.Status != LeaseApplicationDocumentRules.ApplicationStatusScreening)
+        {
+            TempData["Error"] = "Documents can only be rejected while the application is under Screening.";
+            return RedirectToAction("Details", new { id = applicationId });
+        }
+
+        var docSnapshots = application.Documents
+            .Select(d => (d.FileType ?? "", d.Status))
+            .ToList();
+
+        if (!LeaseApplicationDocumentRules.HasRejectableDocument(docSnapshots, documentType))
+        {
+            TempData["Error"] = "No active document is available to reject for this type.";
+            return RedirectToAction("Details", new { id = applicationId });
+        }
+
+        var document = application.Documents
+            .Where(d => string.Equals(d.FileType, documentType, StringComparison.OrdinalIgnoreCase)
+                && LeaseApplicationDocumentRules.IsActiveDocumentStatus(d.Status))
+            .OrderByDescending(d => d.UploadedAt)
+            .First();
+
+        document.Status          = LeaseApplicationDocumentRules.DocumentStatusRejected;
+        document.RejectionReason = reason.Trim();
+
+        await _db.SaveChangesAsync();
+
+        var docLabel = LeaseApplicationDocumentRules.GetDisplayName(documentType);
+        var msg = $"Your {docLabel} for application #{applicationId} (Unit {application.Unit.UnitNumber}) was rejected. " +
+                    $"Reason: {reason.Trim()}. Please upload a new PDF.";
+
+        await _notifier.SendAsync(application.UserId, msg, "LeaseUpdate");
+
+        try
+        {
+            await _emailService.SendDocumentsRejectedAsync(
+                application.User.Email,
+                application.User.FullName,
+                application.Unit.UnitNumber,
+                application.Unit.Property.Name,
+                application.ApplicationId,
+                docLabel,
+                reason.Trim());
+        }
+        catch { /* email failure must not block the flow */ }
+
+        TempData["Success"] = $"{docLabel} rejected. The application remains under Screening; the tenant has been notified to upload a new PDF.";
+        return RedirectToAction("Details", new { id = applicationId });
+    }
+
+    // GET /LeaseApplications/ReUploadDocuments/{id}
+    [Authorize(Roles = "Tenant")]
+    public async Task<IActionResult> ReUploadDocuments(int id)
+    {
+        var appUser = await GetAppUserAsync();
+        if (appUser == null) return Unauthorized();
+
+        var application = await _db.LeaseApplications
+            .Include(a => a.Unit).ThenInclude(u => u.Property)
+            .Include(a => a.Documents)
+            .FirstOrDefaultAsync(a => a.ApplicationId == id);
+
+        if (application == null) return NotFound();
+        if (application.UserId != appUser.UserId) return Forbid();
+
+        var docSnapshots = application.Documents.Select(d => (d.FileType ?? "", d.Status ?? "")).ToList();
+        if (!LeaseApplicationDocumentRules.TenantCanReUploadDocuments(application.Status, docSnapshots))
+        {
+            TempData["Error"] = "This application does not require document re-upload.";
+            return RedirectToAction("Details", new { id });
+        }
+
+        return View(BuildReUploadViewModel(application));
+    }
+
+    // POST /LeaseApplications/ReUploadDocuments/{id}
+    [Authorize(Roles = "Tenant")]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ReUploadDocuments(int id, ReUploadDocumentsViewModel model)
+    {
+        var appUser = await GetAppUserAsync();
+        if (appUser == null) return Unauthorized();
+
+        var application = await _db.LeaseApplications
+            .Include(a => a.Unit).ThenInclude(u => u.Property)
+            .Include(a => a.Documents)
+            .FirstOrDefaultAsync(a => a.ApplicationId == id);
+
+        if (application == null) return NotFound();
+        if (application.UserId != appUser.UserId) return Forbid();
+        if (!LeaseApplicationDocumentRules.TenantCanReUploadDocuments(
+                application.Status,
+                application.Documents.Select(d => (d.FileType ?? "", d.Status))))
+        {
+            TempData["Error"] = "This application does not require document re-upload.";
+            return RedirectToAction("Details", new { id = id });
+        }
+
+        var docSnapshots = application.Documents
+            .Select(d => (d.FileType ?? "", d.Status ?? ""))
+            .ToList();
+        var rejectedTypes = LeaseApplicationDocumentRules.GetRejectedDocumentTypes(docSnapshots);
+
+        if (rejectedTypes.Count == 0)
+        {
+            TempData["Error"] = "No rejected documents are available for re-upload.";
+            return RedirectToAction("Details", new { id });
+        }
+
+        Document? FindRejected(string documentType) => application.Documents
+            .Where(d => string.Equals(d.FileType, documentType, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(d.Status, LeaseApplicationDocumentRules.DocumentStatusRejected,
+                    StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(d => d.UploadedAt)
+            .FirstOrDefault();
+
+        IFormFile? FileForType(string type)
+        {
+            if (LeaseApplicationDocumentRules.IsNationalIdType(type))
+                return model.NationalIdFile;
+            if (LeaseApplicationDocumentRules.IsSalaryIncomeType(type))
+                return model.SalaryIncomeFile;
+            return null;
+        }
+
+        var typesWithFiles = rejectedTypes
+            .Where(t => FileForType(t) is { Length: > 0 })
+            .ToList();
+
+        if (typesWithFiles.Count == 0)
+            ModelState.AddModelError(string.Empty, "Please select at least one PDF to upload.");
+
+        foreach (var type in typesWithFiles)
+        {
+            var file = FileForType(type)!;
+            var label = LeaseApplicationDocumentRules.GetDisplayName(type);
+            var propertyName = LeaseApplicationDocumentRules.GetReUploadPropertyName(type);
+
+            foreach (var msg in LeaseApplicationDocumentRules.ValidateSinglePdfUpload(
+                         true, file.FileName, file.Length, label))
+                ModelState.AddModelError(propertyName, msg);
+        }
+
+        if (!ModelState.IsValid)
+            return View(BuildReUploadViewModel(application));
+
+        foreach (var type in typesWithFiles)
+        {
+            var rejected = FindRejected(type);
+            var file     = FileForType(type);
+            if (rejected == null || file == null) continue;
+
+            await _documents.ReplaceRejectedDocumentAsync(
+                rejected, application.ApplicationId, appUser.UserId, appUser.FullName,
+                file, type);
+        }
+
+        var tuples = (await _db.Documents
+                .Where(d => d.ApplicationId == id)
+                .Select(d => new { d.FileType, d.Status })
+                .ToListAsync())
+            .Where(d => d.FileType != null)
+            .Select(d => (d.FileType!, d.Status ?? ""))
+            .ToList();
+
+        var managers = await _db.Users.Where(u => u.Role == "PropertyManager").ToListAsync();
+        if (LeaseApplicationDocumentRules.HasAllRequiredDocuments(application.ParentLeaseId, tuples))
+        {
+            foreach (var mgr in managers)
+                await _notifier.SendAsync(mgr.UserId,
+                    $"{appUser.FullName} re-uploaded all required documents for application #{application.ApplicationId} (Unit {application.Unit.UnitNumber}). Review in Screening.",
+                    "LeaseUpdate");
+
+            TempData["Success"] = "All documents uploaded. Your application remains under Screening for manager review.";
+        }
+        else
+        {
+            foreach (var mgr in managers)
+                await _notifier.SendAsync(mgr.UserId,
+                    $"{appUser.FullName} re-uploaded a document for application #{application.ApplicationId} (Unit {application.Unit.UnitNumber}).",
+                    "LeaseUpdate");
+
+            TempData["Success"] = "Document uploaded. Please upload any remaining rejected documents.";
+        }
+
+        var stillRejected = LeaseApplicationDocumentRules.GetRejectedDocumentTypes(tuples);
+        if (stillRejected.Count > 0)
+            return RedirectToAction(nameof(ReUploadDocuments), new { id });
+
+        return RedirectToAction("Details", new { id });
+    }
+
+    private static ReUploadDocumentsViewModel BuildReUploadViewModel(LeaseApplication application)
+    {
+        var rejected = application.Documents
+            .Where(d => string.Equals(d.Status, LeaseApplicationDocumentRules.DocumentStatusRejected,
+                StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        return new ReUploadDocumentsViewModel
+        {
+            ApplicationId               = application.ApplicationId,
+            UnitNumber                  = application.Unit.UnitNumber,
+            PropertyName                = application.Unit.Property.Name,
+            RejectedDocumentCount       = rejected.Count,
+            NeedsNationalId             = rejected.Any(d =>
+                string.Equals(d.FileType, LeaseApplicationDocumentRules.NationalId,
+                    StringComparison.OrdinalIgnoreCase)),
+            NeedsSalaryIncome           = rejected.Any(d =>
+                string.Equals(d.FileType, LeaseApplicationDocumentRules.SalaryIncome,
+                    StringComparison.OrdinalIgnoreCase)),
+            NationalIdRejectionReason   = rejected
+                .FirstOrDefault(d => string.Equals(d.FileType, LeaseApplicationDocumentRules.NationalId,
+                    StringComparison.OrdinalIgnoreCase))?.RejectionReason,
+            SalaryIncomeRejectionReason = rejected
+                .FirstOrDefault(d => string.Equals(d.FileType, LeaseApplicationDocumentRules.SalaryIncome,
+                    StringComparison.OrdinalIgnoreCase))?.RejectionReason
+        };
     }
 
     // ── Lease Details ─────────────────────────────────────────────────────────
@@ -569,7 +1031,22 @@ public class LeaseApplicationsController : Controller
             ModelState.AddModelError(nameof(model.RequestedEndDate),
                 "Lease period cannot exceed one year from the start date.");
 
-        if (!ModelState.IsValid) return View(model);
+        foreach (var msg in LeaseApplicationDocumentRules.ValidateRegularApplicationUploads(
+                     model.NationalIdFile != null && model.NationalIdFile.Length > 0,
+                     model.SalaryIncomeFile != null && model.SalaryIncomeFile.Length > 0,
+                     model.NationalIdFile?.FileName,
+                     model.NationalIdFile?.Length ?? 0,
+                     model.SalaryIncomeFile?.FileName,
+                     model.SalaryIncomeFile?.Length ?? 0))
+        {
+            ModelState.AddModelError(string.Empty, msg);
+        }
+
+        if (!ModelState.IsValid)
+        {
+            await ReloadApplyUnitSummaryAsync(model);
+            return View(model);
+        }
 
         var appUser = await GetAppUserAsync();
         if (appUser == null) return Unauthorized();
@@ -577,7 +1054,8 @@ public class LeaseApplicationsController : Controller
         var existing = await _db.LeaseApplications.AnyAsync(a =>
             a.UnitId == model.UnitId &&
             a.UserId == appUser.UserId &&
-            (a.Status == "Pending" || a.Status == "Screening" || a.Status == "Approved"));
+            (a.Status == "Pending" || a.Status == "Screening" || a.Status == "Approved"
+             || a.Status == LeaseApplicationDocumentRules.ApplicationStatusDocumentsRequired));
 
         if (existing)
         {
@@ -599,6 +1077,13 @@ public class LeaseApplicationsController : Controller
 
         _db.LeaseApplications.Add(application);
         await _db.SaveChangesAsync();
+
+        await _documents.SaveRegularApplicationDocumentsAsync(
+            application.ApplicationId,
+            appUser.UserId,
+            appUser.FullName,
+            model.NationalIdFile!,
+            model.SalaryIncomeFile!);
 
         _db.LeaseApplicationLogs.Add(new LeaseApplicationLog
         {
@@ -1026,6 +1511,23 @@ public class LeaseApplicationsController : Controller
             return RedirectToAction("Details", new { id = applicationId });
         }
 
+        if (!LeaseApplicationDocumentRules.IsRenewalApplication(application.ParentLeaseId))
+        {
+            var presentDocs = await _db.Documents
+                .Where(d => d.ApplicationId == applicationId && d.FileType != null)
+                .Select(d => new { d.FileType, d.Status })
+                .ToListAsync();
+
+            var presentTuples = presentDocs.Select(d => (d.FileType!, d.Status)).ToList();
+
+            if (!LeaseApplicationDocumentRules.HasAllRequiredDocuments(application.ParentLeaseId, presentTuples))
+            {
+                TempData["Error"] =
+                    "Cannot start screening: the tenant has not uploaded all required documents (National ID and salary / income proof).";
+                return RedirectToAction("Details", new { id = applicationId });
+            }
+        }
+
         application.Status = "Screening";
 
         _db.LeaseApplicationLogs.Add(new LeaseApplicationLog
@@ -1063,8 +1565,9 @@ public class LeaseApplicationsController : Controller
         if (appUser == null) return Unauthorized();
 
         var application = await _db.LeaseApplications
-            .Include(a => a.Unit)
+            .Include(a => a.Unit).ThenInclude(u => u.Property)
             .Include(a => a.User)
+            .Include(a => a.Documents)
             .FirstOrDefaultAsync(a => a.ApplicationId == applicationId);
 
         if (application == null) return NotFound();
@@ -1101,6 +1604,16 @@ public class LeaseApplicationsController : Controller
         };
         _db.Leases.Add(lease);
         await _db.SaveChangesAsync();
+
+        if (!application.ParentLeaseId.HasValue && application.Documents.Count > 0)
+        {
+            var archived = _documents.ArchiveApprovedApplicationDocuments(
+                application.UserId,
+                application.User.FullName,
+                application.Documents);
+            if (archived == 0)
+                TempData["Warning"] = "Application approved, but document files could not be archived.";
+        }
 
         _db.LeaseLogs.Add(new LeaseLog
         {

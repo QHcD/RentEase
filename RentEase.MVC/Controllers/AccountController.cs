@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PropertyLeasing.API.Data;
 using PropertyLeasing.API.Models;
+using PropertyLeasing.BusinessLogic;
 using PropertyLeasing.MVC.Services;
 using PropertyLeasing.MVC.ViewModels;
 
@@ -91,6 +92,7 @@ public class AccountController : Controller
                 await _db.SaveChangesAsync();
             }
 
+            await _signInManager.RefreshSignInAsync(user);
             return await RedirectAfterLoginAsync(user, returnUrl);
         }
 
@@ -169,31 +171,86 @@ public class AccountController : Controller
 
         var roles = await _userManager.GetRolesAsync(identityUser);
 
+        var appUser = await _db.Users.FirstOrDefaultAsync(u => u.IdentityUserId == identityUser.Id)
+                   ?? await _db.Users.FirstOrDefaultAsync(u => u.Email == identityUser.Email);
+        if (appUser != null)
+        {
+            if (TenantProfileSync.ApplyIdentityToAppUser(
+                    identityUser.FullName,
+                    identityUser.Email!,
+                    identityUser.Phone,
+                    v => appUser.FullName = v,
+                    v => appUser.Email = v,
+                    v => appUser.Phone = v,
+                    new TenantProfileSync.ProfileSnapshot(appUser.FullName, appUser.Email, appUser.Phone)))
+            {
+                if (string.IsNullOrEmpty(appUser.IdentityUserId))
+                    appUser.IdentityUserId = identityUser.Id;
+                await _db.SaveChangesAsync();
+            }
+        }
+
         var model = new ProfileViewModel
         {
             FullName = identityUser.FullName,
-            Email    = identityUser.Email!,
-            Phone    = identityUser.Phone,
+            Username = identityUser.UserName ?? identityUser.Email ?? string.Empty,
+            Email    = identityUser.Email ?? string.Empty,
+            Phone    = identityUser.Phone ?? string.Empty,
             Role     = roles.FirstOrDefault() ?? "Tenant"
         };
         return View(model);
     }
 
-    // POST /Account/Profile
+    // GET /Account/ProfileEdit
     [Authorize]
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Profile(ProfileViewModel model)
+    [HttpGet]
+    public async Task<IActionResult> ProfileEdit()
     {
         var identityUser = await _userManager.GetUserAsync(User);
         if (identityUser == null) return NotFound();
 
-        // Update name and phone
+        return View(new EditProfileViewModel
+        {
+            FullName = identityUser.FullName,
+            Username = identityUser.UserName ?? string.Empty,
+            Email    = identityUser.Email ?? string.Empty,
+            Phone    = identityUser.Phone ?? string.Empty
+        });
+    }
+
+    // POST /Account/ProfileEdit
+    [Authorize]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ProfileEdit(EditProfileViewModel model)
+    {
+        if (!ModelState.IsValid) return View(model);
+
+        var identityUser = await _userManager.GetUserAsync(User);
+        if (identityUser == null) return NotFound();
+
         identityUser.FullName = model.FullName;
         identityUser.Phone    = model.Phone;
-        await _userManager.UpdateAsync(identityUser);
 
-        // Also update app User table
+        if (!string.Equals(identityUser.UserName, model.Username, StringComparison.Ordinal))
+        {
+            var setNameResult = await _userManager.SetUserNameAsync(identityUser, model.Username);
+            if (!setNameResult.Succeeded)
+            {
+                foreach (var error in setNameResult.Errors)
+                    ModelState.AddModelError(nameof(model.Username), error.Description);
+                return View(model);
+            }
+        }
+
+        var updateResult = await _userManager.UpdateAsync(identityUser);
+        if (!updateResult.Succeeded)
+        {
+            foreach (var error in updateResult.Errors)
+                ModelState.AddModelError(string.Empty, error.Description);
+            return View(model);
+        }
+
         var appUser = await _db.Users.FirstOrDefaultAsync(u => u.IdentityUserId == identityUser.Id);
         if (appUser != null)
         {
@@ -202,21 +259,39 @@ public class AccountController : Controller
             await _db.SaveChangesAsync();
         }
 
-        // Change password if provided
-        if (!string.IsNullOrWhiteSpace(model.NewPassword))
+        await _signInManager.RefreshSignInAsync(identityUser);
+        TempData["Success"] = "Profile updated successfully.";
+        return RedirectToAction(nameof(Profile));
+    }
+
+    // GET /Account/ChangePassword
+    [Authorize]
+    [HttpGet]
+    public IActionResult ChangePassword() => View(new ChangePasswordViewModel());
+
+    // POST /Account/ChangePassword
+    [Authorize]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ChangePassword(ChangePasswordViewModel model)
+    {
+        if (!ModelState.IsValid) return View(model);
+
+        var identityUser = await _userManager.GetUserAsync(User);
+        if (identityUser == null) return NotFound();
+
+        var passResult = await _userManager.ChangePasswordAsync(
+            identityUser, model.CurrentPassword!, model.NewPassword!);
+        if (!passResult.Succeeded)
         {
-            var passResult = await _userManager.ChangePasswordAsync(
-                identityUser, model.CurrentPassword!, model.NewPassword);
-            if (!passResult.Succeeded)
-            {
-                foreach (var error in passResult.Errors)
-                    ModelState.AddModelError(string.Empty, error.Description);
-                return View(model);
-            }
+            foreach (var error in passResult.Errors)
+                ModelState.AddModelError(string.Empty, error.Description);
+            return View(model);
         }
 
-        TempData["Success"] = "Profile updated successfully.";
-        return RedirectToAction("Profile");
+        await _signInManager.RefreshSignInAsync(identityUser);
+        TempData["Success"] = "Password changed successfully.";
+        return RedirectToAction(nameof(Profile));
     }
 
     // GET /Account/ForgotPassword

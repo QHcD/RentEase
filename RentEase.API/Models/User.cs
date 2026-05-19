@@ -16,6 +16,9 @@ public partial class User
     [StringLength(100)]
     public string FullName { get; set; } = null!;
 
+    [StringLength(50)]
+    public string? Username { get; set; }
+
     [Required]
     [StringLength(100)]
     public string Email { get; set; } = null!;

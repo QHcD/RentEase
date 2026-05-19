@@ -9,8 +9,15 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
 </head>
 <body>
+    @using System.Security.Claims
+    @using PropertyLeasing.BusinessLogic
     @{
         var isMaintenanceStaff = User.Identity?.IsAuthenticated == true && User.IsInRole("MaintenanceStaff");
+        var navDisplayName = User.Identity?.IsAuthenticated == true
+            ? (User.FindFirst(TenantProfileSync.DisplayNameClaimType)?.Value
+               ?? User.FindFirst(ClaimTypes.Name)?.Value
+               ?? User.Identity!.Name)
+            : null;
     }
     <header>
         <nav class="navbar navbar-expand-sm navbar-dark bg-dark border-bottom border-body">
@@ -52,7 +59,7 @@
                             </li>
                             <li class="nav-item dropdown">
                                 <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
-                                    <i class="fa fa-user me-1"></i>@User.Identity!.Name
+                                    <i class="fa fa-user me-1"></i>@navDisplayName
                                 </a>
                                 <ul class="dropdown-menu dropdown-menu-end">
                                     <li>
@@ -138,7 +145,7 @@
                                 </li>
                                 <li class="nav-item dropdown">
                                     <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
-                                        <i class="fa fa-user me-1"></i>@User.Identity.Name
+                                        <i class="fa fa-user me-1"></i>@navDisplayName
                                     </a>
                                     <ul class="dropdown-menu dropdown-menu-end">
                                         <li>

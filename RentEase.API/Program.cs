@@ -135,6 +135,24 @@ using (var scope = app.Services.CreateScope())
 
     try
     {
+        var db = services.GetRequiredService<PropertyLeasingDbContext>();
+        await db.Database.ExecuteSqlRawAsync(@"
+            IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Document' AND COLUMN_NAME = 'Status')
+            BEGIN
+                ALTER TABLE [Document] ADD [Status] NVARCHAR(50) NOT NULL
+                    CONSTRAINT [DF_Document_Status] DEFAULT 'Submitted' WITH VALUES;
+            END;
+            IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Document' AND COLUMN_NAME = 'RejectionReason')
+                ALTER TABLE [Document] ADD [RejectionReason] NVARCHAR(500) NULL;
+            IF NOT EXISTS (SELECT 1 FROM [__EFMigrationsHistory] WHERE [MigrationId] = N'20260519120000_AddDocumentReviewStatus')
+                INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+                VALUES (N'20260519120000_AddDocumentReviewStatus', N'9.0.0');
+        ");
+    }
+    catch { }
+
+    try
+    {
         await ContextSeed.SeedRolesAndUsersAsync(services);
     }
     catch { }

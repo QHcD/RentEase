@@ -21,6 +21,11 @@ public class RegisterViewModel
     [Display(Name = "Full Name")]
     public string FullName { get; set; } = string.Empty;
 
+    [Required(ErrorMessage = "Username is required.")]
+    [StringLength(50, MinimumLength = 3)]
+    [Display(Name = "Username")]
+    public string Username { get; set; } = string.Empty;
+
     [Required]
     [EmailAddress]
     public string Email { get; set; } = string.Empty;
@@ -36,8 +41,10 @@ public class RegisterViewModel
     [Display(Name = "Confirm Password")]
     public string ConfirmPassword { get; set; } = string.Empty;
 
+    [Required(ErrorMessage = "Phone number is required.")]
     [Phone]
-    public string? Phone { get; set; }
+    [Display(Name = "Phone")]
+    public string Phone { get; set; } = string.Empty;
 }
 
 public class ForgotPasswordViewModel
@@ -73,19 +80,48 @@ public class VerifyResetCodeViewModel
 
 public class ProfileViewModel
 {
-    public string  FullName { get; set; } = string.Empty;
-    public string  Email    { get; set; } = string.Empty;
-    public string? Phone    { get; set; }
-    public string  Role     { get; set; } = string.Empty;
+    public string FullName { get; set; } = string.Empty;
+    public string Username { get; set; } = string.Empty;
+    public string Email    { get; set; } = string.Empty;
+    public string Phone    { get; set; } = string.Empty;
+    public string Role     { get; set; } = string.Empty;
+}
 
+public class EditProfileViewModel
+{
+    [Required]
+    [Display(Name = "Full Name")]
+    public string FullName { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Username is required.")]
+    [StringLength(50, MinimumLength = 3)]
+    [Display(Name = "Username")]
+    public string Username { get; set; } = string.Empty;
+
+    [Required]
+    [EmailAddress]
+    public string Email { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Phone number is required.")]
+    [Phone]
+    [Display(Name = "Phone")]
+    public string Phone { get; set; } = string.Empty;
+}
+
+public class ChangePasswordViewModel
+{
+    [Required]
     [DataType(DataType.Password)]
     [Display(Name = "Current Password")]
     public string? CurrentPassword { get; set; }
 
+    [Required]
     [DataType(DataType.Password)]
+    [StringLength(100, MinimumLength = 6)]
     [Display(Name = "New Password")]
     public string? NewPassword { get; set; }
 
+    [Required]
     [DataType(DataType.Password)]
     [Compare("NewPassword", ErrorMessage = "Passwords do not match.")]
     [Display(Name = "Confirm New Password")]

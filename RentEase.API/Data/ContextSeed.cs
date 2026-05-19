@@ -78,6 +78,7 @@ public static class ContextSeed
             await PatchMurtadhaSecondLeaseAsync(db, userManager, logger);
             await PatchMurtadhaExtraLeasesAsync(db, userManager, logger);
             await PatchRegularApplicationsOffOccupiedUnitsAsync(db, logger);
+            await PatchSyncAppUsersFromIdentityAsync(userManager, db, logger);
         }
         catch (Exception ex) { logger.LogError(ex, "[Seed] Top-level failure."); }
     }
@@ -136,8 +137,66 @@ public static class ContextSeed
                 appUser.IdentityUserId = existing.Id;
                 await db.SaveChangesAsync();
             }
+
+            if (appUser != null && TenantProfileCatalog.TryGetByEmail(email, out var canonical))
+            {
+                var changed = false;
+                if (!string.Equals(appUser.FullName, canonical.FullName, StringComparison.Ordinal))
+                {
+                    appUser.FullName = canonical.FullName;
+                    changed = true;
+                }
+                if (phone != null && appUser.Phone != phone)
+                {
+                    appUser.Phone = phone;
+                    changed = true;
+                }
+                if (existing.FullName != canonical.FullName)
+                {
+                    existing.FullName = canonical.FullName;
+                    await userManager.UpdateAsync(existing);
+                }
+                if (changed)
+                    await db.SaveChangesAsync();
+            }
         }
         catch (Exception ex) { logger.LogError(ex, "[Seed] SeedUser failed for {Email}.", email); }
+    }
+
+    /// <summary>Aligns app <c>User</c> rows with ASP.NET Identity (fixes legacy SQL seed mismatches).</summary>
+    private static async Task PatchSyncAppUsersFromIdentityAsync(
+        UserManager<AppUser> userManager,
+        PropertyLeasingDbContext db,
+        ILogger logger)
+    {
+        var linked = await db.Users
+            .Where(u => u.IdentityUserId != null && u.IdentityUserId != "")
+            .ToListAsync();
+
+        var updated = 0;
+        foreach (var appUser in linked)
+        {
+            var identity = await userManager.FindByIdAsync(appUser.IdentityUserId!);
+            if (identity == null) continue;
+
+            var changed = TenantProfileSync.ApplyIdentityToAppUser(
+                identity.FullName,
+                identity.Email ?? appUser.Email,
+                identity.Phone,
+                v => appUser.FullName = v,
+                v => appUser.Email = v,
+                v => appUser.Phone = v,
+                new TenantProfileSync.ProfileSnapshot(appUser.FullName, appUser.Email, appUser.Phone));
+
+            if (changed)
+                updated++;
+        }
+
+        if (updated > 0)
+        {
+            await db.SaveChangesAsync();
+            logger.LogInformation("[Patch] Synced {Count} app user profile(s) from Identity.", updated);
+        }
     }
 
     private static async Task ResetBusinessDataAsync(PropertyLeasingDbContext db, ILogger logger)

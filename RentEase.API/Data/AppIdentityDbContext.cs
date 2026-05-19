@@ -8,6 +8,10 @@ namespace PropertyLeasing.API.Data;
 public class AppUser : IdentityUser
 {
     public string FullName { get; set; } = string.Empty;
+
+    /// <summary>Display handle (separate from login email).</summary>
+    public string? Username { get; set; }
+
     public string? Phone { get; set; }
 }
 

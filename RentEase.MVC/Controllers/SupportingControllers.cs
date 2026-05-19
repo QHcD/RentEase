@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PropertyLeasing.API.Data;
 using PropertyLeasing.API.Models;
+using PropertyLeasing.BusinessLogic;
 using PropertyLeasing.MVC.Services;
 using PropertyLeasing.MVC.ViewModels;
 
@@ -424,6 +425,9 @@ public class PaymentsController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> TenantPay(TenantPayViewModel vm)
     {
+        foreach (var msg in PaymentCardRules.ValidateExpiryDate(vm.ExpiryDate))
+            ModelState.AddModelError(nameof(vm.ExpiryDate), msg);
+
         if (!ModelState.IsValid)
             return View("Pay", vm);
 
@@ -636,6 +640,9 @@ public class PaymentsController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> ProcessPayment(CheckoutViewModel vm)
     {
+        foreach (var msg in PaymentCardRules.ValidateExpiryDate(vm.ExpiryDate))
+            ModelState.AddModelError(nameof(vm.ExpiryDate), msg);
+
         if (!ModelState.IsValid) return View("Checkout", vm);
 
         var appUser = await GetAppUserAsync();

@@ -83,6 +83,7 @@
                         <div class="row mb-3">
                             <div class="col-6">
                                 <label asp-for="ExpiryDate" class="form-label fw-semibold"></label>
+                            <div class="form-text">Use a future date (MM/YY). Expired cards are rejected.</div>
                                 <input asp-for="ExpiryDate" class="form-control" placeholder="MM/YY"
                                        maxlength="5" id="expiryDate" />
                                 <span asp-validation-for="ExpiryDate" class="text-danger small"></span>

@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Http;
 
 namespace PropertyLeasing.MVC.ViewModels;
 
@@ -21,6 +22,12 @@ public class CreateLeaseApplicationViewModel
 
     [StringLength(500)]
     public string? Notes { get; set; }
+
+    [Display(Name = "National ID (CPR / Passport)")]
+    public IFormFile? NationalIdFile { get; set; }
+
+    [Display(Name = "Salary / Income Proof")]
+    public IFormFile? SalaryIncomeFile { get; set; }
 
     // Helpers for HTML min/max attributes
     public string MinStartDate => DateTime.Today.AddDays(2).ToString("yyyy-MM-dd");
@@ -116,7 +123,51 @@ public class LeaseApplicationDetailViewModel
     public int?      ParentLeaseId      { get; set; }
     public bool      IsRenewal          => ParentLeaseId.HasValue;
     public bool      CanCancel          => Status != "Rejected" && Status != "Canceled";
+    public bool      CanReUploadDocuments { get; set; }
+    /// <summary>Tenant always; manager when status is Screening or later.</summary>
+    public bool      CanViewDocumentFiles { get; set; }
+    public int       UploadedDocumentCount { get; set; }
     public List<LeaseApplicationLogViewModel> Logs { get; set; } = new();
+    public List<ApplicationDocumentViewModel> Documents { get; set; } = new();
+}
+
+public class DocumentViewerViewModel
+{
+    public int    DocumentId { get; set; }
+    public string Title      { get; set; } = string.Empty;
+}
+
+public class ApplicationDocumentViewModel
+{
+    public int      DocumentId       { get; set; }
+    public string   DocumentType     { get; set; } = string.Empty;
+    public string   DisplayName      { get; set; } = string.Empty;
+    public string   FileName         { get; set; } = string.Empty;
+    public string   Status           { get; set; } = string.Empty;
+    public string?  RejectionReason  { get; set; }
+    public DateTime UploadedAt       { get; set; }
+    public bool     IsRejected       => string.Equals(Status,
+        PropertyLeasing.BusinessLogic.LeaseApplicationDocumentRules.DocumentStatusRejected,
+        StringComparison.OrdinalIgnoreCase);
+}
+
+public class ReUploadDocumentsViewModel
+{
+    public int      ApplicationId   { get; set; }
+    public string   UnitNumber      { get; set; } = string.Empty;
+    public string   PropertyName    { get; set; } = string.Empty;
+    public int      RejectedDocumentCount { get; set; }
+
+    public bool     NeedsNationalId { get; set; }
+    public bool     NeedsSalaryIncome { get; set; }
+    public string?  NationalIdRejectionReason   { get; set; }
+    public string?  SalaryIncomeRejectionReason { get; set; }
+
+    [Display(Name = "National ID (PDF)")]
+    public IFormFile? NationalIdFile { get; set; }
+
+    [Display(Name = "Salary / Income Proof (PDF)")]
+    public IFormFile? SalaryIncomeFile { get; set; }
 }
 
 // ── Log entry (read-only, inside Details) ─────────────────────────────────────
@@ -197,7 +248,7 @@ public class ApplicationsAndLeasesViewModel
     public string AppStatusFilter { get; set; } = "All";
 
     // All statuses shown as sub-tabs (including new Canceled)
-    public static readonly string[] AppStatuses   = { "All", "Pending", "Screening", "Approved", "Rejected", "Canceled" };
+    public static readonly string[] AppStatuses   = { "All", "Pending", "DocumentsRequired", "Screening", "Approved", "Rejected", "Canceled" };
     // All lease statuses (Approved replaces Expired)
     public static readonly string[] LeaseStatuses = { "All", "PendingPayment", "Approved", "Active", "Terminated", "Renewed" };
 

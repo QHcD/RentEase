@@ -35,7 +35,7 @@ INSERT INTO [User] (FullName, Email, Phone, [Role], SkillProfile, AvailabilitySt
 ('Mohammed Al Tajer',  'tenant2@example.com',         '+973 3300 0003', 'Tenant',            NULL,                        NULL),
 ('Ali Hassan',         'staff1@propleasing.com',      '+973 3300 0004', 'MaintenanceStaff',  'Plumbing, General',         'Available'),
 ('Yusuf Al Zayani',    'staff2@propleasing.com',      '+973 3300 0005', 'MaintenanceStaff',  'Electrical, HVAC',          'Available'),
-('Fatima Nasser',      'tenant3@example.com',         '+973 3300 0006', 'Tenant',            NULL,                        NULL);
+('Noor Ibrahim',       'tenant3@example.com',         '+97333667788',   'Tenant',            NULL,                        NULL);
 
 -- =============================================
 -- Lease Applications

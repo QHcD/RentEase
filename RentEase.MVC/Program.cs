@@ -23,7 +23,8 @@ builder.Services.AddIdentity<AppUser, IdentityRole>(options =>
     options.Password.RequireUppercase = true;
 })
 .AddEntityFrameworkStores<AppIdentityDbContext>()
-.AddDefaultTokenProviders();
+.AddDefaultTokenProviders()
+.AddClaimsPrincipalFactory<AppUserClaimsPrincipalFactory>();
 
 // Configure login path
 builder.Services.ConfigureApplicationCookie(options =>
@@ -33,7 +34,9 @@ builder.Services.ConfigureApplicationCookie(options =>
 });
 
 // ── MVC ───────────────────────────────────────────────
-builder.Services.AddControllersWithViews();
+var mvcBuilder = builder.Services.AddControllersWithViews();
+if (builder.Environment.IsDevelopment())
+    mvcBuilder.AddRazorRuntimeCompilation();
 
 // ── HttpClient for API calls (Public Lookup page) ─────
 builder.Services.AddHttpClient<ApiService>(client =>
@@ -45,6 +48,7 @@ builder.Services.AddHttpClient<ApiService>(client =>
 // ── App Services ──────────────────────────────────────
 builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<EmailService>();
+builder.Services.AddScoped<LeaseApplicationDocumentService>();
 builder.Services.AddHostedService<MaintenanceDailyService>();
 
 var app = builder.Build();
@@ -125,6 +129,25 @@ using (var scope = app.Services.CreateScope())
         logger.LogInformation("MaintenanceRequest extra columns ensured.");
     }
     catch (Exception ex) { logger.LogWarning(ex, "Could not auto-add ImagePath column (non-fatal)."); }
+
+    try
+    {
+        var db = scope.ServiceProvider.GetRequiredService<PropertyLeasingDbContext>();
+        await db.Database.ExecuteSqlRawAsync(@"
+            IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Document' AND COLUMN_NAME = 'Status')
+            BEGIN
+                ALTER TABLE [Document] ADD [Status] NVARCHAR(50) NOT NULL
+                    CONSTRAINT [DF_Document_Status] DEFAULT 'Submitted' WITH VALUES;
+            END;
+            IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Document' AND COLUMN_NAME = 'RejectionReason')
+                ALTER TABLE [Document] ADD [RejectionReason] NVARCHAR(500) NULL;
+            IF NOT EXISTS (SELECT 1 FROM [__EFMigrationsHistory] WHERE [MigrationId] = N'20260519120000_AddDocumentReviewStatus')
+                INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+                VALUES (N'20260519120000_AddDocumentReviewStatus', N'9.0.0');
+        ");
+        logger.LogInformation("Document review columns ensured.");
+    }
+    catch (Exception ex) { logger.LogWarning(ex, "Could not ensure Document review columns (non-fatal)."); }
 
     try
     {

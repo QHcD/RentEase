@@ -238,6 +238,24 @@ public class EmailService
         await SendAsync(toEmail, subject, body);
     }
 
+    // ── Supporting document rejected — tenant must re-upload PDF ───────────
+    public async Task SendDocumentsRejectedAsync(string toEmail, string toName,
+        string unitNumber, string propertyName, int applicationId,
+        string documentLabel, string rejectionReason)
+    {
+        string subject = "RentEase — Document Rejected — Re-upload Required";
+        string body    = BuildApplicationEmail(toName, unitNumber, propertyName, applicationId,
+            status:  "Documents Required",
+            title:   "Document Rejected",
+            message: $"Your <strong>{documentLabel}</strong> was rejected during review.<br/><br/>" +
+                     $"<strong>Reason:</strong> {System.Net.WebUtility.HtmlEncode(rejectionReason)}<br/><br/>" +
+                     "Please log in to RentEase, open your application, and upload a new <strong>PDF</strong> " +
+                     "for the rejected document. Only PDF files are accepted (max 10 MB).",
+            color:   "#e65100",
+            icon:    "📄");
+        await SendAsync(toEmail, subject, body);
+    }
+
     // ── Renewal Application Submitted ──────────────────────────────────────
     public async Task SendRenewalSubmittedAsync(string toEmail, string toName,
         string unitNumber, string propertyName, DateTime newEndDate, int applicationId)
