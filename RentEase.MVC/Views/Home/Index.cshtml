@@ -11,9 +11,6 @@
             <a asp-controller="Properties" asp-action="Index" class="btn btn-primary btn-lg">
                 <i class="fa fa-search me-1"></i> Browse Properties
             </a>
-            <a asp-controller="Home" asp-action="MaintenanceLookup" class="btn btn-outline-light btn-lg">
-                <i class="fa fa-wrench me-1"></i> Track Maintenance Request
-            </a>
             @if (!User.Identity!.IsAuthenticated)
             {
                 <a asp-controller="Account" asp-action="Register" class="btn btn-success btn-lg">

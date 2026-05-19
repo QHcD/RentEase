@@ -116,6 +116,19 @@ public class AccountController : Controller
     {
         if (!ModelState.IsValid) return View(model);
 
+        // Phone uniqueness check
+        if (!string.IsNullOrWhiteSpace(model.Phone))
+        {
+            var phoneTaken = await _userManager.Users
+                .AnyAsync(u => u.Phone == model.Phone.Trim());
+            if (phoneTaken)
+            {
+                ModelState.AddModelError(nameof(model.Phone),
+                    "This phone number is already registered to another account.");
+                return View(model);
+            }
+        }
+
         var identityUser = new AppUser
         {
             UserName       = model.Email,
@@ -229,8 +242,22 @@ public class AccountController : Controller
         var identityUser = await _userManager.GetUserAsync(User);
         if (identityUser == null) return NotFound();
 
+        // Phone uniqueness check — only if user changed their phone
+        if (!string.IsNullOrWhiteSpace(model.Phone) &&
+            !string.Equals(identityUser.Phone, model.Phone.Trim(), StringComparison.OrdinalIgnoreCase))
+        {
+            var phoneTaken = await _userManager.Users
+                .AnyAsync(u => u.Phone == model.Phone.Trim() && u.Id != identityUser.Id);
+            if (phoneTaken)
+            {
+                ModelState.AddModelError(nameof(model.Phone),
+                    "This phone number is already registered to another account.");
+                return View(model);
+            }
+        }
+
         identityUser.FullName = model.FullName;
-        identityUser.Phone    = model.Phone;
+        identityUser.Phone    = model.Phone?.Trim();
 
         if (!string.Equals(identityUser.UserName, model.Username, StringComparison.Ordinal))
         {

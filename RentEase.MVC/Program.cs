@@ -185,6 +185,72 @@ using (var scope = app.Services.CreateScope())
 
     try
     {
+        // EF maps AppUser.Username → [DisplayUsername] column.
+        // EnsureCreatedAsync won't add it to an existing DB, so we guard it manually.
+        var identityDb = scope.ServiceProvider.GetRequiredService<AppIdentityDbContext>();
+        await identityDb.Database.ExecuteSqlRawAsync(@"
+            IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+                          WHERE TABLE_NAME='AspNetUsers' AND COLUMN_NAME='DisplayUsername')
+                ALTER TABLE [AspNetUsers] ADD DisplayUsername NVARCHAR(50) NULL;
+        ");
+        logger.LogInformation("AspNetUsers.DisplayUsername column ensured.");
+    }
+    catch (Exception ex) { logger.LogWarning(ex, "Could not ensure DisplayUsername column (non-fatal)."); }
+
+    try
+    {
+        // Backfill serial phone numbers for all seeded users in Identity DB (AspNetUsers).
+        var identityDb = scope.ServiceProvider.GetRequiredService<AppIdentityDbContext>();
+        await identityDb.Database.ExecuteSqlRawAsync(@"
+            UPDATE [AspNetUsers] SET [Phone] = '66600001' WHERE [Email] = 'manager@propleasing.com'  AND ([Phone] IS NULL OR [Phone] != '66600001');
+            UPDATE [AspNetUsers] SET [Phone] = '66600002' WHERE [Email] = 'tenant1@example.com'      AND ([Phone] IS NULL OR [Phone] != '66600002');
+            UPDATE [AspNetUsers] SET [Phone] = '66600003' WHERE [Email] = 'tenant2@example.com'      AND ([Phone] IS NULL OR [Phone] != '66600003');
+            UPDATE [AspNetUsers] SET [Phone] = '66600004' WHERE [Email] = 'tenant3@example.com'      AND ([Phone] IS NULL OR [Phone] != '66600004');
+            UPDATE [AspNetUsers] SET [Phone] = '66600005' WHERE [Email] = 'tenant4@example.com'      AND ([Phone] IS NULL OR [Phone] != '66600005');
+            UPDATE [AspNetUsers] SET [Phone] = '66600006' WHERE [Email] = 'tenant5@example.com'      AND ([Phone] IS NULL OR [Phone] != '66600006');
+            UPDATE [AspNetUsers] SET [Phone] = '66600007' WHERE [Email] = 'staff1@propleasing.com'   AND ([Phone] IS NULL OR [Phone] != '66600007');
+            UPDATE [AspNetUsers] SET [Phone] = '66600008' WHERE [Email] = 'staff2@propleasing.com'   AND ([Phone] IS NULL OR [Phone] != '66600008');
+            UPDATE [AspNetUsers] SET [Phone] = '66600009' WHERE [Email] = 'staff3@propleasing.com'   AND ([Phone] IS NULL OR [Phone] != '66600009');
+            UPDATE [AspNetUsers] SET [Phone] = '66600010' WHERE [Email] = 'staff4@propleasing.com'   AND ([Phone] IS NULL OR [Phone] != '66600010');
+            UPDATE [AspNetUsers] SET [Phone] = '66600011' WHERE [Email] = 'staff5@propleasing.com'   AND ([Phone] IS NULL OR [Phone] != '66600011');
+            UPDATE [AspNetUsers] SET [Phone] = '66600012' WHERE [Email] = 'staff6@propleasing.com'   AND ([Phone] IS NULL OR [Phone] != '66600012');
+            UPDATE [AspNetUsers] SET [Phone] = '66600013' WHERE [Email] = 'staff7@propleasing.com'   AND ([Phone] IS NULL OR [Phone] != '66600013');
+            UPDATE [AspNetUsers] SET [Phone] = '66600014' WHERE [Email] = 'staff8@propleasing.com'   AND ([Phone] IS NULL OR [Phone] != '66600014');
+            UPDATE [AspNetUsers] SET [Phone] = '66600015' WHERE [Email] = 'staff9@propleasing.com'   AND ([Phone] IS NULL OR [Phone] != '66600015');
+            UPDATE [AspNetUsers] SET [Phone] = '66600016' WHERE [Email] = 'staff10@propleasing.com'  AND ([Phone] IS NULL OR [Phone] != '66600016');
+        ");
+        logger.LogInformation("Seeded user phone numbers backfilled in Identity DB.");
+    }
+    catch (Exception ex) { logger.LogWarning(ex, "Could not backfill phone numbers in Identity DB (non-fatal)."); }
+
+    try
+    {
+        // Backfill serial phone numbers for all seeded users in business DB ([User] table).
+        var db = scope.ServiceProvider.GetRequiredService<PropertyLeasingDbContext>();
+        await db.Database.ExecuteSqlRawAsync(@"
+            UPDATE [User] SET [Phone] = '66600001' WHERE [Email] = 'manager@propleasing.com'  AND ([Phone] IS NULL OR [Phone] != '66600001');
+            UPDATE [User] SET [Phone] = '66600002' WHERE [Email] = 'tenant1@example.com'      AND ([Phone] IS NULL OR [Phone] != '66600002');
+            UPDATE [User] SET [Phone] = '66600003' WHERE [Email] = 'tenant2@example.com'      AND ([Phone] IS NULL OR [Phone] != '66600003');
+            UPDATE [User] SET [Phone] = '66600004' WHERE [Email] = 'tenant3@example.com'      AND ([Phone] IS NULL OR [Phone] != '66600004');
+            UPDATE [User] SET [Phone] = '66600005' WHERE [Email] = 'tenant4@example.com'      AND ([Phone] IS NULL OR [Phone] != '66600005');
+            UPDATE [User] SET [Phone] = '66600006' WHERE [Email] = 'tenant5@example.com'      AND ([Phone] IS NULL OR [Phone] != '66600006');
+            UPDATE [User] SET [Phone] = '66600007' WHERE [Email] = 'staff1@propleasing.com'   AND ([Phone] IS NULL OR [Phone] != '66600007');
+            UPDATE [User] SET [Phone] = '66600008' WHERE [Email] = 'staff2@propleasing.com'   AND ([Phone] IS NULL OR [Phone] != '66600008');
+            UPDATE [User] SET [Phone] = '66600009' WHERE [Email] = 'staff3@propleasing.com'   AND ([Phone] IS NULL OR [Phone] != '66600009');
+            UPDATE [User] SET [Phone] = '66600010' WHERE [Email] = 'staff4@propleasing.com'   AND ([Phone] IS NULL OR [Phone] != '66600010');
+            UPDATE [User] SET [Phone] = '66600011' WHERE [Email] = 'staff5@propleasing.com'   AND ([Phone] IS NULL OR [Phone] != '66600011');
+            UPDATE [User] SET [Phone] = '66600012' WHERE [Email] = 'staff6@propleasing.com'   AND ([Phone] IS NULL OR [Phone] != '66600012');
+            UPDATE [User] SET [Phone] = '66600013' WHERE [Email] = 'staff7@propleasing.com'   AND ([Phone] IS NULL OR [Phone] != '66600013');
+            UPDATE [User] SET [Phone] = '66600014' WHERE [Email] = 'staff8@propleasing.com'   AND ([Phone] IS NULL OR [Phone] != '66600014');
+            UPDATE [User] SET [Phone] = '66600015' WHERE [Email] = 'staff9@propleasing.com'   AND ([Phone] IS NULL OR [Phone] != '66600015');
+            UPDATE [User] SET [Phone] = '66600016' WHERE [Email] = 'staff10@propleasing.com'  AND ([Phone] IS NULL OR [Phone] != '66600016');
+        ");
+        logger.LogInformation("Seeded user phone numbers backfilled in business DB.");
+    }
+    catch (Exception ex) { logger.LogWarning(ex, "Could not backfill phone numbers in business DB (non-fatal)."); }
+
+    try
+    {
         await ContextSeed.SeedRolesAndUsersAsync(scope.ServiceProvider);
         logger.LogInformation("Seed completed.");
     }

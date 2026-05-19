@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace PropertyLeasing.API.Data;
 
@@ -10,6 +11,7 @@ public class AppUser : IdentityUser
     public string FullName { get; set; } = string.Empty;
 
     /// <summary>Display handle (separate from login email).</summary>
+    [Column("DisplayUsername")]
     public string? Username { get; set; }
 
     public string? Phone { get; set; }

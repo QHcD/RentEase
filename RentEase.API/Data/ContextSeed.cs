@@ -26,27 +26,27 @@ public static class ContextSeed
                     await roleManager.CreateAsync(new IdentityRole(role));
 
             // ── Managers ──
-            await SeedUser(userManager, db, "manager@propleasing.com",  "Ahmed Al-Mansoori", "Manager@123", "PropertyManager", "+97317171001", logger);
+            await SeedUser(userManager, db, "manager@propleasing.com",  "Ahmed Al-Mansoori", "Manager@123", "PropertyManager", "66600001", logger);
 
             // ── Tenants ──
-            await SeedUser(userManager, db, "tenant1@example.com",        "Sara Al-Khalifa",    "Tenant@123",  "Tenant", "+97333112233", logger);
-            await SeedUser(userManager, db, "tenant2@example.com",        "Mohammed Al-Baker",  "Tenant@123",  "Tenant", "+97333224455", logger);
-            await SeedUser(userManager, db, "tenant3@example.com",        "Noor Ibrahim",       "Tenant@123",  "Tenant", "+97333667788", logger);
-            await SeedUser(userManager, db, "tenant4@example.com",        "Fatima Al-Zayani",   "Tenant@123",  "Tenant", "+97333991122", logger);
-            await SeedUser(userManager, db, "tenant5@example.com",        "Omar Al-Rumaihi",    "Tenant@123",  "Tenant", "+97333556677", logger);
-            await SeedUser(userManager, db, "murtadhaahss05@gmail.com",   "Murtadha",           "12345678aA@", "Tenant", "+97333000001", logger);
+            await SeedUser(userManager, db, "tenant1@example.com",        "Sara Al-Khalifa",    "Tenant@123",  "Tenant", "66600002", logger);
+            await SeedUser(userManager, db, "tenant2@example.com",        "Mohammed Al-Baker",  "Tenant@123",  "Tenant", "66600003", logger);
+            await SeedUser(userManager, db, "tenant3@example.com",        "Noor Ibrahim",       "Tenant@123",  "Tenant", "66600004", logger);
+            await SeedUser(userManager, db, "tenant4@example.com",        "Fatima Al-Zayani",   "Tenant@123",  "Tenant", "66600005", logger);
+            await SeedUser(userManager, db, "tenant5@example.com",        "Omar Al-Rumaihi",    "Tenant@123",  "Tenant", "66600006", logger);
+            await SeedUser(userManager, db, "murtadhaahss05@gmail.com",   "Murtadha",           "12345678aA@", "Tenant", null,        logger);
 
             // ── Maintenance Staff (2 per category) ──
-            await SeedUser(userManager, db, "staff1@propleasing.com",  "Ali Hassan",          "Staff@123", "MaintenanceStaff", "+97333445566", logger); // Plumbing
-            await SeedUser(userManager, db, "staff2@propleasing.com",  "Yusuf Al-Darwish",    "Staff@123", "MaintenanceStaff", "+97333778899", logger); // Plumbing
-            await SeedUser(userManager, db, "staff3@propleasing.com",  "Khalid Al-Hamad",     "Staff@123", "MaintenanceStaff", "+97333334455", logger); // Electrical
-            await SeedUser(userManager, db, "staff4@propleasing.com",  "Mariam Al-Mutawa",    "Staff@123", "MaintenanceStaff", "+97333441111", logger); // Electrical
-            await SeedUser(userManager, db, "staff5@propleasing.com",  "Faisal Al-Najjar",    "Staff@123", "MaintenanceStaff", "+97333442222", logger); // HVAC
-            await SeedUser(userManager, db, "staff6@propleasing.com",  "Laila Al-Sayed",      "Staff@123", "MaintenanceStaff", "+97333443333", logger); // HVAC
-            await SeedUser(userManager, db, "staff7@propleasing.com",  "Hassan Al-Mahdi",     "Staff@123", "MaintenanceStaff", "+97333444444", logger); // Carpentry
-            await SeedUser(userManager, db, "staff8@propleasing.com",  "Nora Al-Kooheji",     "Staff@123", "MaintenanceStaff", "+97333445500", logger); // Carpentry
-            await SeedUser(userManager, db, "staff9@propleasing.com",  "Saeed Al-Qassim",     "Staff@123", "MaintenanceStaff", "+97333446666", logger); // General
-            await SeedUser(userManager, db, "staff10@propleasing.com", "Reem Al-Madani",      "Staff@123", "MaintenanceStaff", "+97333447777", logger); // General
+            await SeedUser(userManager, db, "staff1@propleasing.com",  "Ali Hassan",          "Staff@123", "MaintenanceStaff", "66600007", logger); // Plumbing
+            await SeedUser(userManager, db, "staff2@propleasing.com",  "Yusuf Al-Darwish",    "Staff@123", "MaintenanceStaff", "66600008", logger); // Plumbing
+            await SeedUser(userManager, db, "staff3@propleasing.com",  "Khalid Al-Hamad",     "Staff@123", "MaintenanceStaff", "66600009", logger); // Electrical
+            await SeedUser(userManager, db, "staff4@propleasing.com",  "Mariam Al-Mutawa",    "Staff@123", "MaintenanceStaff", "66600010", logger); // Electrical
+            await SeedUser(userManager, db, "staff5@propleasing.com",  "Faisal Al-Najjar",    "Staff@123", "MaintenanceStaff", "66600011", logger); // HVAC
+            await SeedUser(userManager, db, "staff6@propleasing.com",  "Laila Al-Sayed",      "Staff@123", "MaintenanceStaff", "66600012", logger); // HVAC
+            await SeedUser(userManager, db, "staff7@propleasing.com",  "Hassan Al-Mahdi",     "Staff@123", "MaintenanceStaff", "66600013", logger); // Carpentry
+            await SeedUser(userManager, db, "staff8@propleasing.com",  "Nora Al-Kooheji",     "Staff@123", "MaintenanceStaff", "66600014", logger); // Carpentry
+            await SeedUser(userManager, db, "staff9@propleasing.com",  "Saeed Al-Qassim",     "Staff@123", "MaintenanceStaff", "66600015", logger); // General
+            await SeedUser(userManager, db, "staff10@propleasing.com", "Reem Al-Madani",      "Staff@123", "MaintenanceStaff", "66600016", logger); // General
 
             // ── Staff profiles (idempotent/upsert — always safe to run) ──
             await SeedStaffProfilesAsync(db);
@@ -100,6 +100,7 @@ public static class ContextSeed
                     UserName       = email,
                     Email          = email,
                     FullName       = fullName,
+                    Phone          = phone,
                     EmailConfirmed = true
                 };
                 var result = await userManager.CreateAsync(identityUser, password);
@@ -116,6 +117,13 @@ public static class ContextSeed
             }
 
             if (existing == null) return;
+
+            // Always sync phone to Identity DB (no-op if already correct)
+            if (!string.IsNullOrWhiteSpace(phone) && existing.Phone != phone)
+            {
+                existing.Phone = phone;
+                await userManager.UpdateAsync(existing);
+            }
 
             var appUser = await db.Users.FirstOrDefaultAsync(u => u.IdentityUserId == existing.Id)
                        ?? await db.Users.FirstOrDefaultAsync(u => u.Email == email);
