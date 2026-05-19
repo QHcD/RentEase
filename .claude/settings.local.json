@@ -15,7 +15,8 @@
       "Bash(dir \"C:\\\\Users\\\\murta\\\\Desktop\\\\RentEase\\\\RentEase.MVC\\\\Controllers\\\\\" /b)",
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
-      "Bash(Remove-Item -Recurse -Force \"RentEase.API.Tests\")"
+      "Bash(Remove-Item -Recurse -Force \"RentEase.API.Tests\")",
+      "Bash(git commit *)"
     ]
   }
 }
