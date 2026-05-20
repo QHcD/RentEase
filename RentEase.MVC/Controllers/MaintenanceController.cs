@@ -163,7 +163,10 @@ public class MaintenanceController : Controller
                 .ToList();
 
             var indexStaff = await LoadMaintenanceStaffAsync();
-            ViewBag.GeneralStaff = FilterStaffByCategory(indexStaff, "General");
+            // Pre-tenancy maintenance → General specialty staff only
+            ViewBag.GeneralStaff = indexStaff
+                .Where(s => StaffMatchesCategory(s, "General"))
+                .ToList();
         }
 
         ViewBag.CurrentStatus = status;

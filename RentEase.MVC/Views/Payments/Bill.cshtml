@@ -339,9 +339,14 @@
     <a asp-action="Index" class="btn btn-outline-secondary btn-sm">
         <i class="fa fa-arrow-left me-1"></i> Back
     </a>
-    <button onclick="window.print()" class="btn btn-dark btn-sm ms-auto px-4">
-        <i class="fa fa-file-pdf me-2"></i>Download / Print PDF
-    </button>
+    <div class="ms-auto d-flex gap-2">
+        <button onclick="window.print()" class="btn btn-outline-dark btn-sm px-4">
+            <i class="fa fa-eye me-2"></i>View as PDF
+        </button>
+        <button onclick="downloadInvoicePdf()" class="btn btn-dark btn-sm px-4">
+            <i class="fa fa-download me-2"></i>Download PDF
+        </button>
+    </div>
 </div>
 
 <!-- ════════════════ INVOICE ════════════════ -->
@@ -600,9 +605,27 @@
 
 </div><!-- /inv -->
 
-<!-- Floating print button (screen only) -->
-<div class="text-center mt-3 no-print mb-4">
-    <button onclick="window.print()" class="btn btn-dark px-5 py-2">
-        <i class="fa fa-file-pdf me-2"></i>Download as PDF
+<!-- Floating buttons (screen only) -->
+<div class="text-center mt-3 no-print mb-4 d-flex justify-content-center gap-3">
+    <button onclick="window.print()" class="btn btn-outline-dark px-5 py-2">
+        <i class="fa fa-eye me-2"></i>View as PDF
+    </button>
+    <button onclick="downloadInvoicePdf()" class="btn btn-dark px-5 py-2">
+        <i class="fa fa-download me-2"></i>Download PDF
     </button>
 </div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script>
+    function downloadInvoicePdf() {
+        const element = document.querySelector('.inv');
+        const opt = {
+            margin:      [0.3, 0.3, 0.3, 0.3],
+            filename:    '@Model.InvoiceNumber.Replace("/", "-").Replace(" ", "")' + '.pdf',
+            image:       { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2, useCORS: true },
+            jsPDF:       { unit: 'in', format: 'a4', orientation: 'portrait' }
+        };
+        html2pdf().set(opt).from(element).save();
+    }
+</script>
