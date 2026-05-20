@@ -37,6 +37,10 @@ public class SelectPlanViewModel
     public int      ActualDays      { get; set; }   // real calendar days
     public bool     IsPartialMonth  { get; set; }   // < 30 days → pro-rated, Full only
 
+    // Extra days beyond full months (e.g. 6 months + 3 days)
+    public int      ExtraDays       { get; set; }
+    public decimal  ExtraAmount     { get; set; }   // ExtraDays × MonthlyRent / 30
+
     [Required(ErrorMessage = "Please select a payment plan.")]
     public string? SelectedPlan    { get; set; }  // "Full" or "Monthly"
 }

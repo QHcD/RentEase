@@ -82,8 +82,13 @@
 
                         <div class="row mb-3">
                             <div class="col-6">
-                                <label asp-for="ExpiryDate" class="form-label fw-semibold"></label>
-                            <div class="form-text">Use a future date (MM/YY). Expired cards are rejected.</div>
+                                <label asp-for="ExpiryDate" class="form-label fw-semibold">
+                                    Expiry Date
+                                    <i class="fa fa-circle-info text-muted ms-1"
+                                       style="font-size:.8rem; cursor:default;"
+                                       title="Use a future date (MM/YY). Expired cards are rejected."
+                                       data-bs-toggle="tooltip" data-bs-placement="top"></i>
+                                </label>
                                 <input asp-for="ExpiryDate" class="form-control" placeholder="MM/YY"
                                        maxlength="5" id="expiryDate" />
                                 <span asp-validation-for="ExpiryDate" class="text-danger small"></span>
@@ -129,6 +134,10 @@
 @section Scripts {
     @await Html.PartialAsync("_ValidationScriptsPartial")
 <script>
+    // Bootstrap tooltips
+    document.querySelectorAll('[data-bs-toggle="tooltip"]')
+        .forEach(el => new bootstrap.Tooltip(el));
+
     // Format card number with spaces
     document.getElementById('cardNumber').addEventListener('input', function () {
         let val = this.value.replace(/\D/g, '').substring(0, 16);

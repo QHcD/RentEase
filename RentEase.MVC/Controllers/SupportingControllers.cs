@@ -200,17 +200,27 @@ public class PaymentsController : Controller
     // ── Lease duration helper ─────────────────────────────────────────────────
     // < 30 days  → pro-rated single payment, isPartialMonth = true
     // >= 30 days → ceiling months × monthly rent
-    private static (int months, decimal total, bool isPartial, int days)
+    private static (int months, decimal total, bool isPartial, int days, int extraDays)
         CalcLease(DateTime start, DateTime end, decimal monthlyRent)
     {
         int days = (int)(end - start).TotalDays;
         if (days < 30)
         {
             decimal prorated = Math.Round(monthlyRent * days / 30m, 3);
-            return (1, prorated, true, days);
+            return (1, prorated, true, days, 0);
         }
-        int months = (int)Math.Ceiling(days / 30.44);
-        return (months, monthlyRent * months, false, days);
+
+        // Full calendar months (May 22 → Nov 22 = exactly 6)
+        int months = ((end.Year - start.Year) * 12) + (end.Month - start.Month);
+        if (end.Day < start.Day) months--;
+        if (months < 1) months = 1;
+
+        // Remaining days beyond full months → charged pro-rated
+        int extraDays = (int)(end - start.AddMonths(months)).TotalDays;
+        decimal extraCost = Math.Round(extraDays * monthlyRent / 30m, 3);
+        decimal total     = months * monthlyRent + extraCost;
+
+        return (months, total, false, days, extraDays);
     }
 
     private async Task<User?> GetAppUserAsync()
@@ -555,7 +565,7 @@ public class PaymentsController : Controller
             return RedirectToAction("Index", "LeaseApplications", new { tab = "leases" });
         }
 
-        var (months, total, isPartial, days) =
+        var (months, total, isPartial, days, extraDays) =
             CalcLease(lease.LeaseStartDate, lease.LeaseEndDate, lease.MonthlyRent);
 
         return View(new SelectPlanViewModel
@@ -571,6 +581,8 @@ public class PaymentsController : Controller
             TotalAmount     = total,
             ActualDays      = days,
             IsPartialMonth  = isPartial,
+            ExtraDays       = extraDays,
+            ExtraAmount     = Math.Round(extraDays * lease.MonthlyRent / 30m, 3),
             SelectedPlan    = isPartial ? "Full" : null   // auto-select Full for partial
         });
     }
@@ -588,9 +600,10 @@ public class PaymentsController : Controller
                 .FirstOrDefaultAsync(l => l.LeaseId == vm.LeaseId);
             if (lease != null)
             {
-                var (m, tot, partial, d) = CalcLease(lease.LeaseStartDate, lease.LeaseEndDate, lease.MonthlyRent);
+                var (m, tot, partial, d, ed) = CalcLease(lease.LeaseStartDate, lease.LeaseEndDate, lease.MonthlyRent);
                 vm.TotalMonths    = m;   vm.TotalAmount   = tot;
                 vm.ActualDays     = d;   vm.IsPartialMonth = partial;
+                vm.ExtraDays      = ed;  vm.ExtraAmount   = Math.Round(ed * lease.MonthlyRent / 30m, 3);
                 vm.MonthlyRent    = lease.MonthlyRent;
                 vm.SecurityDeposit = lease.SecurityDeposit;
             }
@@ -615,8 +628,12 @@ public class PaymentsController : Controller
         if (lease.Status != "PendingPayment")
             return RedirectToAction("Index", "LeaseApplications", new { tab = "leases" });
 
-        var (totalMonths, totalAmount, isPartial, _) =
+        var (totalMonths, totalAmount, isPartial, _, extraDaysChk) =
             CalcLease(lease.LeaseStartDate, lease.LeaseEndDate, lease.MonthlyRent);
+
+        string durationLabel = extraDaysChk > 0
+            ? $"{totalMonths} month{(totalMonths > 1 ? "s" : "")} + {extraDaysChk} day{(extraDaysChk > 1 ? "s" : "")}"
+            : $"{totalMonths} month{(totalMonths > 1 ? "s" : "")}";
 
         return View(new CheckoutViewModel
         {
@@ -629,8 +646,8 @@ public class PaymentsController : Controller
             AmountToPay     = plan == "Full" ? totalAmount : lease.MonthlyRent,
             PlanDescription = plan == "Full"
                 ? (isPartial ? $"Pro-rated payment ({(int)(lease.LeaseEndDate - lease.LeaseStartDate).TotalDays} days)"
-                             : $"Full payment for {totalMonths} month{(totalMonths > 1 ? "s" : "")}")
-                : $"Installment 1 of {totalMonths}"
+                             : $"Full payment for {durationLabel}")
+                : $"Installment 1 of {totalMonths}{(extraDaysChk > 0 ? $" + {extraDaysChk}-day charge" : "")}"
         });
     }
 
@@ -661,7 +678,7 @@ public class PaymentsController : Controller
         }
 
         var now = DateTime.Now;
-        var (totalMonths, totalAmount, isPartial, actualDays) =
+        var (totalMonths, totalAmount, isPartial, actualDays, extraDays) =
             CalcLease(lease.LeaseStartDate, lease.LeaseEndDate, lease.MonthlyRent);
 
         if (vm.PlanType == "Full")
@@ -681,17 +698,32 @@ public class PaymentsController : Controller
         }
         else
         {
+            decimal extraAmount = extraDays > 0
+                ? Math.Round(extraDays * lease.MonthlyRent / 30m, 3)
+                : 0m;
+
             for (int i = 0; i < totalMonths; i++)
             {
+                // Extra days are merged into the first installment
+                bool   isFirst      = i == 0;
+                decimal amountDue   = isFirst ? lease.MonthlyRent + extraAmount : lease.MonthlyRent;
+
+                string? notes = isFirst
+                    ? (extraDays > 0
+                        ? $"First installment paid at activation — includes {extraDays}-day pro-rated charge " +
+                          $"(BD {lease.MonthlyRent:N3}/30 × {extraDays} = BD {extraAmount:N3})."
+                        : "First installment paid at activation.")
+                    : null;
+
                 _db.PaymentRecords.Add(new PaymentRecord
                 {
                     LeaseId       = lease.LeaseId,
-                    AmountDue     = lease.MonthlyRent,
-                    AmountPaid    = i == 0 ? lease.MonthlyRent : null,
+                    AmountDue     = amountDue,
+                    AmountPaid    = isFirst ? amountDue : null,
                     DueDate       = lease.LeaseStartDate.AddMonths(i),
-                    PaidDate      = i == 0 ? now : null,
-                    PaymentStatus = i == 0 ? "Paid" : "Upcoming",
-                    Notes         = i == 0 ? "First installment paid at activation." : null
+                    PaidDate      = isFirst ? now : null,
+                    PaymentStatus = isFirst ? "Paid" : "Upcoming",
+                    Notes         = notes
                 });
             }
         }
