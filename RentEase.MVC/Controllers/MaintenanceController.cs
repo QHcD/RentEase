@@ -619,7 +619,8 @@ public class MaintenanceController : Controller
             ? $" — \"{model.Notes.Trim().Substring(0, Math.Min(model.Notes.Trim().Length, 80))}\""
             : "";
 
-        if (statusChanged)
+        // Only notify tenant for regular requests — pre-tenancy is internal (manager-initiated)
+        if (statusChanged && !request.ScheduledDate.HasValue)
         {
             var tenantMsg = request.Status == "Resolved"
                 ? $"✅ Your request \"{request.Title}\" has been RESOLVED{notesSnippet}"
@@ -641,7 +642,8 @@ public class MaintenanceController : Controller
                 $"📋 You have been assigned to \"{request.Title}\" (Ticket: {request.TicketNumber}). Status: {request.Status}",
                 "MaintenanceUpdate");
 
-        if (statusChanged && !string.IsNullOrWhiteSpace(request.Tenant?.Email))
+        // Send email only for regular requests — pre-tenancy is internal, no customer email
+        if (statusChanged && !request.ScheduledDate.HasValue && !string.IsNullOrWhiteSpace(request.Tenant?.Email))
         {
             try
             {
