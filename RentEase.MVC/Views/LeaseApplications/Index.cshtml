@@ -397,6 +397,15 @@
     <!-- ══ LEASES PANEL ════════════════════════════════════════════════════ -->
     <div class="@(Model.ActiveTab == "leases" ? "" : "d-none")">
 
+        @if (Model.IsManager)
+        {
+            <div class="d-flex justify-content-end mb-2">
+                <a asp-action="RefundReport" class="btn btn-sm btn-outline-danger">
+                    <i class="fa fa-undo me-1"></i>Refund Report
+                </a>
+            </div>
+        }
+
         <ul class="nav nav-pills mb-3 flex-wrap gap-1">
             @foreach (var s in ApplicationsAndLeasesViewModel.LeaseStatuses)
             {

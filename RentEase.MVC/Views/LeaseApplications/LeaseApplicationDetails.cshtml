@@ -1,6 +1,7 @@
 @model PropertyLeasing.MVC.ViewModels.LeaseApplicationDetailViewModel
 @{
     ViewData["Title"] = "Application Details";
+    bool fromDashboard = Context.Request.Query["from"] == "dashboard";
     var badgeColor = Model.Status switch
     {
         "Approved"            => "success",
@@ -137,9 +138,18 @@
             <span class="badge bg-info fs-6 ms-2">Renewal</span>
         }
     </h2>
-    <a asp-action="Index" class="btn btn-outline-dark btn-sm">
-        <i class="fa fa-arrow-left me-1"></i>Back to List
-    </a>
+    @if (fromDashboard)
+    {
+        <a asp-controller="Dashboard" asp-action="Index" class="btn btn-outline-dark btn-sm">
+            <i class="fa fa-arrow-left me-1"></i>Back to Dashboard
+        </a>
+    }
+    else
+    {
+        <a asp-action="Index" class="btn btn-outline-dark btn-sm">
+            <i class="fa fa-arrow-left me-1"></i>Back to List
+        </a>
+    }
 </div>
 
 @if (TempData["Success"] != null)

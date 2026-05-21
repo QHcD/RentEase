@@ -12,16 +12,18 @@ namespace PropertyLeasing.MVC.Controllers;
 public class PropertiesController : Controller
 {
     private readonly PropertyLeasingDbContext _db;
+    private readonly IWebHostEnvironment _env;
 
-    public PropertiesController(PropertyLeasingDbContext db)
+    public PropertiesController(PropertyLeasingDbContext db, IWebHostEnvironment env)
     {
-        _db = db;
+        _db  = db;
+        _env = env;
     }
 
     // GET /Properties — all properties (public)
     public async Task<IActionResult> Index(string? search, string? type)
     {
-        var query = _db.Properties.Include(p => p.Units).AsQueryable();
+        var query = _db.Properties.Include(p => p.Units).Include(p => p.PropertyImages).AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(search))
             query = query.Where(p => p.Name.Contains(search) || p.Address.Contains(search) || p.City!.Contains(search));
@@ -40,7 +42,8 @@ public class PropertiesController : Controller
                 PropertyType    = p.PropertyType,
                 ImgPath         = p.ImgPath,
                 TotalUnits      = p.Units.Count,
-                AvailableUnits  = p.Units.Count(u => u.AvailabilityStatus == "Available")
+                AvailableUnits  = p.Units.Count(u => u.AvailabilityStatus == "Available"),
+                ImagePaths      = p.PropertyImages.OrderBy(i => i.SortOrder).Select(i => i.ImagePath).ToList()
             })
             .ToListAsync();
 
@@ -65,6 +68,7 @@ public class PropertiesController : Controller
         var query = _db.Units
             .Include(u => u.Property)
             .Include(u => u.Feedbacks)
+            .Include(u => u.UnitImages)
             .Where(u => u.PropertyId == propertyId)
             .AsQueryable();
 
@@ -92,7 +96,8 @@ public class PropertiesController : Controller
                 PropertyAddress    = u.Property.Address,
                 PropertyId         = u.PropertyId,
                 AverageRating      = u.Feedbacks.Any() ? u.Feedbacks.Average(f => (double)(f.Rating ?? 0)) : 0,
-                FeedbackCount      = u.Feedbacks.Count(f => f.IsVisible)
+                FeedbackCount      = u.Feedbacks.Count(f => f.IsVisible),
+                ImagePaths         = u.UnitImages.OrderBy(i => i.SortOrder).Select(i => i.ImagePath).ToList()
             })
             .ToListAsync();
 
@@ -113,6 +118,7 @@ public class PropertiesController : Controller
     {
         var unit = await _db.Units
             .Include(u => u.Property)
+            .Include(u => u.UnitImages.OrderBy(i => i.SortOrder))
             .Include(u => u.Feedbacks.Where(f => f.IsVisible))
                 .ThenInclude(f => f.User)
             .FirstOrDefaultAsync(u => u.UnitId == id);
@@ -257,6 +263,11 @@ public class PropertiesController : Controller
             CustomAmenities        = customs
         };
 
+        ViewBag.PropertyImages = await _db.PropertyImages
+            .Where(i => i.PropertyId == id)
+            .OrderBy(i => i.SortOrder)
+            .ToListAsync();
+
         return View(vm);
     }
 
@@ -381,5 +392,103 @@ public class PropertiesController : Controller
         }
 
         return RedirectToAction(nameof(Units), new { propertyId });
+    }
+
+    // ── Image Management ─────────────────────────────────────────────────────
+
+    private static readonly string[] AllowedImgExt = { ".jpg", ".jpeg", ".png", ".webp" };
+
+    // POST /Properties/UploadPropertyImages
+    [Authorize(Roles = "PropertyManager")]
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> UploadPropertyImages(int propertyId, List<IFormFile> files)
+    {
+        var property = await _db.Properties.FindAsync(propertyId);
+        if (property == null) return NotFound();
+
+        var dir = Path.Combine(_env.WebRootPath, "uploads", "properties", propertyId.ToString());
+        Directory.CreateDirectory(dir);
+        int order = await _db.PropertyImages.Where(i => i.PropertyId == propertyId).CountAsync();
+
+        foreach (var file in files.Where(f => f.Length > 0))
+        {
+            var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+            if (!AllowedImgExt.Contains(ext)) continue;
+            var name = $"{Guid.NewGuid()}{ext}";
+            await using var fs = System.IO.File.Create(Path.Combine(dir, name));
+            await file.CopyToAsync(fs);
+            _db.PropertyImages.Add(new PropertyImage
+            {
+                PropertyId = propertyId,
+                ImagePath  = $"/uploads/properties/{propertyId}/{name}",
+                SortOrder  = order++
+            });
+        }
+        await _db.SaveChangesAsync();
+        TempData["Success"] = "Images uploaded.";
+        return RedirectToAction("Edit", new { id = propertyId });
+    }
+
+    // POST /Properties/DeletePropertyImage
+    [Authorize(Roles = "PropertyManager")]
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeletePropertyImage(int imageId, int propertyId)
+    {
+        var img = await _db.PropertyImages.FindAsync(imageId);
+        if (img != null)
+        {
+            var path = Path.Combine(_env.WebRootPath, img.ImagePath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
+            if (System.IO.File.Exists(path)) System.IO.File.Delete(path);
+            _db.PropertyImages.Remove(img);
+            await _db.SaveChangesAsync();
+        }
+        return RedirectToAction("Edit", new { id = propertyId });
+    }
+
+    // POST /Properties/UploadUnitImages
+    [Authorize(Roles = "PropertyManager")]
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> UploadUnitImages(int unitId, List<IFormFile> files)
+    {
+        var unit = await _db.Units.FindAsync(unitId);
+        if (unit == null) return NotFound();
+
+        var dir = Path.Combine(_env.WebRootPath, "uploads", "units", unitId.ToString());
+        Directory.CreateDirectory(dir);
+        int order = await _db.UnitImages.Where(i => i.UnitId == unitId).CountAsync();
+
+        foreach (var file in files.Where(f => f.Length > 0))
+        {
+            var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+            if (!AllowedImgExt.Contains(ext)) continue;
+            var name = $"{Guid.NewGuid()}{ext}";
+            await using var fs = System.IO.File.Create(Path.Combine(dir, name));
+            await file.CopyToAsync(fs);
+            _db.UnitImages.Add(new UnitImage
+            {
+                UnitId    = unitId,
+                ImagePath = $"/uploads/units/{unitId}/{name}",
+                SortOrder = order++
+            });
+        }
+        await _db.SaveChangesAsync();
+        TempData["Success"] = "Images uploaded.";
+        return RedirectToAction("UnitDetails", new { id = unitId });
+    }
+
+    // POST /Properties/DeleteUnitImage
+    [Authorize(Roles = "PropertyManager")]
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteUnitImage(int imageId, int unitId)
+    {
+        var img = await _db.UnitImages.FindAsync(imageId);
+        if (img != null)
+        {
+            var path = Path.Combine(_env.WebRootPath, img.ImagePath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
+            if (System.IO.File.Exists(path)) System.IO.File.Delete(path);
+            _db.UnitImages.Remove(img);
+            await _db.SaveChangesAsync();
+        }
+        return RedirectToAction("UnitDetails", new { id = unitId });
     }
 }

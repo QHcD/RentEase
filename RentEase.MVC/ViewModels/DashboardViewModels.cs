@@ -11,9 +11,28 @@ public class DashboardViewModel
     public int OpenMaintenanceRequests  { get; set; }
     public int OverduePayments          { get; set; }
 
+    // Refund stats
+    public int     TotalRefunds          { get; set; }
+    public decimal TotalRefundAmount     { get; set; }
+    public decimal ThisMonthRefundAmount { get; set; }
+
     public List<PropertyOccupancyViewModel>    PropertyOccupancy  { get; set; } = new();
     public List<MaintenanceListViewModel>      RecentMaintenance  { get; set; } = new();
     public List<LeaseApplicationListViewModel> RecentApplications { get; set; } = new();
+    public List<RefundSummaryViewModel>        RecentRefunds      { get; set; } = new();
+}
+
+public class RefundSummaryViewModel
+{
+    public int      RefundId       { get; set; }
+    public string   TenantName     { get; set; } = string.Empty;
+    public string   UnitNumber     { get; set; } = string.Empty;
+    public string   PropertyName   { get; set; } = string.Empty;
+    public DateTime CancelledAt    { get; set; }
+    public int      MonthsConsumed { get; set; }
+    public int      MonthsRefunded { get; set; }
+    public decimal  TotalPaid      { get; set; }
+    public decimal  RefundAmount   { get; set; }
 }
 
 public class PropertyOccupancyViewModel

@@ -1,3 +1,4 @@
+@using PropertyLeasing.API.Models
 @model PropertyLeasing.MVC.ViewModels.EditPropertyViewModel
 @using PropertyLeasing.MVC.Helpers
 @{
@@ -69,6 +70,58 @@
                         <a asp-action="Manage" class="btn btn-outline-secondary">Cancel</a>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@{
+    var propImages = ViewBag.PropertyImages as List<PropertyImage> ?? new();
+}
+
+<!-- Property Images Card -->
+<div class="row justify-content-center mt-4">
+    <div class="col-lg-9">
+        <div class="card shadow-sm">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="fa fa-images me-2 text-primary"></i>Property Images</span>
+                <span class="badge bg-secondary">@propImages.Count photos</span>
+            </div>
+            <div class="card-body">
+                @if (propImages.Any())
+                {
+                    <div class="row g-2 mb-3">
+                        @foreach (var img in propImages)
+                        {
+                            <div class="col-4 col-md-3 position-relative">
+                                <img src="@img.ImagePath" class="img-fluid rounded" style="height:100px;width:100%;object-fit:cover;" />
+                                <form asp-action="DeletePropertyImage" method="post" class="position-absolute top-0 end-0 m-1">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="imageId" value="@img.Id" />
+                                    <input type="hidden" name="propertyId" value="@Model.PropertyId" />
+                                    <button type="submit" class="btn btn-danger btn-sm py-0 px-1"
+                                            onclick="return confirm('Delete this image?')"
+                                            title="Delete" style="font-size:.7rem;">
+                                        <i class="fa fa-times"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <p class="text-muted small mb-3"><i class="fa fa-info-circle me-1"></i>No images uploaded yet.</p>
+                }
+                <form asp-action="UploadPropertyImages" method="post" enctype="multipart/form-data" class="d-flex gap-2 align-items-center">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="propertyId" value="@Model.PropertyId" />
+                    <input type="file" name="files" multiple accept="image/*" class="form-control form-control-sm" style="max-width:340px;" />
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        <i class="fa fa-upload me-1"></i>Upload
+                    </button>
+                </form>
+                <div class="form-text mt-1">Supported: JPG, PNG, WEBP. Select multiple files at once.</div>
             </div>
         </div>
     </div>

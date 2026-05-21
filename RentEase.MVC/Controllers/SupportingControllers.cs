@@ -10,6 +10,17 @@ using PropertyLeasing.MVC.ViewModels;
 
 namespace PropertyLeasing.MVC.Controllers;
 
+// ── Refund Preview DTO ─────────────────────────────────
+public class RefundPreview
+{
+    public int     MonthsConsumed  { get; set; }
+    public int     MonthsRefunded  { get; set; }
+    public decimal TotalPaid       { get; set; }
+    public decimal RefundAmount    { get; set; }   // = NetRefund (TotalPaid - consumed cost)
+    public decimal MonthlyRent     { get; set; }
+    public bool    BeforeStart     { get; set; }   // lease hasn't started yet → full refund
+}
+
 // ── Notifications ─────────────────────────────────────
 [Authorize]
 public class NotificationsController : Controller
@@ -111,6 +122,41 @@ public class DashboardController : Controller
     // GET /Dashboard
     public async Task<IActionResult> Index()
     {
+        var now             = DateTime.Now;
+        var monthStart      = new DateTime(now.Year, now.Month, 1);
+
+        var refundStats = await _db.LeaseRefunds
+            .GroupBy(r => 1)
+            .Select(g => new
+            {
+                Total       = g.Count(),
+                TotalAmount = g.Sum(r => r.RefundAmount)
+            })
+            .FirstOrDefaultAsync();
+
+        var thisMonthRefund = await _db.LeaseRefunds
+            .Where(r => r.CancelledAt >= monthStart)
+            .SumAsync(r => r.RefundAmount);
+
+        var recentRefunds = await _db.LeaseRefunds
+            .Include(r => r.Lease.Application.User)
+            .Include(r => r.Lease.Application.Unit).ThenInclude(u => u.Property)
+            .OrderByDescending(r => r.CancelledAt)
+            .Take(5)
+            .Select(r => new RefundSummaryViewModel
+            {
+                RefundId       = r.RefundId,
+                TenantName     = r.Lease.Application.User.FullName,
+                UnitNumber     = r.Lease.Application.Unit.UnitNumber,
+                PropertyName   = r.Lease.Application.Unit.Property.Name,
+                CancelledAt    = r.CancelledAt,
+                MonthsConsumed = r.MonthsConsumed,
+                MonthsRefunded = r.MonthsRefunded,
+                TotalPaid      = r.TotalPaid,
+                RefundAmount   = r.RefundAmount
+            })
+            .ToListAsync();
+
         var model = new DashboardViewModel
         {
             TotalProperties     = await _db.Properties.CountAsync(),
@@ -123,6 +169,11 @@ public class DashboardController : Controller
                 .CountAsync(r => r.Status == "Submitted" || r.Status == "Assigned" || r.Status == "InProgress"),
             OverduePayments     = await _db.PaymentRecords
                 .CountAsync(p => p.PaymentStatus == "Overdue"),
+
+            TotalRefunds          = refundStats?.Total       ?? 0,
+            TotalRefundAmount     = refundStats?.TotalAmount ?? 0,
+            ThisMonthRefundAmount = thisMonthRefund,
+            RecentRefunds         = recentRefunds,
 
             PropertyOccupancy = await _db.Properties
                 .Include(p => p.Units)
@@ -330,8 +381,11 @@ public class PaymentsController : Controller
         if (appUser.Role == "Tenant")
             baseQuery = baseQuery.Where(p => p.Lease.Application.UserId == appUser.UserId);
 
+        // Exclude cancelled records from main payment list
+        var activeQuery = baseQuery.Where(p => p.PaymentStatus != "Cancelled");
+
         // Counts from full dataset (before status filter) for tab badges
-        var allStatuses = await baseQuery.Select(p => p.PaymentStatus).ToListAsync();
+        var allStatuses = await activeQuery.Select(p => p.PaymentStatus).ToListAsync();
         ViewBag.TabCounts = new Dictionary<string, int>
         {
             ["All"]      = allStatuses.Count,
@@ -341,7 +395,7 @@ public class PaymentsController : Controller
             ["Paid"]     = allStatuses.Count(s => s == "Paid"),
         };
 
-        var query = baseQuery;
+        var query = activeQuery;
         if (!string.IsNullOrWhiteSpace(status))
             query = query.Where(p => p.PaymentStatus == status || (status == "Unpaid" && p.PaymentStatus == "Pending"));
 
@@ -379,9 +433,45 @@ public class PaymentsController : Controller
             };
         }).ToList();
 
-        ViewBag.Status   = status;
+        // Load refund records for the current user (or all for manager)
+        var refundQuery = _db.LeaseRefunds
+            .Include(r => r.Lease)
+                .ThenInclude(l => l.Application)
+                .ThenInclude(a => a.Unit)
+                .ThenInclude(u => u.Property)
+            .Include(r => r.Lease.Application.User)
+            .AsQueryable();
+
+        if (appUser.Role == "Tenant")
+            refundQuery = refundQuery.Where(r => r.Lease.Application.UserId == appUser.UserId);
+
+        ViewBag.Refunds   = await refundQuery.OrderByDescending(r => r.CancelledAt).ToListAsync();
+        ViewBag.Status    = status;
         ViewBag.IsManager = appUser.Role == "PropertyManager";
         return View(payments);
+    }
+
+    // GET /Payments/RefundReceipt/{refundId}
+    public async Task<IActionResult> RefundReceipt(int refundId)
+    {
+        var appUser = await GetAppUserAsync();
+        if (appUser == null) return Unauthorized();
+
+        var refund = await _db.LeaseRefunds
+            .Include(r => r.Lease)
+                .ThenInclude(l => l.Application)
+                .ThenInclude(a => a.Unit)
+                .ThenInclude(u => u.Property)
+            .Include(r => r.Lease.Application.User)
+            .FirstOrDefaultAsync(r => r.RefundId == refundId);
+
+        if (refund == null) return NotFound();
+
+        // Tenants can only view their own refunds
+        if (appUser.Role == "Tenant" && refund.Lease.Application.UserId != appUser.UserId)
+            return Forbid();
+
+        return View(refund);
     }
 
     // GET /Payments/Pay/{paymentId} — Tenant pays a single installment
@@ -448,6 +538,7 @@ public class PaymentsController : Controller
             .Include(p => p.Lease)
                 .ThenInclude(l => l.Application)
                 .ThenInclude(a => a.Unit)
+                .ThenInclude(u => u.Property)
             .FirstOrDefaultAsync(p => p.PaymentId == vm.PaymentId);
 
         if (payment == null) return NotFound();
@@ -466,11 +557,39 @@ public class PaymentsController : Controller
 
         await _db.SaveChangesAsync();
 
+        // Notify managers
         var managers = await _db.Users.Where(u => u.Role == "PropertyManager").ToListAsync();
         foreach (var mgr in managers)
             await _notifier.SendAsync(mgr.UserId,
                 $"{appUser.FullName} paid installment {vm.InstallmentNum}/{vm.TotalInstallments} (BD {vm.TotalAmount:N2}) for unit {payment.Lease.Application.Unit.UnitNumber}.",
                 "PaymentReminder");
+
+        // Notify tenant
+        await _notifier.SendAsync(appUser.UserId,
+            $"Your installment payment of BD {vm.TotalAmount:N2} ({vm.InstallmentNum}/{vm.TotalInstallments}) for unit {payment.Lease.Application.Unit.UnitNumber} was received successfully.",
+            "PaymentReminder");
+
+        // Find next upcoming installment due date
+        var nextPayment = await _db.PaymentRecords
+            .Where(p => p.LeaseId == payment.LeaseId && p.PaymentStatus == "Upcoming" && p.DueDate > payment.DueDate)
+            .OrderBy(p => p.DueDate)
+            .FirstOrDefaultAsync();
+
+        // Send confirmation email to tenant
+        try
+        {
+            await _emailService.SendInstallmentPaidAsync(
+                toEmail:           appUser.Email,
+                toName:            appUser.FullName,
+                unitNumber:        payment.Lease.Application.Unit.UnitNumber,
+                propertyName:      payment.Lease.Application.Unit.Property?.Name ?? "",
+                installmentNum:    vm.InstallmentNum,
+                totalInstallments: vm.TotalInstallments,
+                amountPaid:        vm.TotalAmount,
+                paidOn:            payment.PaidDate ?? DateTime.Now,
+                nextDueDate:       nextPayment?.DueDate);
+        }
+        catch { /* email failure must not block the flow */ }
 
         TempData["Success"] = $"Payment of BD {vm.TotalAmount:N2} completed successfully!";
         return RedirectToAction("Index");
@@ -818,7 +937,11 @@ public class PaymentsController : Controller
     public async Task<IActionResult> RecordPayment(int paymentId, decimal amountPaid, string? notes)
     {
         var payment = await _db.PaymentRecords
-            .Include(p => p.Lease).ThenInclude(l => l.Application).ThenInclude(a => a.User)
+            .Include(p => p.Lease)
+                .ThenInclude(l => l.Application)
+                .ThenInclude(a => a.User)
+            .Include(p => p.Lease.Application.Unit)
+                .ThenInclude(u => u.Property)
             .FirstOrDefaultAsync(p => p.PaymentId == paymentId);
         if (payment == null) return NotFound();
 
@@ -830,9 +953,39 @@ public class PaymentsController : Controller
 
         await _db.SaveChangesAsync();
 
-        await _notifier.SendAsync(payment.Lease.Application.UserId,
-            $"Your installment payment of BD {amountPaid:N2} for unit {payment.Lease.Application.Unit?.UnitNumber} has been recorded.",
+        // Calculate installment numbers for the email
+        var allRecords = await _db.PaymentRecords
+            .Where(p => p.LeaseId == payment.LeaseId)
+            .OrderBy(p => p.DueDate)
+            .ToListAsync();
+        int totalInstallments = allRecords.Count;
+        int installmentNum    = allRecords.FindIndex(p => p.PaymentId == paymentId) + 1;
+        var nextPayment       = allRecords.FirstOrDefault(p => p.PaymentStatus == "Upcoming" && p.DueDate > payment.DueDate);
+
+        var tenant   = payment.Lease.Application.User;
+        var unit     = payment.Lease.Application.Unit;
+        var property = unit.Property;
+
+        // Notify tenant
+        await _notifier.SendAsync(tenant.UserId,
+            $"Your installment payment of BD {amountPaid:N2} ({installmentNum}/{totalInstallments}) for unit {unit.UnitNumber} has been recorded by the manager.",
             "PaymentReminder");
+
+        // Email tenant
+        try
+        {
+            await _emailService.SendInstallmentPaidAsync(
+                toEmail:           tenant.Email,
+                toName:            tenant.FullName,
+                unitNumber:        unit.UnitNumber,
+                propertyName:      property?.Name ?? "",
+                installmentNum:    installmentNum,
+                totalInstallments: totalInstallments,
+                amountPaid:        amountPaid,
+                paidOn:            payment.PaidDate ?? DateTime.Now,
+                nextDueDate:       nextPayment?.DueDate);
+        }
+        catch { /* email failure must not block the flow */ }
 
         TempData["Success"] = "Payment recorded successfully.";
         return RedirectToAction("Index");

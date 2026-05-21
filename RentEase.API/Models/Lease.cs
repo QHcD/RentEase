@@ -61,4 +61,6 @@ public partial class Lease
 
     [InverseProperty("Lease")]
     public virtual ICollection<LeaseLog> LeaseLogs { get; set; } = new List<LeaseLog>();
+
+    public virtual LeaseRefund? LeaseRefund { get; set; }
 }

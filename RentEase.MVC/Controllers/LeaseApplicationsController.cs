@@ -1721,6 +1721,204 @@ public class LeaseApplicationsController : Controller
         return RedirectToAction("Details", new { id = applicationId });
     }
 
+    // ── Cancel Lease with Refund (Active or Approved-paid) ───────────────────
+
+    // GET: calculate refund preview and return JSON for modal
+    [Authorize(Roles = "Tenant")]
+    public async Task<IActionResult> CancelLeasePreview(int leaseId)
+    {
+        var appUser = await GetAppUserAsync();
+        if (appUser == null) return Unauthorized();
+
+        var lease = await _db.Leases
+            .Include(l => l.Application).ThenInclude(a => a.Unit).ThenInclude(u => u.Property)
+            .Include(l => l.PaymentRecords)
+            .FirstOrDefaultAsync(l => l.LeaseId == leaseId);
+
+        if (lease == null) return NotFound();
+        if (lease.Application.UserId != appUser.UserId) return Forbid();
+        if (lease.Status != "Active" && lease.Status != "Approved")
+            return Json(new { error = "This lease cannot be cancelled." });
+
+        var preview = ComputeRefundPreview(lease);
+        return Json(preview);
+    }
+
+    // POST: execute cancellation
+    [Authorize(Roles = "Tenant")]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CancelLease(int leaseId)
+    {
+        var appUser = await GetAppUserAsync();
+        if (appUser == null) return Unauthorized();
+
+        var lease = await _db.Leases
+            .Include(l => l.Application).ThenInclude(a => a.Unit).ThenInclude(u => u.Property)
+            .Include(l => l.Application.User)
+            .Include(l => l.PaymentRecords)
+            .FirstOrDefaultAsync(l => l.LeaseId == leaseId);
+
+        if (lease == null) return NotFound();
+        if (lease.Application.UserId != appUser.UserId) return Forbid();
+
+        if (lease.Status != "Active" && lease.Status != "Approved")
+        {
+            TempData["Error"] = "This lease cannot be cancelled.";
+            return RedirectToAction("LeaseDetails", new { id = leaseId });
+        }
+
+        var preview = ComputeRefundPreview(lease);
+        var now     = DateTime.Now;
+
+        // 1. Cancel all Upcoming payments
+        foreach (var p in lease.PaymentRecords.Where(p => p.PaymentStatus == "Upcoming"))
+            p.PaymentStatus = "Cancelled";
+
+        // 2. Create refund record
+        _db.LeaseRefunds.Add(new LeaseRefund
+        {
+            LeaseId         = lease.LeaseId,
+            MonthsConsumed  = preview.MonthsConsumed,
+            MonthsRefunded  = preview.MonthsRefunded,
+            TotalPaid       = preview.TotalPaid,
+            OverdueDeducted = 0,
+            RefundAmount    = preview.RefundAmount,
+            CancelledAt     = now,
+            Notes           = preview.BeforeStart
+                ? "Lease cancelled before start date — full refund issued."
+                : $"Lease cancelled early by tenant. Months consumed: {preview.MonthsConsumed}, months refunded: {preview.MonthsRefunded}."
+        });
+
+        // 3. Terminate lease + free unit
+        lease.Status = "Terminated";
+        if (lease.Application.Unit != null)
+            lease.Application.Unit.AvailabilityStatus = "Available";
+
+        _db.LeaseLogs.Add(new LeaseLog
+        {
+            LeaseId         = lease.LeaseId,
+            Status          = "Terminated",
+            ChangedByUserId = appUser.UserId,
+            Notes           = preview.RefundAmount > 0
+                ? $"Lease cancelled by tenant. Refund BD {preview.RefundAmount:N2} to be returned within 5–7 business days."
+                : "Lease cancelled by tenant. No refund due.",
+            CreatedAt       = now
+        });
+
+        // 4. Cancel any pre-tenancy maintenance
+        await CancelPreTenancyMaintenanceAsync(lease.Application.UnitId, "Lease cancelled by tenant", appUser.UserId);
+
+        await _db.SaveChangesAsync();
+
+        string unitNum = lease.Application.Unit?.UnitNumber ?? $"Lease #{lease.LeaseId}";
+
+        // 5. Notify tenant
+        await _notifier.SendAsync(appUser.UserId,
+            preview.RefundAmount > 0
+                ? $"Your lease for unit {unitNum} has been cancelled. BD {preview.RefundAmount:N2} will be returned to your bank card within 5–7 business days."
+                : $"Your lease for unit {unitNum} has been cancelled. No refund is due.",
+            "LeaseUpdate");
+
+        // 6. Notify managers
+        var managers = await _db.Users.Where(u => u.Role == "PropertyManager").ToListAsync();
+        foreach (var mgr in managers)
+            await _notifier.SendAsync(mgr.UserId,
+                $"Tenant {appUser.FullName} cancelled lease #{lease.LeaseId} for unit {unitNum}." +
+                (preview.RefundAmount > 0 ? $" Refund due: BD {preview.RefundAmount:N2}." : " No refund due."),
+                "LeaseUpdate");
+
+        // 7. Email tenant
+        try
+        {
+            await _emailService.SendLeaseCancelledAsync(
+                toEmail:        appUser.Email,
+                toName:         appUser.FullName,
+                unitNumber:     lease.Application.Unit?.UnitNumber ?? unitNum,
+                propertyName:   lease.Application.Unit?.Property?.Name ?? "",
+                leaseId:        lease.LeaseId,
+                refundAmount:   preview.RefundAmount,
+                monthsRefunded: preview.MonthsRefunded);
+        }
+        catch { /* email failure must not block the flow */ }
+
+        TempData["Success"] = preview.RefundAmount > 0
+            ? $"Lease cancelled. <strong>BD {preview.RefundAmount:N2}</strong> will be refunded to your bank card within 5–7 business days."
+            : "Lease cancelled. No refund is due for this lease.";
+
+        return RedirectToAction("LeaseDetails", new { id = leaseId });
+    }
+
+    // Helper: compute refund breakdown (no overdue deduction — not applicable)
+    private static RefundPreview ComputeRefundPreview(Lease lease)
+    {
+        var today      = DateTime.Today;
+        bool beforeStart = today < lease.LeaseStartDate.Date;
+
+        // Total actually paid (Paid records only)
+        decimal totalPaid = lease.PaymentRecords
+            .Where(p => p.PaymentStatus == "Paid")
+            .Sum(p => p.AmountPaid ?? p.AmountDue);
+
+        // If lease hasn't started yet → full refund, no months consumed
+        if (beforeStart)
+        {
+            int refundedMonths = lease.MonthlyRent > 0
+                ? (int)Math.Round(totalPaid / lease.MonthlyRent, MidpointRounding.AwayFromZero)
+                : 0;
+            return new RefundPreview
+            {
+                MonthsConsumed = 0,
+                MonthsRefunded = refundedMonths,
+                TotalPaid      = totalPaid,
+                RefundAmount   = totalPaid,
+                MonthlyRent    = lease.MonthlyRent,
+                BeforeStart    = true
+            };
+        }
+
+        // Months consumed = full months from lease start up to and including current month
+        var startMonth = new DateTime(lease.LeaseStartDate.Year, lease.LeaseStartDate.Month, 1);
+        var thisMonth  = new DateTime(today.Year, today.Month, 1);
+        int monthsConsumed = ((thisMonth.Year - startMonth.Year) * 12)
+                           + (thisMonth.Month - startMonth.Month) + 1;
+        monthsConsumed = Math.Max(1, monthsConsumed);
+
+        // Cost of consumed months (capped at what was paid — avoids negative refund)
+        decimal consumedCost  = Math.Min(monthsConsumed * lease.MonthlyRent, totalPaid);
+        decimal refundAmount  = Math.Max(0, totalPaid - consumedCost);
+
+        int monthsRefunded = lease.MonthlyRent > 0
+            ? (int)Math.Floor(refundAmount / lease.MonthlyRent)
+            : 0;
+
+        return new RefundPreview
+        {
+            MonthsConsumed = monthsConsumed,
+            MonthsRefunded = monthsRefunded,
+            TotalPaid      = totalPaid,
+            RefundAmount   = refundAmount,
+            MonthlyRent    = lease.MonthlyRent,
+            BeforeStart    = false
+        };
+    }
+
+    // ── Refund Report (manager only) ──────────────────────────────────────────
+    [Authorize(Roles = "PropertyManager")]
+    public async Task<IActionResult> RefundReport()
+    {
+        var refunds = await _db.LeaseRefunds
+            .Include(r => r.Lease)
+                .ThenInclude(l => l.Application)
+                .ThenInclude(a => a.Unit)
+                .ThenInclude(u => u.Property)
+            .Include(r => r.Lease.Application.User)
+            .OrderByDescending(r => r.CancelledAt)
+            .ToListAsync();
+
+        return View(refunds);
+    }
+
     // ── Legacy UpdateStatus shim ──────────────────────────────────────────────
     [Authorize(Roles = "PropertyManager")]
     [HttpPost]

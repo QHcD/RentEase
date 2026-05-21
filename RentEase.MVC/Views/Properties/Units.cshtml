@@ -113,10 +113,50 @@
 
         <div class="col-md-4">
             <div class="card h-100 shadow-sm @(isMaintenance ? "border-warning border-2" : "")">
-                @if (isMaintenance)
+                @{
+                    var unitImgs = u.ImagePaths.Count > 0 ? u.ImagePaths
+                                 : (!string.IsNullOrWhiteSpace(u.ImgPath) ? new List<string> { u.ImgPath } : new List<string>());
+                }
+                @if (unitImgs.Count > 0)
                 {
-                    <div class="card-img-top d-flex align-items-center justify-content-center"
-                         style="height:6px; background:repeating-linear-gradient(45deg,#ffc107,#ffc107 6px,#fff3cd 6px,#fff3cd 12px);">
+                    <div id="unitcar-@u.UnitId" class="carousel slide" data-bs-ride="false">
+                        <div class="carousel-inner" style="height:170px;overflow:hidden;">
+                            @for (int ci = 0; ci < unitImgs.Count; ci++)
+                            {
+                                <div class="carousel-item @(ci == 0 ? "active" : "")">
+                                    <img src="@unitImgs[ci]" class="d-block w-100"
+                                         style="height:170px;object-fit:cover;" alt="Unit image" />
+                                </div>
+                            }
+                        </div>
+                        @if (unitImgs.Count > 1)
+                        {
+                            <button class="carousel-control-prev" type="button"
+                                    data-bs-target="#unitcar-@u.UnitId" data-bs-slide="prev">
+                                <span class="carousel-control-prev-icon"></span>
+                            </button>
+                            <button class="carousel-control-next" type="button"
+                                    data-bs-target="#unitcar-@u.UnitId" data-bs-slide="next">
+                                <span class="carousel-control-next-icon"></span>
+                            </button>
+                            <div class="carousel-indicators" style="bottom:2px;">
+                                @for (int ci = 0; ci < unitImgs.Count; ci++)
+                                {
+                                    <button type="button" data-bs-target="#unitcar-@u.UnitId"
+                                            data-bs-slide-to="@ci" class="@(ci == 0 ? "active" : "")"></button>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+                else if (isMaintenance)
+                {
+                    <div style="height:6px; background:repeating-linear-gradient(45deg,#ffc107,#ffc107 6px,#fff3cd 6px,#fff3cd 12px);"></div>
+                }
+                else
+                {
+                    <div class="d-flex align-items-center justify-content-center bg-light" style="height:170px;">
+                        <i class="fa fa-door-open fa-3x text-muted"></i>
                     </div>
                 }
                 <div class="card-body">

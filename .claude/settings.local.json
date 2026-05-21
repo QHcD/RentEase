@@ -16,7 +16,14 @@
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
       "Bash(Remove-Item -Recurse -Force \"RentEase.API.Tests\")",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(powershell.exe -Command \"Get-ChildItem 'C:\\\\Users\\\\murta\\\\Desktop\\\\RentEase\\\\RentEase.MVC\\\\wwwroot\\\\uploads' -Recurse -File | Select-Object FullName\")",
+      "Bash(powershell.exe -Command \"Test-Path 'C:\\\\Users\\\\murta\\\\Desktop\\\\RentEase\\\\RentEase.MVC\\\\wwwroot\\\\uploads'\")",
+      "Bash(sqlcmd -S \"\\(localdb\\)\\\\MSSQLLocalDB\" -d PropertyLeasingDB -Q \"DELETE FROM LeaseRefund WHERE LeaseID=317\")",
+      "Bash(sqlcmd -S \"\\(localdb\\)\\\\MSSQLLocalDB\" -d PropertyLeasingDB -Q \"UPDATE Lease SET Status='Active' WHERE LeaseID=317\")",
+      "Bash(sqlcmd -S \"\\(localdb\\)\\\\MSSQLLocalDB\" -d PropertyLeasingDB -Q \"DELETE FROM LeaseLog WHERE LeaseID=317 AND Status='Terminated'\")",
+      "Bash(sqlcmd -S \"\\(localdb\\)\\\\MSSQLLocalDB\" -d PropertyLeasingDB -Q \"UPDATE Unit SET AvailabilityStatus='Occupied' WHERE UnitID=4819\")",
+      "Bash(sqlcmd -S '\\(localdb\\)\\\\MSSQLLocalDB' -d PropertyLeasingDB -Q ' *)"
     ]
   }
 }

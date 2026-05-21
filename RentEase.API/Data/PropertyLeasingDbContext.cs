@@ -28,6 +28,9 @@ public partial class PropertyLeasingDbContext : DbContext
     public virtual DbSet<MaintenanceStaff> MaintenanceStaffs { get; set; }
     public virtual DbSet<MaintenanceRequestLog> MaintenanceRequestLogs { get; set; }
     public virtual DbSet<Termination> Terminations { get; set; }
+    public virtual DbSet<PropertyImage> PropertyImages { get; set; }
+    public virtual DbSet<UnitImage> UnitImages { get; set; }
+    public virtual DbSet<LeaseRefund> LeaseRefunds { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) { }
 
@@ -90,6 +93,16 @@ public partial class PropertyLeasingDbContext : DbContext
             entity.HasOne(d => d.Lease)
                 .WithMany(p => p.PaymentRecords)
                 .HasConstraintName("FK_PaymentRecord_Lease");
+        });
+
+        // Lease -> LeaseRefund (one-to-one)
+        modelBuilder.Entity<LeaseRefund>(entity =>
+        {
+            entity.HasOne(d => d.Lease)
+                .WithOne(l => l.LeaseRefund)
+                .HasForeignKey<LeaseRefund>(d => d.LeaseId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_LeaseRefund_Lease");
         });
 
         // Unit -> MaintenanceRequests

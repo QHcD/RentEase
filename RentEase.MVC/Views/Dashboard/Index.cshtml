@@ -88,11 +88,17 @@
                                     <td><small>@r.TicketNumber</small></td>
                                     <td>@r.Title</td>
                                     <td>
-                                        <span class="badge bg-@(r.Priority == "Urgent" ? "danger" : r.Priority == "High" ? "warning" : "secondary")">
+                                        <span class="badge bg-@(r.Priority == "Urgent" ? "danger" : r.Priority == "High" ? "warning" : "secondary")"
+                                              style="width:80px;display:inline-block;text-align:center;">
                                             @r.Priority
                                         </span>
                                     </td>
-                                    <td><span class="badge bg-info">@r.Status</span></td>
+                                    <td>
+                                        <span class="badge bg-info"
+                                              style="width:80px;display:inline-block;text-align:center;">
+                                            @r.Status
+                                        </span>
+                                    </td>
                                 </tr>
                             }
                         </tbody>
@@ -125,7 +131,10 @@
                         </td>
                         <td>@a.CreatedAt.ToString("dd MMM yyyy")</td>
                         <td>
-                            <a asp-controller="LeaseApplications" asp-action="Index" class="btn btn-sm btn-outline-primary">View</a>
+                            <a asp-controller="LeaseApplications" asp-action="Details"
+                               asp-route-id="@a.ApplicationId"
+                               asp-route-from="dashboard"
+                               class="btn btn-sm btn-outline-primary">View</a>
                         </td>
                     </tr>
                 }
@@ -149,8 +158,8 @@ connection.on("NewRequest", (data) => {
     const row = `<tr id="row-${data.requestId}" class="table-warning">
         <td><small>${data.ticketNumber}</small></td>
         <td>${data.title}</td>
-        <td><span class="badge bg-${priorityColor}">${data.priority}</span></td>
-        <td><span class="badge bg-secondary">${data.status}</span></td>
+        <td><span class="badge bg-${priorityColor}" style="width:80px;display:inline-block;text-align:center;">${data.priority}</span></td>
+        <td><span class="badge bg-secondary" style="width:80px;display:inline-block;text-align:center;">${data.status}</span></td>
     </tr>`;
     tbody.insertAdjacentHTML("afterbegin", row);
 });

@@ -663,4 +663,259 @@ public class EmailService
         </html>
         """;
     }
+
+    // ── Installment Payment Confirmation Email ────────────────────────────
+    public async Task SendInstallmentPaidAsync(string toEmail, string toName,
+        string unitNumber, string propertyName,
+        int installmentNum, int totalInstallments,
+        decimal amountPaid, DateTime paidOn, DateTime? nextDueDate)
+    {
+        string subject = $"RentEase — Installment {installmentNum}/{totalInstallments} Paid ✅";
+        string body    = BuildInstallmentPaidEmail(toName, unitNumber, propertyName,
+                            installmentNum, totalInstallments, amountPaid, paidOn, nextDueDate);
+        await SendAsync(toEmail, subject, body);
+    }
+
+    private static string BuildInstallmentPaidEmail(string name, string unitNumber,
+        string propertyName, int installmentNum, int totalInstallments,
+        decimal amountPaid, DateTime paidOn, DateTime? nextDueDate)
+    {
+        string nextLine = nextDueDate.HasValue
+            ? $"<p style='margin:8px 0 0;font-size:13px;color:#555;'>Next installment due: <strong>{nextDueDate.Value:dd MMM yyyy}</strong></p>"
+            : "<p style='margin:8px 0 0;font-size:13px;color:#2e7d32;'><strong>🎉 All installments completed!</strong></p>";
+
+        return $"""
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="UTF-8"/>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+          <title>Installment Paid</title>
+        </head>
+        <body style="margin:0;padding:0;background:#f4f6f9;font-family:'Segoe UI',Arial,sans-serif;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f9;padding:40px 0;">
+            <tr><td align="center">
+              <table width="600" cellpadding="0" cellspacing="0"
+                     style="background:#fff;border-radius:12px;overflow:hidden;
+                            box-shadow:0 4px 20px rgba(0,0,0,.08);max-width:600px;">
+
+                <!-- Header -->
+                <tr>
+                  <td style="background:linear-gradient(135deg,#1a73e8,#0d47a1);
+                             padding:28px 32px;text-align:center;">
+                    <h1 style="margin:0;color:#fff;font-size:22px;font-weight:700;">🏠 RentEase</h1>
+                    <p style="margin:6px 0 0;color:#bbdefb;font-size:14px;">Payment Receipt</p>
+                  </td>
+                </tr>
+
+                <!-- Greeting -->
+                <tr>
+                  <td style="padding:28px 32px 0;">
+                    <p style="margin:0;font-size:16px;color:#333;">Hi <strong>{name}</strong>,</p>
+                    <p style="margin:10px 0 0;font-size:14px;color:#555;">
+                      Your installment payment has been received successfully. Here are the details:
+                    </p>
+                  </td>
+                </tr>
+
+                <!-- Payment Info Box -->
+                <tr>
+                  <td style="padding:20px 32px 0;">
+                    <table width="100%" cellpadding="0" cellspacing="0"
+                           style="background:#e8f5e9;border-radius:8px;padding:20px;">
+                      <tr>
+                        <td>
+                          <p style="margin:0 0 4px;font-size:13px;color:#555;">Amount Paid</p>
+                          <p style="margin:0;font-size:28px;font-weight:700;color:#2e7d32;">BD {amountPaid:N3}</p>
+                          <p style="margin:8px 0 0;font-size:13px;color:#555;">
+                            Installment <strong>{installmentNum} of {totalInstallments}</strong> &nbsp;·&nbsp;
+                            Paid on <strong>{paidOn:dd MMM yyyy, HH:mm}</strong>
+                          </p>
+                          {nextLine}
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+
+                <!-- Unit Info -->
+                <tr>
+                  <td style="padding:20px 32px 0;">
+                    <table width="100%" cellpadding="16" cellspacing="0"
+                           style="background:#f8f9fa;border-radius:8px;font-size:14px;color:#333;">
+                      <tr>
+                        <td style="padding:8px 16px;border-bottom:1px solid #e0e0e0;">
+                          <span style="color:#888;">Unit</span>
+                          <strong style="float:right;">{unitNumber}</strong>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding:8px 16px;">
+                          <span style="color:#888;">Property</span>
+                          <strong style="float:right;">{propertyName}</strong>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+
+                <!-- Footer note -->
+                <tr>
+                  <td style="padding:20px 32px;">
+                    <p style="margin:0;font-size:13px;color:#777;">
+                      You can view your full payment history and download your invoice from
+                      <a href="#" style="color:#1a73e8;">My Payments</a> in the portal.
+                    </p>
+                  </td>
+                </tr>
+
+                <!-- Footer -->
+                <tr>
+                  <td style="background:#f4f6f9;padding:16px 32px;text-align:center;border-top:1px solid #e0e0e0;">
+                    <p style="margin:0;font-size:12px;color:#aaa;">
+                      © {DateTime.Now.Year} RentEase Leasing &amp; Maintenance Platform
+                    </p>
+                  </td>
+                </tr>
+
+              </table>
+            </td></tr>
+          </table>
+        </body>
+        </html>
+        """;
+    }
+
+    // ── Lease Cancellation / Refund Email ─────────────────────────────────
+    public async Task SendLeaseCancelledAsync(string toEmail, string toName,
+        string unitNumber, string propertyName,
+        int leaseId, decimal refundAmount, int monthsRefunded)
+    {
+        string subject = "RentEase — Lease Cancelled & Refund Notice";
+        string body    = BuildLeaseCancelledEmail(toName, unitNumber, propertyName,
+                                                  leaseId, refundAmount, monthsRefunded);
+        await SendAsync(toEmail, subject, body);
+    }
+
+    private static string BuildLeaseCancelledEmail(string name, string unitNumber,
+        string propertyName, int leaseId, decimal refundAmount, int monthsRefunded)
+    {
+        string refundSection = refundAmount > 0
+            ? $"""
+               <tr>
+                 <td style="padding:24px 32px 0;">
+                   <table width="100%" cellpadding="0" cellspacing="0"
+                          style="background:#e8f5e9;border-radius:8px;padding:20px;">
+                     <tr>
+                       <td>
+                         <p style="margin:0 0 8px;font-size:15px;color:#2e7d32;font-weight:600;">
+                           <span style="font-size:20px;">💳</span> Refund Details
+                         </p>
+                         <p style="margin:0;font-size:14px;color:#555;">
+                           Months refunded: <strong>{monthsRefunded}</strong>
+                         </p>
+                         <p style="margin:6px 0 0;font-size:22px;font-weight:700;color:#2e7d32;">
+                           BD {refundAmount:N2}
+                         </p>
+                         <p style="margin:6px 0 0;font-size:13px;color:#777;">
+                           This amount will be returned to your bank card within
+                           <strong>5–7 business days</strong>.
+                         </p>
+                       </td>
+                     </tr>
+                   </table>
+                 </td>
+               </tr>
+               """
+            : $"""
+               <tr>
+                 <td style="padding:24px 32px 0;">
+                   <table width="100%" cellpadding="0" cellspacing="0"
+                          style="background:#fff3e0;border-radius:8px;padding:20px;">
+                     <tr>
+                       <td>
+                         <p style="margin:0;font-size:14px;color:#e65100;">
+                           <strong>No refund is due</strong> for this lease based on payments made
+                           and the months consumed.
+                         </p>
+                       </td>
+                     </tr>
+                   </table>
+                 </td>
+               </tr>
+               """;
+
+        return $"""
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="UTF-8"/>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+          <title>Lease Cancelled</title>
+        </head>
+        <body style="margin:0;padding:0;background:#f4f6f9;font-family:'Segoe UI',Arial,sans-serif;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f9;padding:40px 0;">
+            <tr>
+              <td align="center">
+                <table width="600" cellpadding="0" cellspacing="0"
+                       style="background:#ffffff;border-radius:12px;overflow:hidden;
+                              box-shadow:0 4px 20px rgba(0,0,0,.08);max-width:600px;">
+
+                  <!-- Header -->
+                  <tr>
+                    <td style="background:#b71c1c;padding:28px 32px;text-align:center;">
+                      <h1 style="margin:0;color:#fff;font-size:22px;font-weight:700;">
+                        🏠 RentEase
+                      </h1>
+                      <p style="margin:6px 0 0;color:#ffcdd2;font-size:14px;">
+                        Lease Cancellation Confirmation
+                      </p>
+                    </td>
+                  </tr>
+
+                  <!-- Greeting -->
+                  <tr>
+                    <td style="padding:28px 32px 0;">
+                      <p style="margin:0;font-size:16px;color:#333;">
+                        Dear <strong>{name}</strong>,
+                      </p>
+                      <p style="margin:12px 0 0;font-size:15px;color:#555;line-height:1.6;">
+                        Your lease <strong>#{leaseId}</strong> for unit
+                        <strong>{unitNumber}</strong> at <strong>{propertyName}</strong>
+                        has been successfully cancelled.
+                      </p>
+                    </td>
+                  </tr>
+
+                  <!-- Refund section -->
+                  {refundSection}
+
+                  <!-- Info -->
+                  <tr>
+                    <td style="padding:24px 32px;">
+                      <p style="margin:0;font-size:13px;color:#777;line-height:1.6;">
+                        If you have any questions regarding your refund or lease cancellation,
+                        please contact our support team. We're happy to help.
+                      </p>
+                    </td>
+                  </tr>
+
+                  <!-- Footer -->
+                  <tr>
+                    <td style="background:#f8f9fa;padding:20px 32px;text-align:center;
+                               border-top:1px solid #eee;">
+                      <p style="margin:0;font-size:12px;color:#aaa;">
+                        © {DateTime.Now.Year} RentEase Leasing & Maintenance Platform
+                      </p>
+                    </td>
+                  </tr>
+
+                </table>
+              </td>
+            </tr>
+          </table>
+        </body>
+        </html>
+        """;
+    }
 }

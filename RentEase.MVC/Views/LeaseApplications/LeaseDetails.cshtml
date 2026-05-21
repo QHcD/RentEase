@@ -49,6 +49,34 @@
     var remaining_amt = totalAmt - paidAmt;
 }
 
+<!-- ── Cancel Lease with Refund Modal ──────────────────────────────────── -->
+<div class="modal fade" id="cancelLeaseModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="fa fa-times-circle me-2"></i>Cancel Lease</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="cancelLeaseBody">
+                <div class="text-center py-3">
+                    <div class="spinner-border text-danger" role="status"></div>
+                    <p class="mt-2 text-muted small">Calculating refund...</p>
+                </div>
+            </div>
+            <div class="modal-footer" id="cancelLeaseFooter" style="display:none!important;">
+                <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Keep Lease</button>
+                <form asp-action="CancelLease" method="post" id="cancelLeaseForm">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="leaseId" value="@Model.LeaseId" />
+                    <button type="submit" class="btn btn-danger" id="confirmCancelBtn">
+                        <i class="fa fa-times me-1"></i>Confirm Cancellation
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Modals -->
 <div class="modal fade" id="terminateNowModal" tabindex="-1">
     <div class="modal-dialog">
@@ -246,8 +274,9 @@
                         <span class="text-muted small me-2">
                             Activates on <strong>@Model.LeaseStartDate.ToString("dd MMM yyyy")</strong>
                         </span>
-                        <button class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#terminateNowModal">
-                            <i class="fa fa-times-circle me-2"></i>Terminate Lease Now
+                        <button class="btn btn-outline-danger btn-sm"
+                                onclick="loadCancelPreview(@Model.LeaseId)">
+                            <i class="fa fa-ban me-1"></i>Cancel Lease &amp; Refund
                         </button>
                     }
                     @if (Model.Status == "Active")
@@ -306,6 +335,12 @@
                                 else                                            { <span>Less than 2 days remaining.</span> }
                             </small>
                         }
+
+                        <!-- Cancel Active Lease with Refund -->
+                        <button class="btn btn-outline-danger btn-sm ms-auto"
+                                onclick="loadCancelPreview(@Model.LeaseId)">
+                            <i class="fa fa-ban me-1"></i>Cancel Lease &amp; Refund
+                        </button>
                     }
                     @if (Model.Status == "Terminated" || Model.Status == "Renewed")
                     {
@@ -542,3 +577,82 @@
     </div>
 
 </div>
+
+@section Scripts {
+<script>
+    function loadCancelPreview(leaseId) {
+        // Reset modal
+        document.getElementById('cancelLeaseBody').innerHTML = `
+            <div class="text-center py-3">
+                <div class="spinner-border text-danger" role="status"></div>
+                <p class="mt-2 text-muted small">Calculating refund...</p>
+            </div>`;
+        document.getElementById('cancelLeaseFooter').style.setProperty('display', 'none', 'important');
+
+        var modal = new bootstrap.Modal(document.getElementById('cancelLeaseModal'));
+        modal.show();
+
+        fetch('/LeaseApplications/CancelLeasePreview?leaseId=' + leaseId)
+            .then(r => r.json())
+            .then(data => {
+                if (data.error) {
+                    document.getElementById('cancelLeaseBody').innerHTML =
+                        `<div class="alert alert-danger mb-0"><i class="fa fa-exclamation-circle me-2"></i>${data.error}</div>`;
+                    return;
+                }
+
+                var refundColor = data.refundAmount > 0 ? 'success' : 'secondary';
+                var refundIcon  = data.refundAmount > 0 ? 'fa-money-bill-wave' : 'fa-minus-circle';
+
+                var consumedRow = data.beforeStart ? '' :
+                    `<tr>
+                       <td><i class="fa fa-calendar-check me-1 text-muted"></i>Months consumed (incl. current)</td>
+                       <td class="text-end"><strong>${data.monthsConsumed}</strong> month(s)</td>
+                     </tr>
+                     <tr>
+                       <td>Cost of consumed months</td>
+                       <td class="text-end text-muted">− BD ${(data.totalPaid - data.refundAmount).toFixed(3)}</td>
+                     </tr>`;
+
+                var beforeStartNote = data.beforeStart
+                    ? `<div class="alert alert-info mt-3 mb-0">
+                           <i class="fa fa-info-circle me-2"></i>
+                           Your lease hasn't started yet — you will receive a <strong>full refund</strong>.
+                       </div>` : '';
+
+                document.getElementById('cancelLeaseBody').innerHTML = `
+                    <p class="text-muted mb-3">Refund breakdown for cancelling lease #${leaseId}:</p>
+                    <table class="table table-sm mb-0">
+                        <tbody>
+                            <tr class="table-light">
+                                <td><i class="fa fa-coins me-1 text-muted"></i>Total paid</td>
+                                <td class="text-end">BD ${data.totalPaid.toFixed(3)}</td>
+                            </tr>
+                            ${consumedRow}
+                            <tr class="table-${refundColor} fw-bold">
+                                <td><i class="fa ${refundIcon} me-1"></i>Refund amount</td>
+                                <td class="text-end fs-5">BD ${data.refundAmount.toFixed(3)}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    ${beforeStartNote}
+                    ${data.refundAmount > 0
+                        ? `<div class="alert alert-success mt-3 mb-0">
+                               <i class="fa fa-clock me-2"></i>
+                               <strong>BD ${data.refundAmount.toFixed(3)}</strong> will be returned to your bank card
+                               within <strong>5–7 business days</strong> after confirmation.
+                           </div>`
+                        : `<div class="alert alert-warning mt-3 mb-0">
+                               <i class="fa fa-info-circle me-2"></i>
+                               No refund is due — the paid months have been fully consumed.
+                           </div>`}`;
+
+                document.getElementById('cancelLeaseFooter').style.removeProperty('display');
+            })
+            .catch(() => {
+                document.getElementById('cancelLeaseBody').innerHTML =
+                    `<div class="alert alert-danger mb-0">Failed to load refund preview. Please try again.</div>`;
+            });
+    }
+</script>
+}

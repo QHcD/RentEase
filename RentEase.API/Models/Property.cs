@@ -41,4 +41,7 @@ public partial class Property
 
     [InverseProperty("Property")]
     public virtual ICollection<Unit> Units { get; set; } = new List<Unit>();
+
+    [InverseProperty("Property")]
+    public virtual ICollection<PropertyImage> PropertyImages { get; set; } = new List<PropertyImage>();
 }

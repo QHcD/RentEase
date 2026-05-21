@@ -151,6 +151,47 @@ using (var scope = app.Services.CreateScope())
 
     try
     {
+        var db = scope.ServiceProvider.GetRequiredService<PropertyLeasingDbContext>();
+        await db.Database.ExecuteSqlRawAsync(@"
+            IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='PropertyImage')
+            CREATE TABLE [PropertyImage] (
+                [Id]         INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                [PropertyID] INT NOT NULL,
+                [ImagePath]  NVARCHAR(300) NOT NULL,
+                [SortOrder]  INT NOT NULL DEFAULT 0,
+                CONSTRAINT [FK_PropertyImage_Property]
+                    FOREIGN KEY ([PropertyID]) REFERENCES [Property]([PropertyID]) ON DELETE CASCADE
+            );
+            IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='UnitImage')
+            CREATE TABLE [UnitImage] (
+                [Id]        INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                [UnitID]    INT NOT NULL,
+                [ImagePath] NVARCHAR(300) NOT NULL,
+                [SortOrder] INT NOT NULL DEFAULT 0,
+                CONSTRAINT [FK_UnitImage_Unit]
+                    FOREIGN KEY ([UnitID]) REFERENCES [Unit]([UnitID]) ON DELETE CASCADE
+            );
+            IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='LeaseRefund')
+            CREATE TABLE [LeaseRefund] (
+                [RefundId]        INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                [LeaseID]         INT NOT NULL UNIQUE,
+                [MonthsConsumed]  INT NOT NULL DEFAULT 0,
+                [MonthsRefunded]  INT NOT NULL DEFAULT 0,
+                [TotalPaid]       DECIMAL(10,2) NOT NULL DEFAULT 0,
+                [OverdueDeducted] DECIMAL(10,2) NOT NULL DEFAULT 0,
+                [RefundAmount]    DECIMAL(10,2) NOT NULL DEFAULT 0,
+                [CancelledAt]     DATETIME NOT NULL DEFAULT GETDATE(),
+                [Notes]           NVARCHAR(500) NULL,
+                CONSTRAINT [FK_LeaseRefund_Lease]
+                    FOREIGN KEY ([LeaseID]) REFERENCES [Lease]([LeaseID]) ON DELETE CASCADE
+            );
+        ");
+        logger.LogInformation("PropertyImage, UnitImage and LeaseRefund tables ensured.");
+    }
+    catch (Exception ex) { logger.LogWarning(ex, "Could not ensure image tables (non-fatal)."); }
+
+    try
+    {
         // Create MaintenanceRequestLog table if it does not exist yet
         var db = scope.ServiceProvider.GetRequiredService<PropertyLeasingDbContext>();
         await db.Database.ExecuteSqlRawAsync(@"

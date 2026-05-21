@@ -49,4 +49,7 @@ public partial class Unit
 
     [InverseProperty("Unit")]
     public virtual ICollection<Feedback> Feedbacks { get; set; } = new List<Feedback>();
+
+    [InverseProperty("Unit")]
+    public virtual ICollection<UnitImage> UnitImages { get; set; } = new List<UnitImage>();
 }

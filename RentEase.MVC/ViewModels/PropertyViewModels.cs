@@ -11,6 +11,7 @@ public class PropertyListViewModel
     public string? ImgPath         { get; set; }
     public int     TotalUnits      { get; set; }
     public int     AvailableUnits  { get; set; }
+    public List<string> ImagePaths { get; set; } = new();
 }
 
 public class UnitListViewModel
@@ -28,4 +29,5 @@ public class UnitListViewModel
     public int      PropertyId         { get; set; }
     public double   AverageRating      { get; set; }
     public int      FeedbackCount      { get; set; }
+    public List<string> ImagePaths     { get; set; } = new();
 }
