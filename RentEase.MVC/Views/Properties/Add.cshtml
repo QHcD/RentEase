@@ -14,7 +14,10 @@
             <div class="card-body">
                 <form asp-action="Add" method="post" id="addPropertyForm">
                     @Html.AntiForgeryToken()
-                    <div asp-validation-summary="All" class="alert alert-danger py-2 small"></div>
+                    @if (!ViewData.ModelState.IsValid)
+                    {
+                        <div asp-validation-summary="All" class="alert alert-danger py-2 small"></div>
+                    }
                     @if (ViewBag.AreaWarnings is IEnumerable<string> areaWarnings && areaWarnings.Any())
                     {
                         <div class="alert alert-warning py-2 small">
