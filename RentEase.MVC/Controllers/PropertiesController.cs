@@ -104,8 +104,6 @@ public class PropertiesController : Controller
         ViewBag.AvailShowAll = availShowAll;
         ViewBag.AvailSelection = availStatuses;
         ViewBag.UnitTypesSelection = unitTypesFilter;
-        if (User.IsInRole("PropertyManager"))
-            ViewBag.BlockingLeaseUnitIds = await PropertyUnitDeletionHelper.GetBlockingUnitIdsForPropertyAsync(_db, propertyId);
 
         return View(units);
     }
@@ -402,34 +400,6 @@ public class PropertiesController : Controller
         }
 
         return RedirectToAction(nameof(Manage));
-    }
-
-    // POST /Properties/DeleteUnit — manager only; removes one unit if no blocking lease.
-    [Authorize(Roles = "PropertyManager")]
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> DeleteUnit(int unitId, int propertyId)
-    {
-        var unit = await _db.Units.FirstOrDefaultAsync(u => u.UnitId == unitId && u.PropertyId == propertyId);
-        if (unit == null) return NotFound();
-
-        try
-        {
-            var (ok, error) = await PropertyUnitDeletionHelper.TryCascadeDeleteUnitsAsync(_db, new List<int> { unitId });
-            if (!ok)
-            {
-                TempData["Error"] = error;
-                return RedirectToAction(nameof(Units), new { propertyId });
-            }
-
-            TempData["Success"] = $"Unit {unit.UnitNumber} was deleted.";
-        }
-        catch (DbUpdateException)
-        {
-            TempData["Error"] = "Unable to delete this unit because related data could not be removed. Try again or contact support.";
-        }
-
-        return RedirectToAction(nameof(Units), new { propertyId });
     }
 
     // ── Image Management ─────────────────────────────────────────────────────

@@ -19,7 +19,6 @@
     var typesSel = ViewBag.UnitTypesSelection as List<string> ?? [];
     decimal? maxRent = ViewBag.MaxRent as decimal?;
     var typesQuery = PropertyUnitsFilterHelper.TypesQueryValue(typesSel);
-    var blockingLeaseUnits = ViewBag.BlockingLeaseUnitIds as HashSet<int>;
 }
 <!-- Filters: multi-select toggles (click to add/remove); max rent applies with Apply -->
 <div class="card mb-4">
@@ -183,27 +182,6 @@
                 <div class="card-footer d-flex flex-wrap gap-2 align-items-center">
                     <a asp-action="UnitDetails" asp-route-id="@u.UnitId"
                        class="btn btn-outline-secondary btn-sm">Details</a>
-                    @if (User.IsInRole("PropertyManager"))
-                    {
-                        var unitBlocked = blockingLeaseUnits != null && blockingLeaseUnits.Contains(u.UnitId);
-                        if (unitBlocked)
-                        {
-                            <button type="button" class="btn btn-outline-secondary btn-sm" disabled
-                                    title="Cannot delete while this unit has an active lease, pending payment, or an approved lease awaiting activation.">
-                                <i class="fa fa-trash me-1"></i>Delete unit
-                            </button>
-                        }
-                        else
-                        {
-                            <form asp-action="DeleteUnit" asp-route-unitId="@u.UnitId" asp-route-propertyId="@pid" method="post" class="d-inline">
-                                @Html.AntiForgeryToken()
-                                <button type="submit" class="btn btn-outline-danger btn-sm"
-                                        onclick="return confirm('Delete unit @u.UnitNumber? This cannot be undone.');">
-                                    <i class="fa fa-trash me-1"></i>Delete unit
-                                </button>
-                            </form>
-                        }
-                    }
                     @if (u.AvailabilityStatus == "Available" && User.IsInRole("Tenant"))
                     {
                         <a asp-controller="LeaseApplications" asp-action="Apply" asp-route-unitId="@u.UnitId"

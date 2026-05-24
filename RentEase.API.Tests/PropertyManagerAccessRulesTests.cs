@@ -21,4 +21,11 @@ public class PropertyManagerAccessRulesTests
         Assert.Contains("Manage", PropertyManagerAccessRules.ManagerOnlyPropertyActions);
         Assert.Contains("Add", PropertyManagerAccessRules.ManagerOnlyPropertyActions);
     }
+
+    [Fact]
+    public void DisallowedManagerPropertyActions_IncludesDeleteUnit()
+    {
+        Assert.Contains("DeleteUnit", PropertyManagerAccessRules.DisallowedManagerPropertyActions);
+        Assert.DoesNotContain("DeleteUnit", PropertyManagerAccessRules.ManagerOnlyPropertyActions);
+    }
 }
