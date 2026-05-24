@@ -27,7 +27,5 @@ public class UnitListViewModel
     public string   PropertyName       { get; set; } = string.Empty;
     public string   PropertyAddress    { get; set; } = string.Empty;
     public int      PropertyId         { get; set; }
-    public double   AverageRating      { get; set; }
-    public int      FeedbackCount      { get; set; }
     public List<string> ImagePaths     { get; set; } = new();
 }

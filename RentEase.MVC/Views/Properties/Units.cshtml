@@ -179,16 +179,6 @@
                             <i class="fa fa-check-circle me-1"></i>@u.Amenities
                         </div>
                     }
-                    @if (u.FeedbackCount > 0)
-                    {
-                        <div class="mt-2 small text-warning">
-                            @for (int i = 1; i <= 5; i++)
-                            {
-                                <i class="fa@(i <= Math.Round(u.AverageRating) ? "s" : "r") fa-star"></i>
-                            }
-                            <span class="text-muted ms-1">(@u.FeedbackCount reviews)</span>
-                        </div>
-                    }
                 </div>
                 <div class="card-footer d-flex flex-wrap gap-2 align-items-center">
                     <a asp-action="UnitDetails" asp-route-id="@u.UnitId"

@@ -119,11 +119,9 @@ else
     </div>
 }
 
-<!-- ── Info + Reviews ───────────────────────────────────────────── -->
+<!-- ── Unit Info ─────────────────────────────────────────────────── -->
 <div class="row g-4">
-
-    <!-- Unit Info -->
-    <div class="col-lg-7">
+    <div class="col-12">
         <div class="card shadow-sm h-100">
             <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
                 <h5 class="mb-0"><i class="fa fa-door-open me-2"></i>Unit @Model.UnitNumber</h5>
@@ -191,48 +189,6 @@ else
                     <div class="alert alert-info mt-3 mb-0">
                         <i class="fa fa-info-circle me-1"></i>
                         <a asp-controller="Account" asp-action="Login">Login</a> to apply for this unit.
-                    </div>
-                }
-            </div>
-        </div>
-    </div>
-
-    <!-- Reviews -->
-    <div class="col-lg-5">
-        <div class="card shadow-sm h-100">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <span><i class="fa fa-star me-1 text-warning"></i>Tenant Reviews</span>
-                <span class="badge bg-secondary">@Model.Feedbacks.Count</span>
-            </div>
-            <div class="card-body" style="max-height:400px; overflow-y:auto;">
-                @if (!Model.Feedbacks.Any())
-                {
-                    <div class="text-center text-muted py-4">
-                        <i class="fa fa-comment-slash fa-2x mb-2 d-block"></i>
-                        No reviews yet.
-                    </div>
-                }
-                @foreach (var fb in Model.Feedbacks)
-                {
-                    <div class="border-bottom pb-3 mb-3">
-                        <div class="d-flex justify-content-between align-items-center mb-1">
-                            <strong class="small">@fb.User.FullName</strong>
-                            <small class="text-muted">@fb.CreatedAt.ToString("dd MMM yyyy")</small>
-                        </div>
-                        @if (fb.Rating.HasValue)
-                        {
-                            <div class="mb-1">
-                                @for (int i = 1; i <= 5; i++)
-                                {
-                                    <i class="fa fa-star @(i <= fb.Rating ? "text-warning" : "text-muted")"
-                                       style="font-size:12px;"></i>
-                                }
-                            </div>
-                        }
-                        @if (!string.IsNullOrWhiteSpace(fb.Comment))
-                        {
-                            <p class="small mb-0 text-secondary">@fb.Comment</p>
-                        }
                     </div>
                 }
             </div>

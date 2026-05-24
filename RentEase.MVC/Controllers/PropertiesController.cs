@@ -67,7 +67,6 @@ public class PropertiesController : Controller
 
         var query = _db.Units
             .Include(u => u.Property)
-            .Include(u => u.Feedbacks)
             .Include(u => u.UnitImages)
             .Where(u => u.PropertyId == propertyId)
             .AsQueryable();
@@ -95,8 +94,6 @@ public class PropertiesController : Controller
                 PropertyName       = u.Property.Name,
                 PropertyAddress    = u.Property.Address,
                 PropertyId         = u.PropertyId,
-                AverageRating      = u.Feedbacks.Any() ? u.Feedbacks.Average(f => (double)(f.Rating ?? 0)) : 0,
-                FeedbackCount      = u.Feedbacks.Count(f => f.IsVisible),
                 ImagePaths         = u.UnitImages.OrderBy(i => i.SortOrder).Select(i => i.ImagePath).ToList()
             })
             .ToListAsync();
@@ -119,8 +116,6 @@ public class PropertiesController : Controller
         var unit = await _db.Units
             .Include(u => u.Property)
             .Include(u => u.UnitImages.OrderBy(i => i.SortOrder))
-            .Include(u => u.Feedbacks.Where(f => f.IsVisible))
-                .ThenInclude(f => f.User)
             .FirstOrDefaultAsync(u => u.UnitId == id);
 
         if (unit == null) return NotFound();

@@ -85,13 +85,6 @@ INSERT INTO Notification (UserID, Message, NotificationType, Status) VALUES
 (6, 'New maintenance request submitted: TKT-2026-003', 'MaintenanceUpdate','Unread');
 
 -- =============================================
--- Feedback
--- =============================================
-INSERT INTO Feedback (UserID, UnitID, Rating, Comment, IsVisible) VALUES
-(2, 1, 5, 'Great apartment, very clean and well-maintained!', 1),
-(3, 3, 3, 'Good location but maintenance is slow.',           1);
-
--- =============================================
 -- Logs
 -- =============================================
 INSERT INTO Log (UserID, Action, Details, LogLevel, Source) VALUES
