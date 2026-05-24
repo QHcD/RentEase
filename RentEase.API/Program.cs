@@ -153,6 +153,19 @@ using (var scope = app.Services.CreateScope())
 
     try
     {
+        var db = services.GetRequiredService<PropertyLeasingDbContext>();
+        await db.Database.ExecuteSqlRawAsync(@"
+            IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Property' AND COLUMN_NAME = 'TotalSizeSqm')
+                ALTER TABLE [Property] ADD [TotalSizeSqm] FLOAT NULL;
+            IF NOT EXISTS (SELECT 1 FROM [__EFMigrationsHistory] WHERE [MigrationId] = N'20260523120000_AddPropertyTotalSizeSqm')
+                INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+                VALUES (N'20260523120000_AddPropertyTotalSizeSqm', N'9.0.0');
+        ");
+    }
+    catch { }
+
+    try
+    {
         await ContextSeed.SeedRolesAndUsersAsync(services);
     }
     catch { }

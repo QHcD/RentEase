@@ -624,6 +624,9 @@ namespace PropertyLeasing.API.Migrations.PropertyLeasingDb
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<double?>("TotalSizeSqm")
+                        .HasColumnType("float");
+
                     b.HasKey("PropertyId");
 
                     b.ToTable("Property");

@@ -153,6 +153,20 @@ using (var scope = app.Services.CreateScope())
     {
         var db = scope.ServiceProvider.GetRequiredService<PropertyLeasingDbContext>();
         await db.Database.ExecuteSqlRawAsync(@"
+            IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Property' AND COLUMN_NAME = 'TotalSizeSqm')
+                ALTER TABLE [Property] ADD [TotalSizeSqm] FLOAT NULL;
+            IF NOT EXISTS (SELECT 1 FROM [__EFMigrationsHistory] WHERE [MigrationId] = N'20260523120000_AddPropertyTotalSizeSqm')
+                INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+                VALUES (N'20260523120000_AddPropertyTotalSizeSqm', N'9.0.0');
+        ");
+        logger.LogInformation("Property TotalSizeSqm column ensured.");
+    }
+    catch (Exception ex) { logger.LogWarning(ex, "Could not ensure Property TotalSizeSqm column (non-fatal)."); }
+
+    try
+    {
+        var db = scope.ServiceProvider.GetRequiredService<PropertyLeasingDbContext>();
+        await db.Database.ExecuteSqlRawAsync(@"
             IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='PropertyImage')
             CREATE TABLE [PropertyImage] (
                 [Id]         INT IDENTITY(1,1) NOT NULL PRIMARY KEY,

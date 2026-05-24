@@ -20,6 +20,10 @@ public class CreatePropertyViewModel : IPropertyAmenitiesForm{
     [StringLength(50)]
     public string? PropertyType { get; set; }
 
+    [Display(Name = "Total property size (m²)")]
+    [Range(typeof(decimal), "50", "1000000", ErrorMessage = "Total size must be between 50 and 1,000,000 m².")]
+    public decimal TotalSizeSqm { get; set; } = 500m;
+
     [Display(Name = "Number of floors")]
     [Range(1, 99)]
     public int NumberOfFloors { get; set; } = 1;
@@ -42,4 +46,7 @@ public class FloorUnitRowInput
     [Display(Name = "Units on this floor")]
     [Range(1, 99)]
     public int UnitsOnFloor { get; set; } = 1;
+
+    /// <summary>Area (m²) for each unit on this floor, in numbering order.</summary>
+    public List<decimal> UnitAreasSqm { get; set; } = new();
 }

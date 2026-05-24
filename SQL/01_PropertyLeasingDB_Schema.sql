@@ -27,7 +27,8 @@ CREATE TABLE Property (
     Address         NVARCHAR(200) NOT NULL,
     City            NVARCHAR(50)  NULL,
     PropertyType    NVARCHAR(50)  NULL,  -- Residential / Commercial
-    ImgPath         NVARCHAR(100) NULL
+    ImgPath         NVARCHAR(100) NULL,
+    TotalSizeSqm    FLOAT         NULL   -- Gross internal area (m²)
 );
 
 -- =============================================

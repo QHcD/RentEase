@@ -39,6 +39,9 @@ public partial class Property
     [Column(TypeName = "decimal(5,2)")]
     public decimal LateFeePercent { get; set; } = 5;
 
+    /// <summary>Gross internal floor area (m²) for the whole building.</summary>
+    public double? TotalSizeSqm { get; set; }
+
     [InverseProperty("Property")]
     public virtual ICollection<Unit> Units { get; set; } = new List<Unit>();
 

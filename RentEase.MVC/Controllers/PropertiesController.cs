@@ -140,27 +140,57 @@ public class PropertiesController : Controller
         return View(properties);
     }
 
-    // GET /Properties/Create
+    // GET /Properties/Add
     [Authorize(Roles = "PropertyManager")]
-    public IActionResult Create()
+    public IActionResult Add()
     {
+        var defaultPlans = PropertyAreaAllocationRules.BuildDefaultFloorPlans(500m, new[] { 1 });
         var vm = new CreatePropertyViewModel
         {
             NumberOfFloors = 1,
-            FloorRows      = new List<FloorUnitRowInput> { new() }
+            TotalSizeSqm   = 500m,
+            FloorRows      = defaultPlans.Select(p => new FloorUnitRowInput
+            {
+                UnitsOnFloor = p.UnitAreasSqm.Count,
+                UnitAreasSqm = p.UnitAreasSqm.ToList()
+            }).ToList()
         };
         return View(vm);
     }
 
-    // POST /Properties/Create
+    // POST /Properties/Add
     [Authorize(Roles = "PropertyManager")]
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create(CreatePropertyViewModel model)
+    public async Task<IActionResult> Add(CreatePropertyViewModel model)
     {
         if (model.FloorRows == null || model.FloorRows.Count != model.NumberOfFloors)
             ModelState.AddModelError(string.Empty,
                 "Floor rows must match the number of floors. Adjust the floor count or refresh the page.");
+
+        foreach (var sizeError in PropertyAreaAllocationRules.ValidatePropertySize(model.TotalSizeSqm))
+            ModelState.AddModelError(nameof(model.TotalSizeSqm), sizeError);
+
+        IReadOnlyList<string> areaWarnings = Array.Empty<string>();
+        if (model.FloorRows != null && model.FloorRows.Count == model.NumberOfFloors)
+        {
+            var floorInputs = model.FloorRows
+                .Select(r => (r.UnitsOnFloor, (IReadOnlyList<decimal>)(r.UnitAreasSqm ?? new List<decimal>())))
+                .ToList();
+
+            var unitsPerFloor = model.FloorRows.Select(r => r.UnitsOnFloor).ToList();
+            foreach (var layoutError in PropertyAreaAllocationRules.ValidatePropertySize(
+                         model.TotalSizeSqm, model.NumberOfFloors, unitsPerFloor))
+                ModelState.AddModelError(nameof(model.TotalSizeSqm), layoutError);
+
+            var (areaErrors, warnings) = PropertyAreaAllocationRules.ValidatePropertyAreaAllocationDetailed(
+                model.TotalSizeSqm, floorInputs);
+            areaWarnings = warnings;
+            foreach (var areaError in areaErrors)
+                ModelState.AddModelError(string.Empty, areaError);
+        }
+
+        ViewBag.AreaWarnings = areaWarnings;
 
         if (model.CustomAmenities is { Count: > 0 } &&
             model.CustomAmenities.Count > PropertyAmenitySelection.MaxCustomAmenityItems)
@@ -175,7 +205,7 @@ public class PropertiesController : Controller
                     $"Each custom amenity must be at most {PropertyAmenitySelection.MaxCustomAmenityItemLength} characters.");
         }
 
-        if (!ModelState.IsValid)
+        if (!ModelState.IsValid || areaWarnings.Count > 0)
             return View(model);
 
         var mergedAmenities = PropertyAmenitySelection.Merge(
@@ -192,6 +222,7 @@ public class PropertiesController : Controller
             return View(model);
 
         IReadOnlyList<string> unitNumbers;
+        IReadOnlyList<double> unitAreasSqm;
         try
         {
             var prefix = model.UnitNumberPrefix;
@@ -199,10 +230,20 @@ public class PropertiesController : Controller
                 .Select(r => ((string?)prefix, r.UnitsOnFloor))
                 .ToList();
             unitNumbers = PropertyCreateUnitNaming.BuildUnitNumbers(floors);
+
+            var areaFloors = model.FloorRows!
+                .Select(r => (r.UnitsOnFloor, (IReadOnlyList<decimal>)(r.UnitAreasSqm ?? new List<decimal>())))
+                .ToList();
+            unitAreasSqm = PropertyAreaAllocationRules.FlattenUnitAreasSqm(model.TotalSizeSqm, areaFloors);
         }
         catch (ArgumentOutOfRangeException)
         {
             ModelState.AddModelError(string.Empty, "Invalid floor layout. Each floor needs 1–99 units.");
+            return View(model);
+        }
+        catch (InvalidOperationException ex)
+        {
+            ModelState.AddModelError(string.Empty, ex.Message);
             return View(model);
         }
 
@@ -213,15 +254,17 @@ public class PropertiesController : Controller
             Address          = model.Address,
             City             = model.City,
             PropertyType     = model.PropertyType,
+            TotalSizeSqm     = (double)model.TotalSizeSqm,
             GracePeriodDays  = 5,
             LateFeePercent   = 5
         };
 
-        foreach (var number in unitNumbers)
+        for (var i = 0; i < unitNumbers.Count; i++)
         {
             property.Units.Add(new Unit
             {
-                UnitNumber           = number,
+                UnitNumber           = unitNumbers[i],
+                Sizesqm              = unitAreasSqm[i],
                 Amenities            = amenitiesJoined,
                 AvailabilityStatus   = "Available"
             });
@@ -229,7 +272,7 @@ public class PropertiesController : Controller
 
         _db.Properties.Add(property);
         await _db.SaveChangesAsync();
-        TempData["Success"] = $"Property created successfully with {unitNumbers.Count} unit(s).";
+        TempData["Success"] = $"Property added successfully with {unitNumbers.Count} unit(s).";
         return RedirectToAction("Manage");
     }
 
