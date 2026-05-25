@@ -219,7 +219,7 @@ else
                                 <input type="hidden" name="imageId" value="@img.Id" />
                                 <input type="hidden" name="unitId" value="@Model.UnitId" />
                                 <button type="submit" class="btn btn-danger btn-sm py-0 px-1"
-                                        onclick="return confirm('Delete this image?')"
+                                        data-confirm="Delete this image? This cannot be undone."
                                         style="font-size:.7rem;">
                                     <i class="fa fa-times"></i>
                                 </button>

@@ -23,7 +23,18 @@
       "Bash(sqlcmd -S \"\\(localdb\\)\\\\MSSQLLocalDB\" -d PropertyLeasingDB -Q \"UPDATE Lease SET Status='Active' WHERE LeaseID=317\")",
       "Bash(sqlcmd -S \"\\(localdb\\)\\\\MSSQLLocalDB\" -d PropertyLeasingDB -Q \"DELETE FROM LeaseLog WHERE LeaseID=317 AND Status='Terminated'\")",
       "Bash(sqlcmd -S \"\\(localdb\\)\\\\MSSQLLocalDB\" -d PropertyLeasingDB -Q \"UPDATE Unit SET AvailabilityStatus='Occupied' WHERE UnitID=4819\")",
-      "Bash(sqlcmd -S '\\(localdb\\)\\\\MSSQLLocalDB' -d PropertyLeasingDB -Q ' *)"
+      "Bash(sqlcmd -S '\\(localdb\\)\\\\MSSQLLocalDB' -d PropertyLeasingDB -Q ' *)",
+      "Bash(curl -L -o \"C:\\\\Users\\\\murta\\\\Desktop\\\\RentEase\\\\RentEase.MVC\\\\wwwroot\\\\uploads\\\\properties\\\\244\\\\1.jpg\" \"https://images.unsplash.com/photo-1643906652169-a750f3f70848?w=800&q=80\" -s --max-time 30)",
+      "WebFetch(domain:unsplash.com)",
+      "Bash(curl -sL --max-time 30 -o C:/Users/murta/Desktop/RentEase/RentEase.MVC/wwwroot/uploads/properties/246/3.jpg 'https://images.unsplash.com/photo-1559329146-807aff9ff1fb?w=800&q=80')",
+      "Bash(curl -sL --max-time 30 -o __TRACKED_VAR__/253/2.jpg '__TRACKED_VAR__/photo-1534430480872-3498386e7856?w=800&q=80')",
+      "Bash(curl -sL --max-time 30 -o __TRACKED_VAR__/253/3.jpg '__TRACKED_VAR__/photo-1416331108676-a22ccb276e35?w=800&q=80')",
+      "Bash(curl -sI \"https://images.unsplash.com/photo-pU4uXQSFKvM?w=800&q=80\")",
+      "Bash(az login *)",
+      "Read(//usr/local/bin/**)",
+      "Read(//c/Users/murta/.local/bin/**)",
+      "Bash(find /opt -name \"az\")",
+      "Bash(git -C \"C:/Users/murta/Desktop/RentEase\" status --short \"RentEase.MVC/wwwroot/uploads/\")"
     ]
   }
 }

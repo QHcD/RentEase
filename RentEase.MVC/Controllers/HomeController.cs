@@ -27,6 +27,7 @@ public class HomeController : Controller
         ViewBag.TotalUnits       = await _db.Units.CountAsync();
         ViewBag.FeaturedProperties = await _db.Properties
             .Include(p => p.Units)
+            .Include(p => p.PropertyImages)
             .Take(3)
             .ToListAsync();
         return View();

@@ -95,12 +95,12 @@
                         {
                             <div class="col-4 col-md-3 position-relative">
                                 <img src="@img.ImagePath" class="img-fluid rounded" style="height:100px;width:100%;object-fit:cover;" />
-                                <form asp-action="DeletePropertyImage" method="post" class="position-absolute top-0 end-0 m-1">
+                                <form asp-action="DeletePropertyImage" method="post" class="position-absolute top-0 end-0 m-1"
+                                      data-confirm="Delete this image? This cannot be undone.">
                                     @Html.AntiForgeryToken()
                                     <input type="hidden" name="imageId" value="@img.Id" />
                                     <input type="hidden" name="propertyId" value="@Model.PropertyId" />
                                     <button type="submit" class="btn btn-danger btn-sm py-0 px-1"
-                                            onclick="return confirm('Delete this image?')"
                                             title="Delete" style="font-size:.7rem;">
                                         <i class="fa fa-times"></i>
                                     </button>

@@ -124,7 +124,7 @@
                             else
                             {
                                 <form asp-action="Delete" asp-route-id="@p.PropertyId" method="post"
-                                      onsubmit="return confirm('Delete this property? All units and historical lease records on this property will be removed.')">
+                                      data-confirm="Delete this property? All units and historical lease records on this property will be removed.">
                                     @Html.AntiForgeryToken()
                                     <button type="submit" class="btn btn-outline-danger btn-sm">
                                         <i class="fa fa-trash"></i>

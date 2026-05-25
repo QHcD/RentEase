@@ -12,7 +12,7 @@
                 <h5 class="mb-0"><i class="fa fa-plus me-2"></i>Add New Property</h5>
             </div>
             <div class="card-body">
-                <form asp-action="Add" method="post" id="addPropertyForm">
+                <form asp-action="Add" method="post" enctype="multipart/form-data" id="addPropertyForm">
                     @Html.AntiForgeryToken()
                     @if (!ViewData.ModelState.IsValid)
                     {
@@ -97,6 +97,20 @@
                     </p>
                     <div id="floorRowsContainer" class="border rounded p-3 bg-light mb-2"></div>
                     <div id="areaAllocationSummary" class="alert alert-secondary py-2 small mb-3" role="status"></div>
+
+                    <!-- Property Images -->
+                    <hr />
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">
+                            <i class="fa fa-images me-1 text-primary"></i>Property Images <span class="text-muted fw-normal small">(optional — jpg, jpeg, png, webp)</span>
+                        </label>
+                        <input type="file" name="Images" id="propImagesInput"
+                               class="form-control" multiple
+                               accept=".jpg,.jpeg,.png,.webp" />
+                        <div class="form-text">You can select multiple photos at once. They will be displayed as a carousel on the property card.</div>
+                        <!-- Live preview -->
+                        <div id="imgPreviewRow" class="d-flex flex-wrap gap-2 mt-2"></div>
+                    </div>
 
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-success">
@@ -484,6 +498,27 @@
             totalSizeInput.addEventListener('input', function () { updateSummary(); });
 
             render(false);
+        })();
+
+        // Image preview
+        (function () {
+            var input = document.getElementById('propImagesInput');
+            var preview = document.getElementById('imgPreviewRow');
+            if (!input || !preview) return;
+            input.addEventListener('change', function () {
+                preview.innerHTML = '';
+                Array.from(input.files).forEach(function (file) {
+                    if (!file.type.startsWith('image/')) return;
+                    var reader = new FileReader();
+                    reader.onload = function (e) {
+                        var img = document.createElement('img');
+                        img.src = e.target.result;
+                        img.style.cssText = 'height:90px;width:120px;object-fit:cover;border-radius:6px;border:1px solid #dee2e6;';
+                        preview.appendChild(img);
+                    };
+                    reader.readAsDataURL(file);
+                });
+            });
         })();
     </script>
 }

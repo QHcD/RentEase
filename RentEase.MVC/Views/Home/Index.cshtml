@@ -54,8 +54,49 @@
 <div class="row g-3">
     @foreach (var property in (ViewBag.FeaturedProperties as List<PropertyLeasing.API.Models.Property> ?? new()))
     {
+        var imgs = property.PropertyImages.OrderBy(i => i.SortOrder).Select(i => i.ImagePath).ToList();
+        var carId = "featcar-" + property.PropertyId;
         <div class="col-md-4">
             <div class="card h-100 shadow-sm">
+                @if (imgs.Count > 0)
+                {
+                    <div id="@carId" class="carousel slide" data-bs-ride="false">
+                        <div class="carousel-inner" style="height:190px;overflow:hidden;">
+                            @for (int ci = 0; ci < imgs.Count; ci++)
+                            {
+                                <div class="carousel-item @(ci == 0 ? "active" : "")">
+                                    <img src="@imgs[ci]" class="d-block w-100"
+                                         style="height:190px;object-fit:cover;" alt="Property image" />
+                                </div>
+                            }
+                        </div>
+                        @if (imgs.Count > 1)
+                        {
+                            <button class="carousel-control-prev" type="button"
+                                    data-bs-target="#@carId" data-bs-slide="prev">
+                                <span class="carousel-control-prev-icon"></span>
+                            </button>
+                            <button class="carousel-control-next" type="button"
+                                    data-bs-target="#@carId" data-bs-slide="next">
+                                <span class="carousel-control-next-icon"></span>
+                            </button>
+                            <div class="carousel-indicators" style="bottom:2px;">
+                                @for (int ci = 0; ci < imgs.Count; ci++)
+                                {
+                                    <button type="button" data-bs-target="#@carId"
+                                            data-bs-slide-to="@ci"
+                                            class="@(ci == 0 ? "active" : "")"></button>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="d-flex align-items-center justify-content-center bg-light rounded-top" style="height:190px;">
+                        <i class="fa fa-building fa-3x text-muted"></i>
+                    </div>
+                }
                 <div class="card-body">
                     <h5 class="card-title"><i class="fa fa-building me-1 text-primary"></i>@property.Name</h5>
                     <p class="text-muted small"><i class="fa fa-map-marker-alt me-1"></i>@property.Address</p>
@@ -65,7 +106,7 @@
                 <div class="card-footer">
                     <a asp-controller="Properties" asp-action="Units" asp-route-propertyId="@property.PropertyId"
                        class="btn btn-outline-primary btn-sm w-100">
-                        View Units
+                        <i class="fa fa-door-open me-1"></i> View Units
                     </a>
                 </div>
             </div>

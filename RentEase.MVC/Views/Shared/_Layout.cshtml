@@ -218,5 +218,69 @@
     <script src="~/lib/bootstrap/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
     @await RenderSectionAsync("Scripts", required: false)
+
+    <!-- ── Global Confirm Modal ─────────────────────────────────────────── -->
+    <div class="modal fade" id="globalConfirmModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title mb-0">
+                        <i class="fa fa-exclamation-triangle me-2"></i>Confirm Delete
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body py-4">
+                    <p id="globalConfirmMessage" class="mb-0 fs-6"></p>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                        <i class="fa fa-times me-1"></i>Cancel
+                    </button>
+                    <button type="button" class="btn btn-danger" id="globalConfirmOk">
+                        <i class="fa fa-trash me-1"></i>Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        (function () {
+            var modal     = new bootstrap.Modal(document.getElementById('globalConfirmModal'));
+            var msgEl     = document.getElementById('globalConfirmMessage');
+            var okBtn     = document.getElementById('globalConfirmOk');
+            var pendingFn = null;
+
+            // Intercept forms with data-confirm attribute
+            document.addEventListener('submit', function (e) {
+                var form = e.target.closest('form[data-confirm]');
+                if (!form) return;
+                e.preventDefault();
+                msgEl.textContent = form.dataset.confirm;
+                pendingFn = function () { form.removeAttribute('data-confirm'); form.submit(); };
+                modal.show();
+            }, true);
+
+            // Intercept buttons/links with data-confirm attribute
+            document.addEventListener('click', function (e) {
+                var el = e.target.closest('[data-confirm]:not(form)');
+                if (!el) return;
+                e.preventDefault();
+                msgEl.textContent = el.dataset.confirm;
+                var href = el.href || null;
+                pendingFn = href ? function () { window.location.href = href; }
+                                 : function () { el.closest('form').submit(); };
+                modal.show();
+            }, true);
+
+            okBtn.addEventListener('click', function () {
+                modal.hide();
+                if (pendingFn) { pendingFn(); pendingFn = null; }
+            });
+
+            document.getElementById('globalConfirmModal').addEventListener('hidden.bs.modal', function () {
+                pendingFn = null;
+            });
+        })();
+    </script>
 </body>
 </html>

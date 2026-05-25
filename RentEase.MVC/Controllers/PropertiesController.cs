@@ -104,6 +104,11 @@ public class PropertiesController : Controller
         ViewBag.AvailShowAll = availShowAll;
         ViewBag.AvailSelection = availStatuses;
         ViewBag.UnitTypesSelection = unitTypesFilter;
+        ViewBag.PropertyImagePaths = await _db.PropertyImages
+            .Where(i => i.PropertyId == propertyId)
+            .OrderBy(i => i.SortOrder)
+            .Select(i => i.ImagePath)
+            .ToListAsync();
 
         return View(units);
     }
@@ -265,6 +270,30 @@ public class PropertiesController : Controller
 
         _db.Properties.Add(property);
         await _db.SaveChangesAsync();
+
+        // Save uploaded property images
+        if (model.Images is { Count: > 0 })
+        {
+            var dir = Path.Combine(_env.WebRootPath, "uploads", "properties", property.PropertyId.ToString());
+            Directory.CreateDirectory(dir);
+            int order = 0;
+            foreach (var file in model.Images.Where(f => f.Length > 0))
+            {
+                var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+                if (!AllowedImgExt.Contains(ext)) continue;
+                var name = $"{Guid.NewGuid()}{ext}";
+                await using var fs = System.IO.File.Create(Path.Combine(dir, name));
+                await file.CopyToAsync(fs);
+                _db.PropertyImages.Add(new PropertyImage
+                {
+                    PropertyId = property.PropertyId,
+                    ImagePath  = $"/uploads/properties/{property.PropertyId}/{name}",
+                    SortOrder  = order++
+                });
+            }
+            await _db.SaveChangesAsync();
+        }
+
         TempData["Success"] = $"Property added successfully with {unitNumbers.Count} unit(s).";
         return RedirectToAction("Manage");
     }

@@ -7,12 +7,5 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     }, 4000);
 
-    // Confirm delete actions
-    document.querySelectorAll("form[data-confirm]").forEach(function (form) {
-        form.addEventListener("submit", function (e) {
-            if (!confirm(form.dataset.confirm || "Are you sure?")) {
-                e.preventDefault();
-            }
-        });
-    });
+    // Confirm delete handled globally by #globalConfirmModal in _Layout.cshtml
 });

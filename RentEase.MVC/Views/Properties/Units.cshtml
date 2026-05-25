@@ -13,6 +13,45 @@
 </div>
 
 @{
+    var propImgPaths = ViewBag.PropertyImagePaths as List<string> ?? new List<string>();
+}
+@if (propImgPaths.Count > 0)
+{
+    <div id="propHeaderCar" class="carousel slide mb-4 rounded shadow overflow-hidden" data-bs-ride="false"
+         style="max-height:320px;">
+        <div class="carousel-inner" style="max-height:320px;">
+            @for (int ci = 0; ci < propImgPaths.Count; ci++)
+            {
+                <div class="carousel-item @(ci == 0 ? "active" : "")">
+                    <img src="@propImgPaths[ci]" class="d-block w-100"
+                         style="max-height:320px;object-fit:cover;" alt="Property image" />
+                </div>
+            }
+        </div>
+        @if (propImgPaths.Count > 1)
+        {
+            <button class="carousel-control-prev" type="button"
+                    data-bs-target="#propHeaderCar" data-bs-slide="prev">
+                <span class="carousel-control-prev-icon"></span>
+            </button>
+            <button class="carousel-control-next" type="button"
+                    data-bs-target="#propHeaderCar" data-bs-slide="next">
+                <span class="carousel-control-next-icon"></span>
+            </button>
+            <div class="carousel-indicators">
+                @for (int ci = 0; ci < propImgPaths.Count; ci++)
+                {
+                    <button type="button" data-bs-target="#propHeaderCar"
+                            data-bs-slide-to="@ci"
+                            class="@(ci == 0 ? "active" : "")"
+                            aria-label="Slide @(ci+1)"></button>
+                }
+            </div>
+        }
+    </div>
+}
+
+@{
     var pid = (int)ViewBag.PropertyId;
     var availShowAll = (bool)ViewBag.AvailShowAll;
     var availSel = ViewBag.AvailSelection as List<string> ?? [];
