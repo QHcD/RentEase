@@ -1,0 +1,241 @@
+@model List<PropertyLeasing.MVC.ViewModels.UnitListViewModel>
+@{
+    ViewData["Title"] = "Units — " + ViewBag.PropertyName;
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <a asp-action="Index" class="btn btn-outline-secondary btn-sm me-2">
+            <i class="fa fa-arrow-left me-1"></i> Back
+        </a>
+        <h4 class="d-inline"><i class="fa fa-door-open me-2"></i>@ViewBag.PropertyName</h4>
+    </div>
+</div>
+
+@{
+    var propImgPaths = ViewBag.PropertyImagePaths as List<string> ?? new List<string>();
+}
+@if (propImgPaths.Count > 0)
+{
+    <div id="propHeaderCar" class="carousel slide mb-4 rounded shadow overflow-hidden" data-bs-ride="false"
+         style="max-height:320px;">
+        <div class="carousel-inner" style="max-height:320px;">
+            @for (int ci = 0; ci < propImgPaths.Count; ci++)
+            {
+                <div class="carousel-item @(ci == 0 ? "active" : "")">
+                    <img src="@propImgPaths[ci]" class="d-block w-100"
+                         style="max-height:320px;object-fit:cover;" alt="Property image" />
+                </div>
+            }
+        </div>
+        @if (propImgPaths.Count > 1)
+        {
+            <button class="carousel-control-prev" type="button"
+                    data-bs-target="#propHeaderCar" data-bs-slide="prev">
+                <span class="carousel-control-prev-icon"></span>
+            </button>
+            <button class="carousel-control-next" type="button"
+                    data-bs-target="#propHeaderCar" data-bs-slide="next">
+                <span class="carousel-control-next-icon"></span>
+            </button>
+            <div class="carousel-indicators">
+                @for (int ci = 0; ci < propImgPaths.Count; ci++)
+                {
+                    <button type="button" data-bs-target="#propHeaderCar"
+                            data-bs-slide-to="@ci"
+                            class="@(ci == 0 ? "active" : "")"
+                            aria-label="Slide @(ci+1)"></button>
+                }
+            </div>
+        }
+    </div>
+}
+
+@{
+    var pid = (int)ViewBag.PropertyId;
+    var availShowAll = (bool)ViewBag.AvailShowAll;
+    var availSel = ViewBag.AvailSelection as List<string> ?? [];
+    var typesSel = ViewBag.UnitTypesSelection as List<string> ?? [];
+    decimal? maxRent = ViewBag.MaxRent as decimal?;
+    var typesQuery = PropertyUnitsFilterHelper.TypesQueryValue(typesSel);
+}
+<!-- Filters: multi-select toggles (click to add/remove); max rent applies with Apply -->
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="mb-3">
+            <div class="form-label small text-muted mb-1">Availability</div>
+            <div class="d-flex flex-wrap gap-2">
+                @foreach (var opt in PropertyUnitsFilterHelper.AvailabilityOptions)
+                {
+                    var nextAvailList = PropertyUnitsFilterHelper.ToggleAvailability(availShowAll, availSel, opt);
+                    var nextAvailShowAll = nextAvailList.Count == 0;
+                    var nextAvailParam = PropertyUnitsFilterHelper.AvailQueryValue(nextAvailShowAll, nextAvailList);
+                    var isAvailOn = !availShowAll && availSel.Contains(opt);
+                    var availLabel = opt == "UnderMaintenance" ? "Under maintenance" : opt;
+                    <a asp-controller="Properties" asp-action="Units"
+                       asp-route-propertyId="@pid"
+                       asp-route-avail="@nextAvailParam"
+                       asp-route-types="@typesQuery"
+                       asp-route-maxRent="@maxRent"
+                       class="btn btn-sm @(isAvailOn ? "btn-primary" : "btn-outline-secondary")">
+                        @if (isAvailOn)
+                        {
+                            <i class="fa fa-check me-1"></i>
+                        }
+                        @availLabel
+                    </a>
+                }
+            </div>
+            <div class="form-text">No selection means all statuses.</div>
+        </div>
+
+        <div class="mb-3">
+            <div class="form-label small text-muted mb-1">Unit type</div>
+            <div class="d-flex flex-wrap gap-2">
+                @foreach (var opt in PropertyUnitsFilterHelper.UnitTypeOptions)
+                {
+                    var nextTypes = PropertyUnitsFilterHelper.ToggleUnitType(typesSel, opt);
+                    var nextTypesQuery = PropertyUnitsFilterHelper.TypesQueryValue(nextTypes);
+                    var isTypeOn = typesSel.Contains(opt);
+                    <a asp-controller="Properties" asp-action="Units"
+                       asp-route-propertyId="@pid"
+                       asp-route-avail="@PropertyUnitsFilterHelper.AvailQueryValue(availShowAll, availSel)"
+                       asp-route-types="@nextTypesQuery"
+                       asp-route-maxRent="@maxRent"
+                       class="btn btn-sm @(isTypeOn ? "btn-primary" : "btn-outline-secondary")">
+                        @if (isTypeOn)
+                        {
+                            <i class="fa fa-check me-1"></i>
+                        }
+                        @opt
+                    </a>
+                }
+            </div>
+            <div class="form-text">No selection means all types.</div>
+        </div>
+
+        <form method="get" class="row g-2 align-items-end">
+            <input type="hidden" name="propertyId" value="@pid" />
+            <input type="hidden" name="avail" value="@PropertyUnitsFilterHelper.AvailQueryValue(availShowAll, availSel)" />
+            @if (typesSel.Count > 0)
+            {
+                <input type="hidden" name="types" value="@string.Join(",", typesSel)" />
+            }
+            <div class="col-md-4 col-lg-3">
+                <label class="form-label small text-muted mb-0">Max rent (BD)</label>
+                <input type="number" name="maxRent" value="@(maxRent.HasValue ? maxRent.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) : "")" class="form-control" placeholder="Any" step="0.01" />
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary w-100">Apply rent</button>
+            </div>
+            <div class="col-md-2">
+                <a asp-controller="Properties" asp-action="Units" asp-route-propertyId="@pid" class="btn btn-outline-secondary w-100">Clear all</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="row g-3">
+    @foreach (var u in Model)
+    {
+        var isMaintenance = u.AvailabilityStatus == "UnderMaintenance";
+        var statusColor   = u.AvailabilityStatus == "Available"        ? "success"
+                          : u.AvailabilityStatus == "Occupied"          ? "danger"
+                          : isMaintenance                               ? "warning"
+                          :                                               "secondary";
+        var statusIcon    = u.AvailabilityStatus == "Available"        ? "fa-check-circle"
+                          : u.AvailabilityStatus == "Occupied"          ? "fa-user"
+                          : isMaintenance                               ? "fa-wrench"
+                          :                                               "fa-circle";
+        var statusLabel   = isMaintenance ? "Under Maintenance" : u.AvailabilityStatus;
+
+        <div class="col-md-4">
+            <div class="card h-100 shadow-sm @(isMaintenance ? "border-warning border-2" : "")">
+                @{
+                    var unitImgs = u.ImagePaths.Count > 0 ? u.ImagePaths
+                                 : (!string.IsNullOrWhiteSpace(u.ImgPath) ? new List<string> { u.ImgPath } : new List<string>());
+                }
+                @if (unitImgs.Count > 0)
+                {
+                    <div id="unitcar-@u.UnitId" class="carousel slide" data-bs-ride="false">
+                        <div class="carousel-inner" style="height:170px;overflow:hidden;">
+                            @for (int ci = 0; ci < unitImgs.Count; ci++)
+                            {
+                                <div class="carousel-item @(ci == 0 ? "active" : "")">
+                                    <img src="@unitImgs[ci]" class="d-block w-100"
+                                         style="height:170px;object-fit:cover;" alt="Unit image" />
+                                </div>
+                            }
+                        </div>
+                        @if (unitImgs.Count > 1)
+                        {
+                            <button class="carousel-control-prev" type="button"
+                                    data-bs-target="#unitcar-@u.UnitId" data-bs-slide="prev">
+                                <span class="carousel-control-prev-icon"></span>
+                            </button>
+                            <button class="carousel-control-next" type="button"
+                                    data-bs-target="#unitcar-@u.UnitId" data-bs-slide="next">
+                                <span class="carousel-control-next-icon"></span>
+                            </button>
+                            <div class="carousel-indicators" style="bottom:2px;">
+                                @for (int ci = 0; ci < unitImgs.Count; ci++)
+                                {
+                                    <button type="button" data-bs-target="#unitcar-@u.UnitId"
+                                            data-bs-slide-to="@ci" class="@(ci == 0 ? "active" : "")"></button>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+                else if (isMaintenance)
+                {
+                    <div style="height:6px; background:repeating-linear-gradient(45deg,#ffc107,#ffc107 6px,#fff3cd 6px,#fff3cd 12px);"></div>
+                }
+                else
+                {
+                    <div class="d-flex align-items-center justify-content-center bg-light" style="height:170px;">
+                        <i class="fa fa-door-open fa-3x text-muted"></i>
+                    </div>
+                }
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <h5 class="card-title mb-0">Unit @u.UnitNumber</h5>
+                        <span class="badge bg-@statusColor">
+                            <i class="fa @statusIcon me-1"></i>@statusLabel
+                        </span>
+                    </div>
+                    <span class="badge bg-secondary mb-2">@u.UnitType</span>
+                    <div class="mb-2">
+                        <strong class="text-primary">BD @u.MonthlyRent?.ToString("N0") /month</strong>
+                    </div>
+                    <div class="text-muted small mb-1">
+                        <i class="fa fa-ruler me-1"></i>@u.Sizesqm m²
+                    </div>
+                    @if (!string.IsNullOrEmpty(u.Amenities))
+                    {
+                        <div class="text-muted small">
+                            <i class="fa fa-check-circle me-1"></i>@u.Amenities
+                        </div>
+                    }
+                </div>
+                <div class="card-footer d-flex flex-wrap gap-2 align-items-center">
+                    <a asp-action="UnitDetails" asp-route-id="@u.UnitId"
+                       class="btn btn-outline-secondary btn-sm">Details</a>
+                    @if (u.AvailabilityStatus == "Available" && User.IsInRole("Tenant"))
+                    {
+                        <a asp-controller="LeaseApplications" asp-action="Apply" asp-route-unitId="@u.UnitId"
+                           class="btn btn-success btn-sm flex-fill">
+                            <i class="fa fa-file-alt me-1"></i> Apply
+                        </a>
+                    }
+                    else if (isMaintenance)
+                    {
+                        <span class="btn btn-warning btn-sm flex-fill disabled" style="cursor:not-allowed; opacity:.85;">
+                            <i class="fa fa-wrench me-1"></i>Under Maintenance
+                        </span>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>

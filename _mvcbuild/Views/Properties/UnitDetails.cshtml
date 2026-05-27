@@ -1,0 +1,274 @@
+@model PropertyLeasing.API.Models.Unit
+@{
+    ViewData["Title"] = $"Unit {Model.UnitNumber}";
+    var detailImgs = Model.UnitImages.OrderBy(i => i.SortOrder).Select(i => i.ImagePath).ToList();
+    if (!detailImgs.Any() && !string.IsNullOrWhiteSpace(Model.ImgPath))
+        detailImgs.Add(Model.ImgPath);
+
+    var statusColor = Model.AvailabilityStatus switch {
+        "Available"        => "success",
+        "Occupied"         => "danger",
+        "UnderMaintenance" => "warning",
+        _                  => "secondary"
+    };
+    var statusIcon = Model.AvailabilityStatus switch {
+        "Available"        => "fa-check-circle",
+        "Occupied"         => "fa-user",
+        "UnderMaintenance" => "fa-wrench",
+        _                  => "fa-circle"
+    };
+}
+
+<!-- Breadcrumb -->
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a asp-controller="Properties" asp-action="Index">Properties</a></li>
+        <li class="breadcrumb-item">
+            <a asp-controller="Properties" asp-action="Units" asp-route-propertyId="@Model.PropertyId">@Model.Property.Name</a>
+        </li>
+        <li class="breadcrumb-item active">Unit @Model.UnitNumber</li>
+    </ol>
+</nav>
+
+<!-- ── Carousel ─────────────────────────────────────────────────── -->
+@if (detailImgs.Any())
+{
+    <div class="position-relative mb-4 rounded overflow-hidden shadow" style="background:#111;">
+        <div id="unitdetailcar" class="carousel slide" data-bs-ride="false">
+            <div class="carousel-inner" style="height:480px;">
+                @for (int ci = 0; ci < detailImgs.Count; ci++)
+                {
+                    <div class="carousel-item @(ci == 0 ? "active" : "")">
+                        <img src="@detailImgs[ci]" class="d-block w-100"
+                             style="height:480px;object-fit:cover;cursor:zoom-in;"
+                             alt="Unit image @(ci+1)"
+                             onclick="openLightbox(@ci)" />
+                    </div>
+                }
+            </div>
+
+            @if (detailImgs.Count > 1)
+            {
+                <button class="carousel-control-prev" type="button"
+                        data-bs-target="#unitdetailcar" data-bs-slide="prev">
+                    <span class="carousel-control-prev-icon"></span>
+                </button>
+                <button class="carousel-control-next" type="button"
+                        data-bs-target="#unitdetailcar" data-bs-slide="next">
+                    <span class="carousel-control-next-icon"></span>
+                </button>
+                <div class="carousel-indicators" style="bottom:10px;">
+                    @for (int ci = 0; ci < detailImgs.Count; ci++)
+                    {
+                        <button type="button" data-bs-target="#unitdetailcar"
+                                data-bs-slide-to="@ci"
+                                class="@(ci == 0 ? "active" : "")"></button>
+                    }
+                </div>
+            }
+        </div>
+
+        <!-- Zoom button + photo count overlay -->
+        <div class="position-absolute top-0 end-0 m-3 d-flex gap-2">
+            <span class="badge bg-dark bg-opacity-75 fs-6">
+                <i class="fa fa-images me-1"></i>@detailImgs.Count
+            </span>
+            <button class="btn btn-sm btn-dark bg-opacity-75"
+                    onclick="openLightbox(0)" title="View full size">
+                <i class="fa fa-expand"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- ── Lightbox Modal ──────────────────────────────────────── -->
+    <div class="modal fade" id="lightboxModal" tabindex="-1">
+        <div class="modal-dialog modal-xl modal-dialog-centered" style="max-width:95vw;">
+            <div class="modal-content bg-black border-0">
+                <div class="modal-header border-0 py-2">
+                    <span class="text-white small" id="lbCounter"></span>
+                    <button type="button" class="btn-close btn-close-white ms-auto"
+                            data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-0 text-center position-relative">
+                    <img id="lbImg" src="" alt="Full size"
+                         style="max-height:82vh;max-width:100%;object-fit:contain;" />
+
+                    @if (detailImgs.Count > 1)
+                    {
+                        <button class="btn btn-dark position-absolute start-0 top-50 translate-middle-y ms-2"
+                                onclick="lbNav(-1)" style="opacity:.8;">
+                            <i class="fa fa-chevron-left"></i>
+                        </button>
+                        <button class="btn btn-dark position-absolute end-0 top-50 translate-middle-y me-2"
+                                onclick="lbNav(1)" style="opacity:.8;">
+                            <i class="fa fa-chevron-right"></i>
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <div class="d-flex align-items-center justify-content-center bg-light rounded mb-4 shadow-sm" style="height:300px;">
+        <div class="text-center text-muted">
+            <i class="fa fa-door-open fa-4x mb-2"></i>
+            <div>No images available</div>
+        </div>
+    </div>
+}
+
+<!-- ── Unit Info ─────────────────────────────────────────────────── -->
+<div class="row g-4">
+    <div class="col-12">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fa fa-door-open me-2"></i>Unit @Model.UnitNumber</h5>
+                <span class="badge bg-@statusColor">
+                    <i class="fa @statusIcon me-1"></i>@Model.AvailabilityStatus
+                </span>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-6">
+                        <div class="p-3 bg-light rounded text-center">
+                            <div class="text-muted small mb-1">Property</div>
+                            <strong>@Model.Property.Name</strong>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="p-3 bg-light rounded text-center">
+                            <div class="text-muted small mb-1">Unit Type</div>
+                            <strong>@Model.UnitType</strong>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="p-3 bg-light rounded text-center">
+                            <div class="text-muted small mb-1">Size</div>
+                            <strong>@Model.Sizesqm m²</strong>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="p-3 rounded text-center" style="background:#e8f5e9;">
+                            <div class="text-muted small mb-1">Monthly Rent</div>
+                            <strong class="text-success fs-5">BD @Model.MonthlyRent?.ToString("N2")</strong>
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <div class="p-3 bg-light rounded">
+                            <div class="text-muted small mb-1">Address</div>
+                            <strong><i class="fa fa-map-marker-alt me-1 text-danger"></i>@Model.Property.Address</strong>
+                        </div>
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(Model.Amenities))
+                    {
+                        <div class="col-12">
+                            <div class="text-muted small mb-2">Amenities</div>
+                            @foreach (var a in Model.Amenities.Split(','))
+                            {
+                                <span class="badge bg-light text-dark border me-1 mb-1 py-2 px-3">
+                                    <i class="fa fa-check me-1 text-success"></i>@a.Trim()
+                                </span>
+                            }
+                        </div>
+                    }
+                </div>
+
+                @if (Model.AvailabilityStatus == "Available" && User.Identity!.IsAuthenticated && User.IsInRole("Tenant"))
+                {
+                    <div class="mt-4">
+                        <a asp-controller="LeaseApplications" asp-action="Apply" asp-route-unitId="@Model.UnitId"
+                           class="btn btn-success w-100 btn-lg">
+                            <i class="fa fa-file-signature me-2"></i>Apply for Lease
+                        </a>
+                    </div>
+                }
+                else if (!User.Identity!.IsAuthenticated && Model.AvailabilityStatus == "Available")
+                {
+                    <div class="alert alert-info mt-3 mb-0">
+                        <i class="fa fa-info-circle me-1"></i>
+                        <a asp-controller="Account" asp-action="Login">Login</a> to apply for this unit.
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Manager: Image Management ────────────────────────────────── -->
+@if (User.IsInRole("PropertyManager"))
+{
+    <div class="card shadow-sm mt-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span><i class="fa fa-images me-2 text-primary"></i>Manage Unit Images</span>
+            <span class="badge bg-secondary">@Model.UnitImages.Count photos</span>
+        </div>
+        <div class="card-body">
+            @if (Model.UnitImages.Any())
+            {
+                <div class="row g-2 mb-3">
+                    @foreach (var img in Model.UnitImages.OrderBy(i => i.SortOrder))
+                    {
+                        <div class="col-4 col-md-2 position-relative">
+                            <img src="@img.ImagePath" class="img-fluid rounded"
+                                 style="height:80px;width:100%;object-fit:cover;" />
+                            <form asp-action="DeleteUnitImage" method="post"
+                                  class="position-absolute top-0 end-0 m-1">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="imageId" value="@img.Id" />
+                                <input type="hidden" name="unitId" value="@Model.UnitId" />
+                                <button type="submit" class="btn btn-danger btn-sm py-0 px-1"
+                                        data-confirm="Delete this image? This cannot be undone."
+                                        style="font-size:.7rem;">
+                                    <i class="fa fa-times"></i>
+                                </button>
+                            </form>
+                        </div>
+                    }
+                </div>
+            }
+            <form asp-action="UploadUnitImages" method="post" enctype="multipart/form-data"
+                  class="d-flex gap-2 align-items-center flex-wrap">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="unitId" value="@Model.UnitId" />
+                <input type="file" name="files" multiple accept="image/*"
+                       class="form-control form-control-sm" style="max-width:320px;" />
+                <button type="submit" class="btn btn-primary btn-sm">
+                    <i class="fa fa-upload me-1"></i>Upload Images
+                </button>
+            </form>
+            <div class="form-text mt-1">Supported: JPG, PNG, WEBP. Select multiple at once.</div>
+        </div>
+    </div>
+}
+
+@section Scripts {
+<script>
+    const lbImgs  = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(detailImgs));
+    let   lbIndex = 0;
+    const lbModal = new bootstrap.Modal(document.getElementById('lightboxModal'));
+
+    function openLightbox(idx) {
+        lbIndex = idx;
+        updateLb();
+        lbModal.show();
+    }
+
+    function lbNav(dir) {
+        lbIndex = (lbIndex + dir + lbImgs.length) % lbImgs.length;
+        updateLb();
+    }
+
+    function updateLb() {
+        document.getElementById('lbImg').src      = lbImgs[lbIndex];
+        document.getElementById('lbCounter').textContent =
+            (lbIndex + 1) + ' / ' + lbImgs.length;
+    }
+
+    // Sync lightbox index with main carousel
+    document.getElementById('unitdetailcar')?.addEventListener('slid.bs.carousel', e => {
+        lbIndex = e.to;
+    });
+</script>
+}

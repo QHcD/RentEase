@@ -5,7 +5,20 @@ namespace PropertyLeasing.BusinessLogic;
 /// </summary>
 public static class LeaseApplicationIndexPartitioner
 {
+    /// <summary>Status sub-tabs on the Applications index (DocumentsRequired is legacy — folded into Screening).</summary>
+    public static readonly string[] ApplicationStatusTabKeys =
+        { "All", "Pending", "Screening", "Approved", "Rejected", "Canceled" };
+
     public static bool IsRenewalApplication(int? parentLeaseId) => parentLeaseId.HasValue;
+
+    /// <summary>Maps legacy <see cref="LeaseApplicationDocumentRules.ApplicationStatusDocumentsRequired"/> to Screening for UI tabs.</summary>
+    public static string NormalizeStatusTabKey(string status) =>
+        string.Equals(status, LeaseApplicationDocumentRules.ApplicationStatusDocumentsRequired, StringComparison.OrdinalIgnoreCase)
+            ? LeaseApplicationDocumentRules.ApplicationStatusScreening
+            : status;
+
+    public static bool MatchesStatusTabFilter(string applicationStatus, string tabFilter) =>
+        string.Equals(NormalizeStatusTabKey(applicationStatus), tabFilter, StringComparison.OrdinalIgnoreCase);
 
     public static (List<T> Regular, List<T> Renewals) PartitionByRenewal<T>(
         IEnumerable<T> items,
@@ -41,7 +54,7 @@ public static class LeaseApplicationIndexPartitioner
         {
             dict[key] = key == "All"
                 ? items.Count
-                : items.Count(i => statusSelector(i) == key);
+                : items.Count(i => MatchesStatusTabFilter(statusSelector(i), key));
         }
 
         return dict;

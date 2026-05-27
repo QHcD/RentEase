@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - Property Leasing</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+</head>
+<body class="d-flex flex-column min-vh-100">
+    @using System.Security.Claims
+    @using PropertyLeasing.BusinessLogic
+    @{
+        var isMaintenanceStaff = User.Identity?.IsAuthenticated == true && User.IsInRole("MaintenanceStaff");
+        var navDisplayName = User.Identity?.IsAuthenticated == true
+            ? (User.FindFirst(TenantProfileSync.DisplayNameClaimType)?.Value
+               ?? User.FindFirst(ClaimTypes.Name)?.Value
+               ?? User.Identity!.Name)
+            : null;
+    }
+    <header>
+        <nav class="navbar navbar-expand-sm navbar-dark bg-dark border-bottom border-body">
+            <div class="container">
+                <a class="navbar-brand fw-bold"
+                   asp-controller="@(isMaintenanceStaff ? "Maintenance" : "Home")"
+                   asp-action="Index">
+                    <i class="fa fa-building me-1"></i> RentEase
+                </a>
+                @{
+                    // Single nav-link helper — shared by all links below
+                    var navCtrl = ViewContext.RouteData.Values["controller"]?.ToString();
+                    var navAct  = ViewContext.RouteData.Values["action"]?.ToString();
+                    string Lnk(string controller, string? action = null) =>
+                        navCtrl == controller && (action == null || navAct == action)
+                            ? "nav-link active"
+                            : "nav-link";
+                }
+
+                @if (isMaintenanceStaff)
+                {
+                    @* Maintenance staff: Maintenance link + bell + user dropdown *@
+                    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMenuStaff">
+                        <span class="navbar-toggler-icon"></span>
+                    </button>
+                    <div class="collapse navbar-collapse" id="navMenuStaff">
+                        <ul class="navbar-nav me-auto">
+                            <li class="nav-item">
+                                <a class="@Lnk("Maintenance")" asp-controller="Maintenance" asp-action="Index">
+                                    <i class="fa fa-wrench me-1"></i>Maintenance
+                                </a>
+                            </li>
+                        </ul>
+                        <ul class="navbar-nav">
+                            <li class="nav-item">
+                                <a class="@Lnk("Notifications")" asp-controller="Notifications" asp-action="Index">
+                                    <i class="fa fa-bell"></i>
+                                </a>
+                            </li>
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
+                                    <i class="fa fa-user me-1"></i>@navDisplayName
+                                </a>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li>
+                                        <a class="dropdown-item" asp-controller="Account" asp-action="Profile">
+                                            <i class="fa fa-id-card me-1"></i>Profile
+                                        </a>
+                                    </li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li>
+                                        <form asp-controller="Account" asp-action="Logout" method="post">
+                                            @Html.AntiForgeryToken()
+                                            <button type="submit" class="dropdown-item text-danger">
+                                                <i class="fa fa-sign-out-alt me-1"></i>Logout
+                                            </button>
+                                        </form>
+                                    </li>
+                                </ul>
+                            </li>
+                        </ul>
+                    </div>
+                }
+                else
+                {
+                    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu">
+                        <span class="navbar-toggler-icon"></span>
+                    </button>
+
+                    <div class="collapse navbar-collapse" id="navMenu">
+                        <ul class="navbar-nav me-auto">
+
+                            <li class="nav-item">
+                                <a class="@Lnk("Properties")" asp-controller="Properties" asp-action="Index">
+                                    <i class="fa fa-home me-1"></i>Properties
+                                </a>
+                            </li>
+
+                            @if (User.Identity?.IsAuthenticated == true)
+                            {
+                                <li class="nav-item">
+                                    <a class="@Lnk("LeaseApplications")"
+                                       asp-controller="LeaseApplications" asp-action="Index">
+                                        <i class="fa fa-file-contract me-1"></i>
+                                        @(User.IsInRole("PropertyManager")
+                                            ? "Applications & Leases"
+                                            : "My Applications & Leases")
+                                    </a>
+                                </li>
+
+                                <li class="nav-item">
+                                    <a class="@Lnk("Maintenance")"
+                                       asp-controller="Maintenance" asp-action="Index">
+                                        <i class="fa fa-wrench me-1"></i>Maintenance
+                                    </a>
+                                </li>
+
+                                <li class="nav-item">
+                                    <a class="@Lnk("Payments")"
+                                       asp-controller="Payments" asp-action="Index">
+                                        <i class="fa fa-credit-card me-1"></i>Payments
+                                    </a>
+                                </li>
+
+                                @if (User.IsInRole("PropertyManager"))
+                                {
+                                    <li class="nav-item">
+                                        <a class="@Lnk("Dashboard")"
+                                           asp-controller="Dashboard" asp-action="Index">
+                                            <i class="fa fa-chart-bar me-1"></i>Dashboard
+                                        </a>
+                                    </li>
+                                }
+                            }
+                        </ul>
+
+                        <ul class="navbar-nav">
+                            @if (User.Identity?.IsAuthenticated == true)
+                            {
+                                <li class="nav-item">
+                                    <a class="@Lnk("Notifications")"
+                                       asp-controller="Notifications" asp-action="Index">
+                                        <i class="fa fa-bell"></i>
+                                    </a>
+                                </li>
+                                <li class="nav-item dropdown">
+                                    <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
+                                        <i class="fa fa-user me-1"></i>@navDisplayName
+                                    </a>
+                                    <ul class="dropdown-menu dropdown-menu-end">
+                                        <li>
+                                            <a class="dropdown-item" asp-controller="Account" asp-action="Profile">
+                                                <i class="fa fa-id-card me-1"></i>Profile
+                                            </a>
+                                        </li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
+                                            <form asp-controller="Account" asp-action="Logout" method="post">
+                                                @Html.AntiForgeryToken()
+                                                <button type="submit" class="dropdown-item text-danger">
+                                                    <i class="fa fa-sign-out-alt me-1"></i>Logout
+                                                </button>
+                                            </form>
+                                        </li>
+                                    </ul>
+                                </li>
+                            }
+                            else
+                            {
+                                <li class="nav-item">
+                                    <a class="@Lnk("Account","Login")"
+                                       asp-controller="Account" asp-action="Login">
+                                        <i class="fa fa-sign-in-alt me-1"></i>Login
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="@Lnk("Account","Register")"
+                                       asp-controller="Account" asp-action="Register">
+                                        <i class="fa fa-user-plus me-1"></i>Register
+                                    </a>
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                }
+            </div>
+        </nav>
+    </header>
+
+    <div class="container mt-4 flex-grow-1">
+        @if (TempData["Success"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                <i class="fa fa-check-circle me-2"></i>@Html.Raw(TempData["Success"])
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        }
+        @if (TempData["Error"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <i class="fa fa-exclamation-circle me-2"></i>@Html.Raw(TempData["Error"])
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        }
+
+        <main role="main">
+            @RenderBody()
+        </main>
+    </div>
+
+    <footer class="border-top footer text-muted mt-auto py-3">
+        <div class="container text-center">
+            &copy; @DateTime.Now.Year - RentEase Leasing &amp; Maintenance Platform
+        </div>
+    </footer>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+
+    <!-- ── Global Confirm Modal ─────────────────────────────────────────── -->
+    <div class="modal fade" id="globalConfirmModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title mb-0">
+                        <i class="fa fa-exclamation-triangle me-2"></i>Confirm Delete
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body py-4">
+                    <p id="globalConfirmMessage" class="mb-0 fs-6"></p>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                        <i class="fa fa-times me-1"></i>Cancel
+                    </button>
+                    <button type="button" class="btn btn-danger" id="globalConfirmOk">
+                        <i class="fa fa-trash me-1"></i>Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        (function () {
+            var modal     = new bootstrap.Modal(document.getElementById('globalConfirmModal'));
+            var msgEl     = document.getElementById('globalConfirmMessage');
+            var okBtn     = document.getElementById('globalConfirmOk');
+            var pendingFn = null;
+
+            // Intercept forms with data-confirm attribute
+            document.addEventListener('submit', function (e) {
+                var form = e.target.closest('form[data-confirm]');
+                if (!form) return;
+                e.preventDefault();
+                msgEl.textContent = form.dataset.confirm;
+                pendingFn = function () { form.removeAttribute('data-confirm'); form.submit(); };
+                modal.show();
+            }, true);
+
+            // Intercept buttons/links with data-confirm attribute
+            document.addEventListener('click', function (e) {
+                var el = e.target.closest('[data-confirm]:not(form)');
+                if (!el) return;
+                e.preventDefault();
+                msgEl.textContent = el.dataset.confirm;
+                var href = el.href || null;
+                pendingFn = href ? function () { window.location.href = href; }
+                                 : function () { el.closest('form').submit(); };
+                modal.show();
+            }, true);
+
+            okBtn.addEventListener('click', function () {
+                modal.hide();
+                if (pendingFn) { pendingFn(); pendingFn = null; }
+            });
+
+            document.getElementById('globalConfirmModal').addEventListener('hidden.bs.modal', function () {
+                pendingFn = null;
+            });
+        })();
+    </script>
+</body>
+</html>

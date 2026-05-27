@@ -1,0 +1,371 @@
+@model List<PropertyLeasing.MVC.ViewModels.PaymentListViewModel>
+@using PropertyLeasing.API.Models
+@{
+    ViewData["Title"] = "Payments";
+    bool isManager = ViewBag.IsManager == true;
+    var refunds = ViewBag.Refunds as List<LeaseRefund> ?? new List<LeaseRefund>();
+
+    string StatusBadge(string s) => s switch
+    {
+        "Paid"                => "success",
+        "Overdue"             => "danger",
+        "Unpaid" or "Pending" => "warning",
+        "Upcoming"            => "info",
+        _                     => "secondary"
+    };
+    string RowClass(string s) => s switch
+    {
+        "Overdue"             => "table-danger",
+        "Unpaid" or "Pending" => "table-warning",
+        _                     => ""
+    };
+    string DisplayStatus(string s) => s == "Pending" ? "Unpaid" : s;
+
+    var groups = Model
+        .GroupBy(p => p.LeaseId)
+        .Select(g => new {
+            LeaseId       = g.Key,
+            UnitNumber    = g.First().UnitNumber,
+            PropertyName  = g.First().PropertyName,
+            TenantName    = g.First().TenantName,
+            PlanType      = g.First().PaymentPlanType,
+            Installments  = g.OrderBy(p => p.DueDate).ToList(),
+            PaidCount     = g.Count(p => p.PaymentStatus == "Paid"),
+            OverdueCount  = g.Count(p => p.PaymentStatus == "Overdue"),
+            UnpaidCount   = g.Count(p => p.PaymentStatus == "Unpaid" || p.PaymentStatus == "Pending"),
+            UpcomingCount = g.Count(p => p.PaymentStatus == "Upcoming"),
+            TotalAmount   = g.Sum(p => p.AmountDue + (p.LateFee ?? 0)),
+            PaidAmount    = g.Where(p => p.AmountPaid.HasValue).Sum(p => p.AmountPaid!.Value),
+        })
+        .OrderBy(g => g.PropertyName).ThenBy(g => g.UnitNumber)
+        .ToList();
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2><i class="fa fa-credit-card me-2"></i>@ViewData["Title"]</h2>
+</div>
+
+<!-- Status Tabs -->
+<ul class="nav nav-tabs mb-3">
+    <li class="nav-item">
+        <a class="nav-link @(ViewBag.Status == null ? "active" : "")" asp-action="Index">
+            All <span class="badge bg-secondary ms-1">@ViewBag.TabCounts["All"]</span>
+        </a>
+    </li>
+    @foreach (var s in new[] { "Unpaid", "Overdue", "Upcoming", "Paid" })
+    {
+        var count = ((Dictionary<string, int>)ViewBag.TabCounts)[s];
+        <li class="nav-item">
+            <a class="nav-link @(ViewBag.Status?.ToString() == s ? "active" : "")"
+               asp-action="Index" asp-route-status="@s">
+                @s <span class="badge bg-@StatusBadge(s) ms-1">@count</span>
+            </a>
+        </li>
+    }
+</ul>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show">
+        <i class="fa fa-check-circle me-2"></i>@TempData["Success"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show">
+        <i class="fa fa-exclamation-circle me-2"></i>@TempData["Error"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+@if (!Model.Any())
+{
+    <div class="alert alert-info"><i class="fa fa-info-circle me-2"></i>No payment records found.</div>
+}
+else
+{
+    <div class="accordion" id="paymentsAccordion">
+        @foreach (var (g, idx) in groups.Select((g, i) => (g, i)))
+        {
+            string collapseId = $"collapse-{g.LeaseId}";
+            bool hasIssue     = g.OverdueCount > 0 || g.UnpaidCount > 0;
+            string rowBorder  = g.OverdueCount > 0 ? "border-danger" : g.UnpaidCount > 0 ? "border-warning" : "border-0";
+
+            <div class="accordion-item border @rowBorder mb-2 rounded shadow-sm overflow-hidden">
+
+                <!-- ── Summary Row (always visible) ── -->
+                <div class="accordion-header">
+                    <button class="accordion-button collapsed py-3 px-3"
+                            type="button"
+                            data-bs-toggle="collapse"
+                            data-bs-target="#@collapseId">
+
+                        <div class="d-flex align-items-center justify-content-between w-100 flex-wrap gap-2 me-2">
+
+                            <!-- Unit & Property -->
+                            <div style="min-width:160px">
+                                <div class="fw-bold"><i class="fa fa-home me-1 text-primary"></i>@g.UnitNumber</div>
+                                <div class="text-muted small">@g.PropertyName</div>
+                                @if (isManager)
+                                {
+                                    <div class="text-muted small"><i class="fa fa-user me-1"></i>@g.TenantName</div>
+                                }
+                            </div>
+
+                            <!-- Plan & Installments -->
+                            <div class="text-muted small" style="min-width:110px">
+                                @if (g.PlanType != null)
+                                {
+                                    <div><i class="fa fa-layer-group me-1"></i>@g.PlanType</div>
+                                }
+                                <div><i class="fa fa-list-ol me-1"></i>@g.Installments.Count installments</div>
+                            </div>
+
+                            <!-- Financial Summary -->
+                            <div class="small" style="min-width:160px">
+                                <div class="text-muted">Total: <strong>BD @g.TotalAmount.ToString("N2")</strong></div>
+                                <div class="text-success">Paid: <strong>BD @g.PaidAmount.ToString("N2")</strong></div>
+                                @if (g.TotalAmount - g.PaidAmount > 0)
+                                {
+                                    <div class="text-danger">Due: <strong>BD @((g.TotalAmount - g.PaidAmount).ToString("N2"))</strong></div>
+                                }
+                            </div>
+
+                            <!-- Status Badges -->
+                            <div class="d-flex gap-1 flex-wrap">
+                                @if (g.PaidCount     > 0) { <span class="badge bg-success">@g.PaidCount Paid</span> }
+                                @if (g.UnpaidCount   > 0) { <span class="badge bg-warning text-dark">@g.UnpaidCount Unpaid</span> }
+                                @if (g.OverdueCount  > 0) { <span class="badge bg-danger">@g.OverdueCount Overdue</span> }
+                                @if (g.UpcomingCount > 0) { <span class="badge bg-info text-dark">@g.UpcomingCount Upcoming</span> }
+                            </div>
+
+                        </div>
+                    </button>
+                </div>
+
+                <!-- ── Installments Detail (collapsed by default) ── -->
+                <div id="@collapseId" class="accordion-collapse collapse">
+                    <div class="accordion-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="ps-3">#</th>
+                                        <th>Due Date</th>
+                                        <th>Amount Due</th>
+                                        <th>Late Fee</th>
+                                        <th>Total</th>
+                                        <th>Paid</th>
+                                        <th>Paid On</th>
+                                        <th>Status</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var p in g.Installments)
+                                    {
+                                        decimal total = p.AmountDue + (p.LateFee ?? 0);
+                                        <tr class="@RowClass(p.PaymentStatus)">
+                                            <td class="ps-3 text-muted small">@p.InstallmentNum / @p.TotalInstallments</td>
+                                            <td>@p.DueDate.ToString("dd MMM yyyy")</td>
+                                            <td>BD @p.AmountDue.ToString("N2")</td>
+                                            <td>
+                                                @if (p.LateFee.HasValue && p.LateFee > 0)
+                                                { <span class="text-danger fw-semibold">BD @p.LateFee.Value.ToString("N2")</span> }
+                                                else { <span class="text-muted">—</span> }
+                                            </td>
+                                            <td class="fw-semibold">BD @total.ToString("N2")</td>
+                                            <td>
+                                                @if (p.AmountPaid.HasValue)
+                                                { <span class="text-success fw-semibold">BD @p.AmountPaid.Value.ToString("N2")</span> }
+                                                else { <span class="text-muted">—</span> }
+                                            </td>
+                                            <td class="text-muted small">
+                                                @(p.PaidDate.HasValue ? p.PaidDate.Value.ToString("dd MMM yyyy") : "—")
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-@StatusBadge(p.PaymentStatus)">@DisplayStatus(p.PaymentStatus)</span>
+                                            </td>
+                                            <td>
+                                                <div class="d-flex flex-wrap gap-1">
+                                                    @* View Bill — only for paid installments *@
+                                                    @if (p.PaymentStatus == "Paid")
+                                                    {
+                                                        <a asp-action="Bill" asp-route-paymentId="@p.PaymentId"
+                                                           class="btn btn-sm btn-outline-primary"
+                                                           title="View Bill / Invoice">
+                                                            <i class="fa fa-file-invoice me-1"></i>Bill
+                                                        </a>
+                                                    }
+
+                                                    @if (isManager && p.PaymentStatus != "Paid")
+                                                    {
+                                                        <button type="button" class="btn btn-sm btn-outline-success"
+                                                                data-bs-toggle="modal" data-bs-target="#recordModal"
+                                                                data-payment-id="@p.PaymentId"
+                                                                data-amount-due="@total"
+                                                                data-unit="@p.UnitNumber"
+                                                                data-tenant="@p.TenantName">
+                                                            <i class="fa fa-check me-1"></i>Record
+                                                        </button>
+                                                    }
+                                                    else if (!isManager && p.PaymentStatus == "Paid")
+                                                    {
+                                                        <span class="text-success small d-flex align-items-center">
+                                                            <i class="fa fa-check-circle me-1"></i>@p.PaidDate?.ToString("dd MMM yyyy")
+                                                        </span>
+                                                    }
+                                                    else if (!isManager && p.PaymentStatus == "Upcoming")
+                                                    {
+                                                        <span class="text-muted small d-flex align-items-center">
+                                                            <i class="fa fa-clock me-1"></i>@p.DueDate.ToString("dd MMM yyyy")
+                                                        </span>
+                                                    }
+                                                    else if (!isManager && (p.PaymentStatus == "Unpaid" || p.PaymentStatus == "Pending" || p.PaymentStatus == "Overdue"))
+                                                    {
+                                                        <a asp-action="Pay" asp-route-paymentId="@p.PaymentId"
+                                                           class="btn btn-sm @(p.PaymentStatus == "Overdue" ? "btn-danger" : "btn-warning")">
+                                                            <i class="fa fa-credit-card me-1"></i>Pay Now
+                                                        </a>
+                                                    }
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        }
+    </div>
+}
+
+@* ── Refund Records Section ──────────────────────────────────────── *@
+@if (refunds.Any())
+{
+    <div class="mt-4">
+        <h5 class="mb-3">
+            <i class="fa fa-undo me-2 text-danger"></i>Lease Cancellations &amp; Refunds
+        </h5>
+        @foreach (var r in refunds)
+        {
+            <div class="card border-danger border-opacity-50 shadow-sm mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center"
+                     style="background:#fff5f5;">
+                    <div>
+                        <span class="fw-bold text-danger">
+                            <i class="fa fa-ban me-1"></i>Lease #@r.LeaseId Cancelled
+                        </span>
+                        <span class="text-muted small ms-2">— @r.Lease.Application.Unit.UnitNumber, @r.Lease.Application.Unit.Property.Name</span>
+                        @if (isManager)
+                        {
+                            <span class="text-muted small ms-2">
+                                <i class="fa fa-user me-1"></i>@r.Lease.Application.User.FullName
+                            </span>
+                        }
+                    </div>
+                    <small class="text-muted">@r.CancelledAt.ToString("dd MMM yyyy, HH:mm")</small>
+                </div>
+                <div class="card-body py-3">
+                    <div class="row g-3 align-items-center">
+                        <div class="col-md-7">
+                            <div class="row g-2 text-center">
+                                <div class="col-4">
+                                    <div class="p-2 bg-light rounded">
+                                        <div class="text-muted small">Total Paid</div>
+                                        <div class="fw-semibold">BD @r.TotalPaid.ToString("N3")</div>
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="p-2 bg-light rounded">
+                                        <div class="text-muted small">Months Consumed</div>
+                                        <div class="fw-semibold">@r.MonthsConsumed month(s)</div>
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="p-2 rounded @(r.RefundAmount > 0 ? "bg-success bg-opacity-10" : "bg-secondary bg-opacity-10")">
+                                        <div class="text-muted small">Refund</div>
+                                        <div class="fw-bold @(r.RefundAmount > 0 ? "text-success" : "text-secondary")">
+                                            BD @r.RefundAmount.ToString("N3")
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-5 text-md-end">
+                            @if (r.RefundAmount > 0)
+                            {
+                                <div class="alert alert-success py-2 px-3 mb-2 d-inline-block text-start">
+                                    <i class="fa fa-clock me-1"></i>
+                                    <strong>BD @r.RefundAmount.ToString("N3")</strong> will be returned to your bank card within <strong>5–7 business days</strong>.
+                                </div>
+                                <br />
+                            }
+                            <a asp-action="RefundReceipt" asp-route-refundId="@r.RefundId"
+                               class="btn btn-sm btn-outline-danger">
+                                <i class="fa fa-file-invoice me-1"></i>View Refund Receipt
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@if (isManager)
+{
+    <div class="modal fade" id="recordModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title"><i class="fa fa-check-circle me-2"></i>Record Payment</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form asp-action="RecordPayment" method="post">
+                    @Html.AntiForgeryToken()
+                    <div class="modal-body">
+                        <p class="text-muted small mb-3">
+                            Tenant: <strong id="modalTenant"></strong> — Unit: <strong id="modalUnit"></strong>
+                        </p>
+                        <input type="hidden" name="paymentId" id="modalPaymentId" />
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Amount Received (BD)</label>
+                            <input type="number" name="amountPaid" id="modalAmountPaid"
+                                   class="form-control" step="0.01" min="0.01" required />
+                            <div class="form-text">Total due: BD <span id="modalAmountDue"></span></div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Notes (optional)</label>
+                            <input type="text" name="notes" class="form-control" placeholder="e.g. Cash / Bank Transfer" />
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-success"><i class="fa fa-save me-1"></i>Save</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}
+
+@section Scripts {
+<script>
+    var modal = document.getElementById('recordModal');
+    if (modal) {
+        modal.addEventListener('show.bs.modal', function (e) {
+            var btn = e.relatedTarget;
+            document.getElementById('modalPaymentId').value       = btn.dataset.paymentId;
+            document.getElementById('modalAmountPaid').value      = parseFloat(btn.dataset.amountDue).toFixed(2);
+            document.getElementById('modalAmountDue').textContent = parseFloat(btn.dataset.amountDue).toFixed(2);
+            document.getElementById('modalTenant').textContent    = btn.dataset.tenant;
+            document.getElementById('modalUnit').textContent      = btn.dataset.unit;
+        });
+    }
+</script>
+}

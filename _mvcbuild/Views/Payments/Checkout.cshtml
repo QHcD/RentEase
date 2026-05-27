@@ -1,0 +1,161 @@
+@model PropertyLeasing.MVC.ViewModels.CheckoutViewModel
+@{
+    ViewData["Title"] = "Payment Checkout";
+    bool isFull = Model.PlanType == "Full";
+}
+
+<div class="container" style="max-width:700px;">
+    <div class="d-flex align-items-center mb-4">
+        <i class="fa fa-lock fa-2x text-success me-3"></i>
+        <div>
+            <h2 class="mb-0">Secure Checkout</h2>
+            <small class="text-muted">@Model.PropertyName — Unit @Model.UnitNumber</small>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Order Summary -->
+        <div class="col-md-5">
+            <div class="card border-0 bg-light h-100">
+                <div class="card-body">
+                    <h6 class="fw-bold mb-3"><i class="fa fa-receipt me-2"></i>Order Summary</h6>
+                    <dl class="row small mb-0">
+                        <dt class="col-7">Unit</dt>
+                        <dd class="col-5">@Model.UnitNumber</dd>
+                        <dt class="col-7">Property</dt>
+                        <dd class="col-5">@Model.PropertyName</dd>
+                        <dt class="col-7">Plan</dt>
+                        <dd class="col-5">
+                            <span class="badge @(isFull ? "bg-success" : "bg-primary")">
+                                @(isFull ? "Full Payment" : "Monthly")
+                            </span>
+                        </dd>
+                        @if (!isFull)
+                        {
+                            <dt class="col-7">Installments</dt>
+                            <dd class="col-5">@Model.TotalMonths months</dd>
+                        }
+                    </dl>
+                    <hr />
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="text-muted small">@Model.PlanDescription</div>
+                            <div class="fw-bold fs-5 text-success">BD @Model.AmountToPay.ToString("N2")</div>
+                        </div>
+                        <i class="fa fa-shield-alt fa-2x text-muted"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card Form -->
+        <div class="col-md-7">
+            <div class="card shadow-sm">
+                <div class="card-header bg-dark text-white">
+                    <i class="fa fa-credit-card me-2"></i>Card Details
+                    <span class="float-end">
+                        <i class="fab fa-cc-visa me-1"></i>
+                        <i class="fab fa-cc-mastercard me-1"></i>
+                        <i class="fab fa-cc-amex"></i>
+                    </span>
+                </div>
+                <div class="card-body p-4">
+                    <form asp-action="ProcessPayment" method="post" id="paymentForm">
+                        <input type="hidden" asp-for="LeaseId" />
+                        <input type="hidden" asp-for="PlanType" />
+                        <input type="hidden" asp-for="AmountToPay" />
+                        <input type="hidden" asp-for="PlanDescription" />
+                        <input type="hidden" asp-for="TotalMonths" />
+                        <input type="hidden" asp-for="MonthlyRent" />
+                        <input type="hidden" asp-for="UnitNumber" />
+                        <input type="hidden" asp-for="PropertyName" />
+
+                        <div class="mb-3">
+                            <label asp-for="CardNumber" class="form-label fw-semibold"></label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="fa fa-credit-card"></i></span>
+                                <input asp-for="CardNumber" class="form-control" placeholder="1234 5678 9012 3456"
+                                       maxlength="19" id="cardNumber" />
+                            </div>
+                            <span asp-validation-for="CardNumber" class="text-danger small"></span>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <label asp-for="ExpiryDate" class="form-label fw-semibold">
+                                    Expiry Date
+                                    <i class="fa fa-circle-info text-muted ms-1"
+                                       style="font-size:.8rem; cursor:default;"
+                                       title="Use a future date (MM/YY). Expired cards are rejected."
+                                       data-bs-toggle="tooltip" data-bs-placement="top"></i>
+                                </label>
+                                <input asp-for="ExpiryDate" class="form-control" placeholder="MM/YY"
+                                       maxlength="5" id="expiryDate" />
+                                <span asp-validation-for="ExpiryDate" class="text-danger small"></span>
+                            </div>
+                            <div class="col-6">
+                                <label asp-for="Cvv" class="form-label fw-semibold"></label>
+                                <div class="input-group">
+                                    <input asp-for="Cvv" class="form-control" placeholder="123"
+                                           maxlength="4" type="password" />
+                                    <span class="input-group-text"><i class="fa fa-question-circle text-muted" title="3 or 4 digit security code"></i></span>
+                                </div>
+                                <span asp-validation-for="Cvv" class="text-danger small"></span>
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label asp-for="CardholderName" class="form-label fw-semibold"></label>
+                            <input asp-for="CardholderName" class="form-control" placeholder="Name on card" />
+                            <span asp-validation-for="CardholderName" class="text-danger small"></span>
+                        </div>
+
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-success btn-lg" id="payBtn">
+                                <i class="fa fa-lock me-2"></i>Pay BD @Model.AmountToPay.ToString("N2")
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <p class="text-muted small text-center mt-2">
+                <i class="fa fa-shield-alt me-1"></i>This is a simulated payment. No real transaction is processed.
+            </p>
+        </div>
+    </div>
+
+    <div class="mt-3">
+        <a asp-action="SelectPlan" asp-route-leaseId="@Model.LeaseId" class="btn btn-outline-secondary btn-sm">
+            <i class="fa fa-arrow-left me-1"></i>Change Plan
+        </a>
+    </div>
+</div>
+
+@section Scripts {
+    @await Html.PartialAsync("_ValidationScriptsPartial")
+<script>
+    // Bootstrap tooltips
+    document.querySelectorAll('[data-bs-toggle="tooltip"]')
+        .forEach(el => new bootstrap.Tooltip(el));
+
+    // Format card number with spaces
+    document.getElementById('cardNumber').addEventListener('input', function () {
+        let val = this.value.replace(/\D/g, '').substring(0, 16);
+        this.value = val.replace(/(.{4})/g, '$1 ').trim();
+    });
+
+    // Format expiry MM/YY
+    document.getElementById('expiryDate').addEventListener('input', function () {
+        let val = this.value.replace(/\D/g, '').substring(0, 4);
+        if (val.length >= 2) val = val.substring(0, 2) + '/' + val.substring(2);
+        this.value = val;
+    });
+
+    // Show spinner on submit
+    document.getElementById('paymentForm').addEventListener('submit', function () {
+        const btn = document.getElementById('payBtn');
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Processing...';
+        btn.disabled = true;
+    });
+</script>
+}

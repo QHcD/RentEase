@@ -310,13 +310,16 @@ public class LeaseApplicationsController : Controller
         appCounts["All"] = regularApps.Count(a => !LeaseApplicationSeedRules.HiddenFromLeaseApplicationAllFilter(a.Status));
         renewalAppCounts["All"] = renewalApps.Count(a => !LeaseApplicationSeedRules.HiddenFromLeaseApplicationAllFilter(a.Status));
 
+        if (!ApplicationsAndLeasesViewModel.AppStatuses.Contains(appStatus, StringComparer.OrdinalIgnoreCase))
+            appStatus = "All";
+
         var filteredRegular = appStatus == "All"
             ? regularApps.Where(a => !LeaseApplicationSeedRules.HiddenFromLeaseApplicationAllFilter(a.Status)).ToList()
-            : regularApps.Where(a => a.Status == appStatus).ToList();
+            : regularApps.Where(a => LeaseApplicationIndexPartitioner.MatchesStatusTabFilter(a.Status, appStatus)).ToList();
 
         var filteredRenewals = appStatus == "All"
             ? renewalApps.Where(a => !LeaseApplicationSeedRules.HiddenFromLeaseApplicationAllFilter(a.Status)).ToList()
-            : renewalApps.Where(a => a.Status == appStatus).ToList();
+            : renewalApps.Where(a => LeaseApplicationIndexPartitioner.MatchesStatusTabFilter(a.Status, appStatus)).ToList();
 
         LeaseApplicationListViewModel MapListVm(LeaseApplication a) => new()
         {

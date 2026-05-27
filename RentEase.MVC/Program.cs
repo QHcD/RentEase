@@ -206,132 +206,6 @@ using (var scope = app.Services.CreateScope())
 
     try
     {
-        // Replace any local /uploads/ property images with Unsplash CDN URLs (portable across machines)
-        var db = scope.ServiceProvider.GetRequiredService<PropertyLeasingDbContext>();
-        await db.Database.ExecuteSqlRawAsync(@"
-            -- Only run if ALL existing records are local paths (not CDN)
-            IF EXISTS (SELECT 1 FROM [PropertyImage]) AND
-               NOT EXISTS (SELECT 1 FROM [PropertyImage] WHERE [ImagePath] LIKE 'https://%')
-            BEGIN
-                DELETE FROM [PropertyImage];
-            END;
-
-            IF NOT EXISTS (SELECT 1 FROM [PropertyImage])
-            BEGIN
-                -- 10 properties × 3 images each, matched by property name
-                INSERT INTO [PropertyImage] ([PropertyID], [ImagePath], [SortOrder])
-                SELECT p.[PropertyID], img.[ImagePath], img.[SortOrder]
-                FROM [Property] p
-                CROSS APPLY (
-                    SELECT v.ImagePath, v.SortOrder FROM (VALUES
-                        -- Seef Tower Residences (Residential)
-                        (N'Seef Tower Residences',    'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=800&q=80', 0),
-                        (N'Seef Tower Residences',    'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?w=800&q=80', 1),
-                        (N'Seef Tower Residences',    'https://images.unsplash.com/photo-1502005229762-cf1b2da7c5d6?w=800&q=80', 2),
-                        -- Riffa Hills Apartments (Residential)
-                        (N'Riffa Hills Apartments',   'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=800&q=80', 0),
-                        (N'Riffa Hills Apartments',   'https://images.unsplash.com/photo-1600585154526-990dced4db0d?w=800&q=80', 1),
-                        (N'Riffa Hills Apartments',   'https://images.unsplash.com/photo-1464082354059-27db6ce50048?w=800&q=80', 2),
-                        -- Juffair Bay Complex (Mixed)
-                        (N'Juffair Bay Complex',      'https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?w=800&q=80', 0),
-                        (N'Juffair Bay Complex',      'https://images.unsplash.com/photo-1486325212027-8081e485255e?w=800&q=80', 1),
-                        (N'Juffair Bay Complex',      'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800&q=80', 2),
-                        -- Adliya Garden Residences (Residential)
-                        (N'Adliya Garden Residences', 'https://images.unsplash.com/photo-1479839672679-a46483c0e7c8?w=800&q=80', 0),
-                        (N'Adliya Garden Residences', 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=800&q=80', 1),
-                        (N'Adliya Garden Residences', 'https://images.unsplash.com/photo-1448630360428-65456885c650?w=800&q=80', 2),
-                        -- Amwaj Waterfront Living (Residential)
-                        (N'Amwaj Waterfront Living',  'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?w=800&q=80', 0),
-                        (N'Amwaj Waterfront Living',  'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=800&q=80', 1),
-                        (N'Amwaj Waterfront Living',  'https://images.unsplash.com/photo-1502005229762-cf1b2da7c5d6?w=800&q=80', 2),
-                        -- Budaiya Family Residences (Residential)
-                        (N'Budaiya Family Residences','https://images.unsplash.com/photo-1464082354059-27db6ce50048?w=800&q=80', 0),
-                        (N'Budaiya Family Residences','https://images.unsplash.com/photo-1600585154526-990dced4db0d?w=800&q=80', 1),
-                        (N'Budaiya Family Residences','https://images.unsplash.com/photo-1479839672679-a46483c0e7c8?w=800&q=80', 2),
-                        -- Diplomatic Quarter Suites (Mixed)
-                        (N'Diplomatic Quarter Suites','https://images.unsplash.com/photo-1486325212027-8081e485255e?w=800&q=80', 0),
-                        (N'Diplomatic Quarter Suites','https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800&q=80', 1),
-                        (N'Diplomatic Quarter Suites','https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=800&q=80', 2),
-                        -- Busaiteen Bay Apartments (Residential)
-                        (N'Busaiteen Bay Apartments', 'https://images.unsplash.com/photo-1448630360428-65456885c650?w=800&q=80', 0),
-                        (N'Busaiteen Bay Apartments', 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?w=800&q=80', 1),
-                        (N'Busaiteen Bay Apartments', 'https://images.unsplash.com/photo-1502005229762-cf1b2da7c5d6?w=800&q=80', 2),
-                        -- Tubli Business Park (Commercial)
-                        (N'Tubli Business Park',      'https://images.unsplash.com/photo-1497366216548-37526070297c?w=800&q=80', 0),
-                        (N'Tubli Business Park',      'https://images.unsplash.com/photo-1464082354059-27db6ce50048?w=800&q=80', 1),
-                        (N'Tubli Business Park',      'https://images.unsplash.com/photo-1486325212027-8081e485255e?w=800&q=80', 2),
-                        -- Muharraq Heritage Homes (Residential)
-                        (N'Muharraq Heritage Homes',  'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=800&q=80', 0),
-                        (N'Muharraq Heritage Homes',  'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=800&q=80', 1),
-                        (N'Muharraq Heritage Homes',  'https://images.unsplash.com/photo-1600585154526-990dced4db0d?w=800&q=80', 2)
-                    ) AS v(PropertyName, ImagePath, SortOrder)
-                    WHERE v.PropertyName = p.[Name]
-                ) img;
-            END;
-        ");
-        logger.LogInformation("Property images seeded with CDN URLs.");
-    }
-    catch (Exception ex) { logger.LogWarning(ex, "Could not seed property images (non-fatal)."); }
-
-    try
-    {
-        // Seed unit images — 3 local .jpg files per unit type, covers all 203 units.
-        // Deletes any old/partial records first, then re-inserts for every unit.
-        var db = scope.ServiceProvider.GetRequiredService<PropertyLeasingDbContext>();
-        await db.Database.ExecuteSqlRawAsync(@"
-            -- Remove partial/old records so we can do a clean full insert
-            DELETE FROM [UnitImage]
-            WHERE [UnitID] IN (
-                SELECT u.[UnitID] FROM [Unit] u
-                WHERE u.[UnitType] IN (
-                    'Studio','1BR Apartment','2BR Apartment','3BR Apartment',
-                    '4BR Apartment','Office','Shop'
-                )
-            )
-            AND [ImagePath] NOT LIKE '/uploads/units/%';
-
-            -- Insert 3 images per unit only for units that still have none
-            WITH TypeImages AS (
-                SELECT UnitType, ImagePath, SortOrder FROM (VALUES
-                    ('Studio',        '/uploads/units/studio/1.jpg', 0),
-                    ('Studio',        '/uploads/units/studio/2.jpg', 1),
-                    ('Studio',        '/uploads/units/studio/3.jpg', 2),
-                    ('1BR Apartment', '/uploads/units/1br/1.jpg',    0),
-                    ('1BR Apartment', '/uploads/units/1br/2.jpg',    1),
-                    ('1BR Apartment', '/uploads/units/1br/3.jpg',    2),
-                    ('2BR Apartment', '/uploads/units/2br/1.jpg',    0),
-                    ('2BR Apartment', '/uploads/units/2br/2.jpg',    1),
-                    ('2BR Apartment', '/uploads/units/2br/3.jpg',    2),
-                    ('3BR Apartment', '/uploads/units/3br/1.jpg',    0),
-                    ('3BR Apartment', '/uploads/units/3br/2.jpg',    1),
-                    ('3BR Apartment', '/uploads/units/3br/3.jpg',    2),
-                    ('4BR Apartment', '/uploads/units/4br/1.jpg',    0),
-                    ('4BR Apartment', '/uploads/units/4br/2.jpg',    1),
-                    ('4BR Apartment', '/uploads/units/4br/3.jpg',    2),
-                    ('Office',        '/uploads/units/office/1.jpg', 0),
-                    ('Office',        '/uploads/units/office/2.jpg', 1),
-                    ('Office',        '/uploads/units/office/3.jpg', 2),
-                    ('Shop',          '/uploads/units/shop/1.jpg',   0),
-                    ('Shop',          '/uploads/units/shop/2.jpg',   1),
-                    ('Shop',          '/uploads/units/shop/3.jpg',   2)
-                ) AS T(UnitType, ImagePath, SortOrder)
-            )
-            INSERT INTO [UnitImage] ([UnitID], [ImagePath], [SortOrder])
-            SELECT u.[UnitID], ti.[ImagePath], ti.[SortOrder]
-            FROM [Unit] u
-            INNER JOIN TypeImages ti ON ti.[UnitType] = u.[UnitType]
-            WHERE NOT EXISTS (
-                SELECT 1 FROM [UnitImage] ui
-                WHERE ui.[UnitID] = u.[UnitID]
-                  AND ui.[ImagePath] LIKE '/uploads/units/%'
-            );
-        ");
-        logger.LogInformation("Unit images seeded (local .jpg).");
-    }
-    catch (Exception ex) { logger.LogWarning(ex, "Could not seed unit images (non-fatal)."); }
-
-    try
-    {
         // Create MaintenanceRequestLog table if it does not exist yet
         var db = scope.ServiceProvider.GetRequiredService<PropertyLeasingDbContext>();
         await db.Database.ExecuteSqlRawAsync(@"
@@ -436,6 +310,112 @@ using (var scope = app.Services.CreateScope())
         logger.LogInformation("Seed completed.");
     }
     catch (Exception ex) { logger.LogError(ex, "Seed failed."); }
+
+    // Image seed runs after business data seed/reset so a reset does not wipe freshly inserted rows.
+    try
+    {
+        var db = scope.ServiceProvider.GetRequiredService<PropertyLeasingDbContext>();
+        await db.Database.ExecuteSqlRawAsync(@"
+            DELETE FROM [PropertyImage] WHERE [ImagePath] NOT LIKE 'https://%';
+
+            INSERT INTO [PropertyImage] ([PropertyID], [ImagePath], [SortOrder])
+            SELECT p.[PropertyID], img.[ImagePath], img.[SortOrder]
+            FROM [Property] p
+            CROSS APPLY (
+                SELECT v.ImagePath, v.SortOrder FROM (VALUES
+                        (N'Seef Tower Residences',    'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=800&q=80', 0),
+                        (N'Seef Tower Residences',    'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?w=800&q=80', 1),
+                        (N'Seef Tower Residences',    'https://images.unsplash.com/photo-1502005229762-cf1b2da7c5d6?w=800&q=80', 2),
+                        (N'Riffa Hills Apartments',   'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=800&q=80', 0),
+                        (N'Riffa Hills Apartments',   'https://images.unsplash.com/photo-1600585154526-990dced4db0d?w=800&q=80', 1),
+                        (N'Riffa Hills Apartments',   'https://images.unsplash.com/photo-1464082354059-27db6ce50048?w=800&q=80', 2),
+                        (N'Juffair Bay Complex',      'https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?w=800&q=80', 0),
+                        (N'Juffair Bay Complex',      'https://images.unsplash.com/photo-1486325212027-8081e485255e?w=800&q=80', 1),
+                        (N'Juffair Bay Complex',      'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800&q=80', 2),
+                        (N'Adliya Garden Residences', 'https://images.unsplash.com/photo-1479839672679-a46483c0e7c8?w=800&q=80', 0),
+                        (N'Adliya Garden Residences', 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=800&q=80', 1),
+                        (N'Adliya Garden Residences', 'https://images.unsplash.com/photo-1448630360428-65456885c650?w=800&q=80', 2),
+                        (N'Amwaj Waterfront Living',  'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?w=800&q=80', 0),
+                        (N'Amwaj Waterfront Living',  'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=800&q=80', 1),
+                        (N'Amwaj Waterfront Living',  'https://images.unsplash.com/photo-1502005229762-cf1b2da7c5d6?w=800&q=80', 2),
+                        (N'Budaiya Family Residences','https://images.unsplash.com/photo-1464082354059-27db6ce50048?w=800&q=80', 0),
+                        (N'Budaiya Family Residences','https://images.unsplash.com/photo-1600585154526-990dced4db0d?w=800&q=80', 1),
+                        (N'Budaiya Family Residences','https://images.unsplash.com/photo-1479839672679-a46483c0e7c8?w=800&q=80', 2),
+                        (N'Diplomatic Quarter Suites','https://images.unsplash.com/photo-1486325212027-8081e485255e?w=800&q=80', 0),
+                        (N'Diplomatic Quarter Suites','https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800&q=80', 1),
+                        (N'Diplomatic Quarter Suites','https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=800&q=80', 2),
+                        (N'Busaiteen Bay Apartments', 'https://images.unsplash.com/photo-1448630360428-65456885c650?w=800&q=80', 0),
+                        (N'Busaiteen Bay Apartments', 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?w=800&q=80', 1),
+                        (N'Busaiteen Bay Apartments', 'https://images.unsplash.com/photo-1502005229762-cf1b2da7c5d6?w=800&q=80', 2),
+                        (N'Tubli Business Park',      'https://images.unsplash.com/photo-1497366216548-37526070297c?w=800&q=80', 0),
+                        (N'Tubli Business Park',      'https://images.unsplash.com/photo-1464082354059-27db6ce50048?w=800&q=80', 1),
+                        (N'Tubli Business Park',      'https://images.unsplash.com/photo-1486325212027-8081e485255e?w=800&q=80', 2),
+                        (N'Muharraq Heritage Homes',  'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=800&q=80', 0),
+                        (N'Muharraq Heritage Homes',  'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=800&q=80', 1),
+                        (N'Muharraq Heritage Homes',  'https://images.unsplash.com/photo-1600585154526-990dced4db0d?w=800&q=80', 2)
+                    ) AS v(PropertyName, ImagePath, SortOrder)
+                    WHERE v.PropertyName = p.[Name]
+                ) img
+            WHERE NOT EXISTS (
+                SELECT 1 FROM [PropertyImage] pi WHERE pi.[PropertyID] = p.[PropertyID]
+            );
+        ");
+        logger.LogInformation("Property images seeded with CDN URLs.");
+    }
+    catch (Exception ex) { logger.LogWarning(ex, "Could not seed property images (non-fatal)."); }
+
+    try
+    {
+        var db = scope.ServiceProvider.GetRequiredService<PropertyLeasingDbContext>();
+        await db.Database.ExecuteSqlRawAsync(@"
+            DELETE FROM [UnitImage]
+            WHERE [UnitID] IN (
+                SELECT u.[UnitID] FROM [Unit] u
+                WHERE u.[UnitType] IN (
+                    'Studio','1BR Apartment','2BR Apartment','3BR Apartment',
+                    '4BR Apartment','Office','Shop'
+                )
+            )
+            AND [ImagePath] NOT LIKE '/uploads/units/%';
+
+            WITH TypeImages AS (
+                SELECT UnitType, ImagePath, SortOrder FROM (VALUES
+                    ('Studio',        '/uploads/units/studio/1.jpg', 0),
+                    ('Studio',        '/uploads/units/studio/2.jpg', 1),
+                    ('Studio',        '/uploads/units/studio/3.jpg', 2),
+                    ('1BR Apartment', '/uploads/units/1br/1.jpg',    0),
+                    ('1BR Apartment', '/uploads/units/1br/2.jpg',    1),
+                    ('1BR Apartment', '/uploads/units/1br/3.jpg',    2),
+                    ('2BR Apartment', '/uploads/units/2br/1.jpg',    0),
+                    ('2BR Apartment', '/uploads/units/2br/2.jpg',    1),
+                    ('2BR Apartment', '/uploads/units/2br/3.jpg',    2),
+                    ('3BR Apartment', '/uploads/units/3br/1.jpg',    0),
+                    ('3BR Apartment', '/uploads/units/3br/2.jpg',    1),
+                    ('3BR Apartment', '/uploads/units/3br/3.jpg',    2),
+                    ('4BR Apartment', '/uploads/units/4br/1.jpg',    0),
+                    ('4BR Apartment', '/uploads/units/4br/2.jpg',    1),
+                    ('4BR Apartment', '/uploads/units/4br/3.jpg',    2),
+                    ('Office',        '/uploads/units/office/1.jpg', 0),
+                    ('Office',        '/uploads/units/office/2.jpg', 1),
+                    ('Office',        '/uploads/units/office/3.jpg', 2),
+                    ('Shop',          '/uploads/units/shop/1.jpg',   0),
+                    ('Shop',          '/uploads/units/shop/2.jpg',   1),
+                    ('Shop',          '/uploads/units/shop/3.jpg',   2)
+                ) AS T(UnitType, ImagePath, SortOrder)
+            )
+            INSERT INTO [UnitImage] ([UnitID], [ImagePath], [SortOrder])
+            SELECT u.[UnitID], ti.[ImagePath], ti.[SortOrder]
+            FROM [Unit] u
+            INNER JOIN TypeImages ti ON ti.[UnitType] = u.[UnitType]
+            WHERE NOT EXISTS (
+                SELECT 1 FROM [UnitImage] ui
+                WHERE ui.[UnitID] = u.[UnitID]
+                  AND ui.[ImagePath] LIKE '/uploads/units/%'
+            );
+        ");
+        logger.LogInformation("Unit images seeded (local .jpg).");
+    }
+    catch (Exception ex) { logger.LogWarning(ex, "Could not seed unit images (non-fatal)."); }
 }
 
 app.Run();

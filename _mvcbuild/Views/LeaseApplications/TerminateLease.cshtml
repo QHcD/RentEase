@@ -1,0 +1,150 @@
+@model PropertyLeasing.MVC.ViewModels.TerminateLeaseViewModel
+@{
+    ViewData["Title"] = Model.TerminationId.HasValue ? "Edit Termination" : "Schedule Termination";
+    bool isEditing = Model.TerminationId.HasValue;
+}
+
+<!-- Cancel Termination Modal -->
+<div class="modal fade" id="cancelTermModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-secondary text-white">
+                <h5 class="modal-title"><i class="fa fa-undo me-2"></i>Cancel Scheduled Termination</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                Cancel the scheduled termination? Your lease will continue until
+                <strong>@Model.LeaseEndDate.ToString("dd MMM yyyy")</strong>.
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Go Back</button>
+                <form asp-action="CancelTermination" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="leaseId" value="@Model.LeaseId" />
+                    <button type="submit" class="btn btn-warning">
+                        <i class="fa fa-undo me-1"></i>Cancel Termination
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>
+        <i class="fa fa-scissors me-2 text-danger"></i>
+        @(isEditing ? "Edit Scheduled Termination" : "Schedule Lease Termination")
+    </h2>
+    <a asp-action="LeaseDetails" asp-route-id="@Model.LeaseId"
+       class="btn btn-outline-secondary btn-sm">
+        <i class="fa fa-arrow-left me-1"></i>Back to Lease
+    </a>
+</div>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show">
+        @TempData["Success"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show">
+        @TempData["Error"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<div class="row justify-content-center">
+    <div class="col-md-7">
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-light">
+                <i class="fa fa-info-circle me-2"></i>Lease Information
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">Unit</dt>
+                    <dd class="col-sm-8">@Model.UnitNumber</dd>
+
+                    <dt class="col-sm-4">Property</dt>
+                    <dd class="col-sm-8">@Model.PropertyName</dd>
+
+                    <dt class="col-sm-4">Lease End Date</dt>
+                    <dd class="col-sm-8 fw-semibold">@Model.LeaseEndDate.ToString("dd MMM yyyy")</dd>
+                </dl>
+            </div>
+        </div>
+
+        <div class="card shadow-sm border-danger">
+            <div class="card-header bg-danger text-white">
+                @(isEditing ? "Update Termination Details" : "Set Termination Date")
+            </div>
+            <div class="card-body">
+                @if (!isEditing)
+                {
+                    <div class="alert alert-warning">
+                        <i class="fa fa-exclamation-triangle me-2"></i>
+                        <strong>Important:</strong> Once a termination date is set, your lease will end on that date
+                        instead of <strong>@Model.LeaseEndDate.ToString("dd MMM yyyy")</strong>. You can edit or cancel
+                        this before the termination date arrives.
+                    </div>
+                }
+
+                <form asp-action="TerminateLease" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="LeaseId"      value="@Model.LeaseId" />
+                    <input type="hidden" name="LeaseEndDate" value="@Model.LeaseEndDate.ToString("yyyy-MM-dd")" />
+                    <input type="hidden" name="TerminationId" value="@Model.TerminationId" />
+                    <input type="hidden" name="UnitNumber"   value="@Model.UnitNumber" />
+                    <input type="hidden" name="PropertyName" value="@Model.PropertyName" />
+
+                    <div class="mb-3">
+                        <label asp-for="TerminationDate" class="form-label fw-semibold">
+                            Termination Date <span class="text-danger">*</span>
+                        </label>
+                        <input asp-for="TerminationDate" type="date"
+                               class="form-control @(ViewData.ModelState["TerminationDate"]?.Errors.Any() == true ? "is-invalid" : "")"
+                               min="@Model.MinTerminationDate"
+                               max="@Model.MaxTerminationDate" />
+                        <span asp-validation-for="TerminationDate" class="invalid-feedback"></span>
+                        <div class="form-text text-muted">
+                            Must be between <strong>@DateTime.Today.AddDays(2).ToString("dd MMM yyyy")</strong>
+                            and <strong>@Model.LeaseEndDate.ToString("dd MMM yyyy")</strong>.
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label asp-for="Notes" class="form-label fw-semibold">Notes (optional)</label>
+                        <textarea asp-for="Notes" class="form-control" rows="3"
+                                  placeholder="Reason for early termination..."></textarea>
+                        <span asp-validation-for="Notes" class="invalid-feedback"></span>
+                    </div>
+
+                    <div class="d-flex gap-2 flex-wrap">
+                        <button type="submit" class="btn btn-danger">
+                            <i class="fa fa-scissors me-2"></i>
+                            @(isEditing ? "Update Termination" : "Confirm Termination Date")
+                        </button>
+                        <a asp-action="LeaseDetails" asp-route-id="@Model.LeaseId"
+                           class="btn btn-outline-secondary">
+                            <i class="fa fa-times me-1"></i>Cancel
+                        </a>
+                        @if (isEditing)
+                        {
+                            <button type="button" class="btn btn-outline-warning ms-auto"
+                                    data-bs-toggle="modal" data-bs-target="#cancelTermModal">
+                                Remove Termination
+                            </button>
+                        }
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{ await Html.RenderPartialAsync("_ValidationScriptsPartial"); }
+}

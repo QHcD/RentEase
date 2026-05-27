@@ -1,0 +1,132 @@
+@model PropertyLeasing.MVC.ViewModels.PublicLookupViewModel
+@{
+    ViewData["Title"] = "Track Maintenance Request";
+}
+
+<div class="row justify-content-center">
+    <div class="col-md-7">
+        <div class="card shadow-sm">
+            <div class="card-header bg-dark text-white">
+                <h4 class="mb-0"><i class="fa fa-search me-2"></i>Track Your Maintenance Request</h4>
+                <small class="text-muted">No login required — enter your ticket number and phone.</small>
+            </div>
+            <div class="card-body">
+                <form asp-action="MaintenanceLookup" method="post">
+                    @Html.AntiForgeryToken()
+                    <div class="mb-3">
+                        <label asp-for="TicketNumber" class="form-label"></label>
+                        <input asp-for="TicketNumber" class="form-control" placeholder="e.g. TKT-2026-1234" />
+                        <span asp-validation-for="TicketNumber" class="text-danger"></span>
+                    </div>
+                    <div class="mb-3">
+                        <label asp-for="Phone" class="form-label"></label>
+                        <input asp-for="Phone" class="form-control" placeholder="+973 3300 0000" />
+                        <span asp-validation-for="Phone" class="text-danger"></span>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fa fa-search me-1"></i> Search
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        @if (Model.Searched)
+        {
+            @if (Model.ErrorMessage != null)
+            {
+                <div class="alert alert-warning mt-3">
+                    <i class="fa fa-exclamation-triangle me-2"></i>@Model.ErrorMessage
+                </div>
+            }
+            else if (Model.Result != null)
+            {
+                var result = Model.Result;
+                var statusColor = result.Status switch
+                {
+                    "Submitted"  => "secondary",
+                    "Assigned"   => "info",
+                    "InProgress" => "primary",
+                    "Resolved"   => "success",
+                    "Closed"     => "dark",
+                    _            => "secondary"
+                };
+                var priorityColor = result.Priority switch
+                {
+                    "Urgent" => "danger",
+                    "High"   => "warning",
+                    "Medium" => "info",
+                    "Low"    => "secondary",
+                    _        => "secondary"
+                };
+
+                <div class="card mt-3 shadow-sm border-success">
+                    <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                        <strong><i class="fa fa-ticket-alt me-1"></i>@result.TicketNumber</strong>
+                        <span class="badge bg-light text-@statusColor">@result.Status</span>
+                    </div>
+                    <div class="card-body">
+                        <h5>@result.Title</h5>
+                        <div class="row g-2 mb-3">
+                            <div class="col-6">
+                                <small class="text-muted">Property</small>
+                                <div>@result.PropertyName</div>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted">Unit</small>
+                                <div>@result.UnitNumber</div>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted">Type</small>
+                                <div>@result.RequestType</div>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted">Priority</small>
+                                <div><span class="badge bg-@priorityColor">@result.Priority</span></div>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted">Submitted</small>
+                                <div>@result.SubmittedAt.ToString("dd MMM yyyy")</div>
+                            </div>
+                            @if (result.ResolvedAt.HasValue)
+                            {
+                                <div class="col-6">
+                                    <small class="text-muted">Resolved</small>
+                                    <div class="text-success">@result.ResolvedAt.Value.ToString("dd MMM yyyy")</div>
+                                </div>
+                            }
+                        </div>
+
+                        @if (result.History.Any())
+                        {
+                            <h6 class="mt-3"><i class="fa fa-history me-1"></i>Status History</h6>
+                            <div class="timeline">
+                                @foreach (var h in result.History)
+                                {
+                                    <div class="d-flex gap-2 mb-2">
+                                        <i class="fa fa-circle-dot mt-1 text-primary"></i>
+                                        <div>
+                                            <strong>@h.NewStatus</strong>
+                                            @if (h.OldStatus != null)
+                                            {
+                                                <span class="text-muted"> (from @h.OldStatus)</span>
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(h.Notes))
+                                            {
+                                                <div class="small text-muted">@h.Notes</div>
+                                            }
+                                            <div class="small text-muted">@h.ChangedAt.ToString("dd MMM yyyy HH:mm")</div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}

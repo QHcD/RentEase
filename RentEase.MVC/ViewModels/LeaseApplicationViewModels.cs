@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Http;
+using PropertyLeasing.BusinessLogic;
 
 namespace PropertyLeasing.MVC.ViewModels;
 
@@ -247,8 +248,8 @@ public class ApplicationsAndLeasesViewModel
     // ── Applications tab (non-renewal only) ──────────────────────────────
     public string AppStatusFilter { get; set; } = "All";
 
-    // All statuses shown as sub-tabs (including new Canceled)
-    public static readonly string[] AppStatuses   = { "All", "Pending", "DocumentsRequired", "Screening", "Approved", "Rejected", "Canceled" };
+    // Status sub-tabs on Applications / Renewals (legacy DocumentsRequired → Screening)
+    public static readonly string[] AppStatuses = LeaseApplicationIndexPartitioner.ApplicationStatusTabKeys;
     // All lease statuses (Approved replaces Expired)
     public static readonly string[] LeaseStatuses = { "All", "PendingPayment", "Approved", "Active", "Terminated", "Renewed" };
 
