@@ -1,0 +1,404 @@
+@model List<PropertyLeasing.MVC.ViewModels.MaintenanceListViewModel>
+@using PropertyLeasing.MVC.ViewModels
+@{
+    ViewData["Title"] = "Maintenance Requests";
+    var currentStatus  = ViewBag.CurrentStatus as string;
+    var role           = ViewBag.Role as string;
+    var counts         = ViewBag.TabCounts as Dictionary<string, int> ?? new Dictionary<string, int>();
+    var expiringLeases = ViewBag.ExpiringLeases as List<ExpiringLeaseViewModel> ?? new List<ExpiringLeaseViewModel>();
+    var generalStaff   = ViewBag.GeneralStaff   as List<StaffSelectItem>       ?? new List<StaffSelectItem>();
+
+    int Count(string key) => counts.TryGetValue(key, out var v) ? v : 0;
+
+    // MaintenanceStaff only see assigned/in-progress/resolved — hide Submitted tab
+    var statusTabs = role == "MaintenanceStaff"
+        ? new[]
+        {
+            ("",           "All",         "secondary"),
+            ("Assigned",   "Assigned",    "info"),
+            ("InProgress", "In Progress", "primary"),
+            ("Resolved",   "Resolved",    "success"),
+            ("Cancelled",  "Cancelled",   "danger"),
+        }
+        : new[]
+        {
+            ("",           "All",         "secondary"),
+            ("Submitted",  "Submitted",   "secondary"),
+            ("Assigned",   "Assigned",    "info"),
+            ("InProgress", "In Progress", "primary"),
+            ("Resolved",   "Resolved",    "success"),
+            ("Cancelled",  "Cancelled",   "danger"),
+        };
+
+    string BadgeColor(string s) => s switch {
+        "Submitted"  => "secondary",
+        "Assigned"   => "info",
+        "InProgress" => "primary",
+        "Resolved"   => "success",
+        "Closed"     => "dark",
+        "Cancelled"  => "danger",
+        _            => "secondary"
+    };
+    string PriorityColor(string p) => p switch {
+        "Urgent" => "danger",
+        "High"   => "warning",
+        "Medium" => "info",
+        _        => "secondary"
+    };
+}
+
+<style>
+    .nav-tabs .nav-link { border-radius: 0; font-size: .9rem; padding: .55rem 1rem; }
+    .nav-tabs .nav-link.active { font-weight: 600; }
+    .maint-card { border: 1px solid #dee2e6; border-radius: 10px; transition: box-shadow .15s; }
+    .maint-card:hover { box-shadow: 0 4px 14px rgba(0,0,0,.1); }
+    .maint-card.cancelled-card { opacity: .55; filter: grayscale(60%); background: #f8f9fa !important; }
+    .maint-card .ticket-num { font-family: monospace; font-size: .78rem; color: #888; }
+    .priority-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+    /* Expiring leases panel */
+    .expiring-panel { background: linear-gradient(135deg,#fff3cd,#ffe8a1); border:1px solid #ffc107; border-radius:12px; }
+    .expiring-unit-card { background:#fff; border:1px solid #ffc107; border-radius:8px; padding:.75rem 1rem; }
+    .expiring-unit-card .days-badge { font-size:.75rem; font-weight:700; }
+    /* Staff picker inside modal */
+    .staff-pick { border:2px solid #dee2e6; border-radius:8px; padding:.5rem .75rem; cursor:pointer; transition:.15s; }
+    .staff-pick:hover  { border-color:#ffc107; background:#fffbf0; }
+    .staff-pick.picked { border-color:#fd7e14; background:#fff3cd; box-shadow:0 0 0 3px rgba(253,126,20,.18); }
+</style>
+
+<!-- Header row -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="mb-0"><i class="fa fa-wrench me-2 text-warning"></i>Maintenance Requests</h2>
+    @if (User.IsInRole("Tenant"))
+    {
+        <a asp-action="Submit" class="btn btn-warning">
+            <i class="fa fa-plus me-1"></i> New Request
+        </a>
+    }
+</div>
+
+@* ── Expiring leases panel (Manager only) ─────────────────────────────────── *@
+@if (role == "PropertyManager" && expiringLeases.Any())
+{
+    <div class="expiring-panel p-3 mb-4">
+        <div class="d-flex align-items-center gap-2 mb-3">
+            <i class="fa fa-triangle-exclamation fa-lg text-warning"></i>
+            <h6 class="mb-0 fw-bold text-dark">
+                Units with Expiring Leases
+                <span class="badge bg-warning text-dark ms-1">@expiringLeases.Count</span>
+            </h6>
+            <small class="text-muted ms-2">— leases ending within 7 days</small>
+        </div>
+        <div class="row g-2">
+            @foreach (var el in expiringLeases)
+            {
+                var urgencyColor = el.DaysRemaining <= 2 ? "danger" : el.DaysRemaining <= 4 ? "warning" : "info";
+                <div class="col-md-6 col-lg-4">
+                    <div class="expiring-unit-card">
+                        <div class="d-flex justify-content-between align-items-start mb-1">
+                            <div>
+                                <div class="fw-semibold small">Unit @el.UnitNumber · @el.PropertyName</div>
+                                <div class="small text-muted"><i class="fa fa-user me-1"></i>@el.TenantName</div>
+                                <div class="small text-muted"><i class="fa fa-calendar me-1"></i>Ends @el.LeaseEndDate.ToString("dd MMM yyyy")</div>
+                            </div>
+                            <span class="badge bg-@urgencyColor days-badge">
+                                @(el.DaysRemaining == 0 ? "Today" : $"{el.DaysRemaining}d left")
+                            </span>
+                        </div>
+                        @if (el.HasOpenRequest)
+                        {
+                            <div class="mt-2">
+                                <span class="badge bg-success"><i class="fa fa-check me-1"></i>Maintenance Scheduled</span>
+                            </div>
+                        }
+                        else
+                        {
+                            <button type="button"
+                                    class="btn btn-sm btn-warning mt-2 w-100"
+                                    onclick="openScheduleModal(@el.LeaseId, '@el.UnitNumber', '@el.PropertyName', '@el.LeaseEndDate.AddDays(1).ToString("dd MMM yyyy")', '@el.LeaseEndDate.AddDays(1).ToString("yyyy-MM-dd")')">
+                                <i class="fa fa-calendar-plus me-1"></i> Schedule Maintenance
+                            </button>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@* ── Schedule Maintenance Modal ───────────────────────────────────────────── *@
+@if (role == "PropertyManager")
+{
+    <div class="modal fade" id="scheduleModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header" style="background:linear-gradient(135deg,#fd7e14,#ffc107);">
+                    <h5 class="modal-title text-white"><i class="fa fa-calendar-plus me-2"></i>Schedule Pre-Tenancy Maintenance</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form asp-action="ScheduleUnitMaintenance" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="leaseId" id="modalLeaseId" />
+                    <div class="modal-body">
+                        <div class="mb-3 p-3 bg-light rounded">
+                            <div class="fw-semibold" id="modalUnitLabel">—</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">
+                                <i class="fa fa-calendar-day me-1 text-warning"></i>Scheduled Date
+                                <span class="text-muted fw-normal small">(must be after tenant's last day)</span>
+                            </label>
+                            <input type="date"
+                                   name="scheduledDate"
+                                   id="modalScheduledDateInput"
+                                   class="form-control"
+                                   required />
+                            <div class="form-text text-muted" id="modalMinDateNote"></div>
+                        </div>
+
+                        <label class="form-label fw-semibold">
+                            <i class="fa fa-user-gear me-1 text-warning"></i>Assign to Staff
+                        </label>
+                        <input type="hidden" name="staffId" id="modalStaffId" value="" />
+
+                        @if (generalStaff.Any())
+                        {
+                            @foreach (var s in generalStaff)
+                            {
+                                var avail  = s.AvailabilityStatus ?? "Available";
+                                var aColor = avail == "Available" ? "success" : avail == "Busy" ? "warning" : "secondary";
+                                <div class="staff-pick mb-2"
+                                     data-userid="@s.UserId"
+                                     onclick="pickStaff(this, '@s.UserId')">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <div style="width:34px;height:34px;border-radius:50%;background:var(--bs-@aColor);
+                                                    display:flex;align-items:center;justify-content:center;
+                                                    color:#fff;font-weight:700;font-size:.9rem;flex-shrink:0;">
+                                            @(s.FullName.Length > 0 ? s.FullName[0].ToString().ToUpper() : "?")
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <div class="fw-semibold small">@s.FullName</div>
+                                            @if (!string.IsNullOrEmpty(s.SkillProfile))
+                                            {
+                                                <div class="text-muted" style="font-size:.72rem;">@s.SkillProfile</div>
+                                            }
+                                        </div>
+                                        <span class="badge bg-@aColor">@avail</span>
+                                    </div>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="text-muted small">No maintenance staff available.</div>
+                        }
+                        <div id="staffValidationMsg" class="text-danger small mt-1 d-none">
+                            Please select a staff member.
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-warning" onclick="submitSchedule()">
+                            <i class="fa fa-check me-1"></i> Confirm Schedule
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Status tabs -->
+<ul class="nav nav-tabs border-bottom mb-3">
+    @foreach (var (val, label, color) in statusTabs)
+    {
+        var isActive   = (string.IsNullOrEmpty(val) && string.IsNullOrEmpty(currentStatus))
+                      || val == currentStatus;
+        var tabCount   = string.IsNullOrEmpty(val) ? Count("All") : Count(val);
+        var tabVal     = string.IsNullOrEmpty(val) ? "InProgress" : val; // for count-key lookup
+        <li class="nav-item">
+            <a class="nav-link @(isActive ? "active" : "")"
+               asp-action="Index" asp-route-status="@val">
+                @label
+                <span class="badge bg-@(isActive ? color : "light text-dark") ms-1">@tabCount</span>
+            </a>
+        </li>
+    }
+</ul>
+
+@if (!Model.Any())
+{
+    <div class="text-center py-5 text-muted">
+        <i class="fa fa-inbox fa-3x mb-3 opacity-25"></i>
+        <div class="fs-5">No requests found</div>
+        @if (User.IsInRole("Tenant"))
+        {
+            <a asp-action="Submit" class="btn btn-warning mt-3">Submit your first request</a>
+        }
+    </div>
+}
+else
+{
+    <div class="row g-3">
+        @foreach (var r in Model)
+        {
+            var isCancelled = r.Status == "Cancelled";
+            <div class="col-12">
+                <div class="maint-card p-3 bg-white d-flex align-items-start gap-3 @(isCancelled ? "cancelled-card" : "")">
+
+                    <!-- Icon -->
+                    <div class="fs-2 pt-1 @(isCancelled ? "text-secondary" : "text-warning")"
+                         style="min-width:2.5rem; text-align:center;">
+                        <i class="fa @(isCancelled ? "fa-ban" : "fa-wrench")"></i>
+                    </div>
+
+                    <!-- Main info -->
+                    <div class="flex-grow-1 min-width-0">
+                        <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                            <span class="fw-semibold fs-6 @(isCancelled ? "text-muted text-decoration-line-through" : "")">@r.Title</span>
+                            <span class="badge bg-@BadgeColor(r.Status)">@r.Status</span>
+                            @if (!isCancelled)
+                            {
+                                <span class="badge bg-@PriorityColor(r.Priority) bg-opacity-75">@r.Priority</span>
+                            }
+                        </div>
+
+                        <div class="small text-muted mb-1">
+                            <span class="ticket-num me-2">@r.TicketNumber</span>
+                            <i class="fa fa-building me-1"></i>Unit @r.UnitNumber · @r.PropertyName
+                            @if (role != "Tenant")
+                            {
+                                <span class="ms-2"><i class="fa fa-user me-1"></i>@r.TenantName</span>
+                            }
+                            @if (!string.IsNullOrEmpty(r.AssignedStaff))
+                            {
+                                <span class="ms-2"><i class="fa fa-user-gear me-1"></i>@r.AssignedStaff</span>
+                            }
+                        </div>
+
+                        @if (isCancelled && !string.IsNullOrEmpty(r.CancellationReason))
+                        {
+                            <div class="small text-danger mt-1">
+                                <i class="fa fa-circle-xmark me-1"></i>
+                                <strong>Cancelled:</strong> @r.CancellationReason
+                            </div>
+                        }
+                        else if (!string.IsNullOrEmpty(r.Description))
+                        {
+                            <div class="small text-secondary text-truncate" style="max-width:600px;">
+                                @r.Description
+                            </div>
+                        }
+                    </div>
+
+                    <!-- Date + actions -->
+                    <div class="text-end text-nowrap">
+                        <div class="small text-muted mb-2">
+                            <i class="fa fa-calendar me-1"></i>@r.SubmittedAt.ToString("dd MMM yyyy")
+                        </div>
+                        <a asp-action="Details" asp-route-id="@r.RequestId"
+                           class="btn btn-sm @(isCancelled ? "btn-outline-secondary" : "btn-outline-primary")">
+                            <i class="fa fa-eye me-1"></i> View
+                        </a>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@if (role == "PropertyManager")
+{
+    @section Scripts {
+    <script>
+        let _staffLoads = {}; // { "userId": count } for the selected date
+
+        function openScheduleModal(leaseId, unitNumber, propertyName, scheduledDateDisplay, scheduledDateVal) {
+            document.getElementById('modalLeaseId').value  = leaseId;
+            document.getElementById('modalUnitLabel').textContent =
+                'Unit ' + unitNumber + ' · ' + propertyName;
+
+            // Date picker — default = day after lease ends, min = same
+            const dateInput = document.getElementById('modalScheduledDateInput');
+            dateInput.value = scheduledDateVal;
+            dateInput.min   = scheduledDateVal;
+            document.getElementById('modalMinDateNote').textContent =
+                'Earliest date: ' + scheduledDateDisplay + ' (day after lease ends)';
+
+            document.getElementById('modalStaffId').value = '';
+            document.querySelectorAll('.staff-pick').forEach(c => c.classList.remove('picked'));
+            document.getElementById('staffValidationMsg').classList.add('d-none');
+
+            // Load staff availability for default date
+            loadStaffLoad(scheduledDateVal);
+
+            // Re-check on date change
+            dateInput.onchange = () => loadStaffLoad(dateInput.value);
+
+            new bootstrap.Modal(document.getElementById('scheduleModal')).show();
+        }
+
+        async function loadStaffLoad(date) {
+            if (!date) return;
+            try {
+                const res  = await fetch('/Maintenance/StaffLoad?date=' + date);
+                _staffLoads = await res.json();
+            } catch { _staffLoads = {}; }
+            updateStaffBusyUI();
+        }
+
+        function updateStaffBusyUI() {
+            document.querySelectorAll('.staff-pick').forEach(el => {
+                const uid   = el.dataset.userid;
+                const count = _staffLoads[uid] || 0;
+                const busy  = count >= 2;
+
+                // Remove old busy badge if any
+                el.querySelectorAll('.busy-badge').forEach(b => b.remove());
+
+                if (busy) {
+                    // Add busy badge
+                    const badge = document.createElement('span');
+                    badge.className = 'badge bg-danger ms-1 busy-badge';
+                    badge.title = count + ' request(s) on this day';
+                    badge.textContent = 'Busy (' + count + ')';
+                    el.querySelector('.flex-grow-1').appendChild(badge);
+
+                    el.classList.add('busy-staff');
+                    el.style.opacity = '0.5';
+                    el.style.cursor  = 'not-allowed';
+                    el.style.pointerEvents = 'none';
+
+                    // Deselect if already picked
+                    if (document.getElementById('modalStaffId').value == uid) {
+                        el.classList.remove('picked');
+                        document.getElementById('modalStaffId').value = '';
+                    }
+                } else {
+                    el.classList.remove('busy-staff');
+                    el.style.opacity = '';
+                    el.style.cursor  = '';
+                    el.style.pointerEvents = '';
+                }
+            });
+        }
+
+        function pickStaff(el, userId) {
+            if (el.classList.contains('busy-staff')) return; // blocked
+            document.querySelectorAll('.staff-pick').forEach(c => c.classList.remove('picked'));
+            el.classList.add('picked');
+            document.getElementById('modalStaffId').value = userId;
+            document.getElementById('staffValidationMsg').classList.add('d-none');
+        }
+
+        function submitSchedule() {
+            const staffId = document.getElementById('modalStaffId').value;
+            if (!staffId) {
+                document.getElementById('staffValidationMsg').classList.remove('d-none');
+                return;
+            }
+            document.querySelector('#scheduleModal form').submit();
+        }
+    </script>
+    }
+}

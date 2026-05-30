@@ -167,6 +167,20 @@ using (var scope = app.Services.CreateScope())
     {
         var db = scope.ServiceProvider.GetRequiredService<PropertyLeasingDbContext>();
         await db.Database.ExecuteSqlRawAsync(@"
+            IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Property' AND COLUMN_NAME = 'Amenities')
+                ALTER TABLE [Property] ADD [Amenities] NVARCHAR(250) NULL;
+            IF NOT EXISTS (SELECT 1 FROM [__EFMigrationsHistory] WHERE [MigrationId] = N'20260525120000_AddPropertyAmenities')
+                INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+                VALUES (N'20260525120000_AddPropertyAmenities', N'9.0.0');
+        ");
+        logger.LogInformation("Property Amenities column ensured.");
+    }
+    catch (Exception ex) { logger.LogWarning(ex, "Could not ensure Property Amenities column (non-fatal)."); }
+
+    try
+    {
+        var db = scope.ServiceProvider.GetRequiredService<PropertyLeasingDbContext>();
+        await db.Database.ExecuteSqlRawAsync(@"
             IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='PropertyImage')
             CREATE TABLE [PropertyImage] (
                 [Id]         INT IDENTITY(1,1) NOT NULL PRIMARY KEY,

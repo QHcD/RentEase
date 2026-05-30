@@ -1,0 +1,372 @@
+@model PropertyLeasing.MVC.ViewModels.CreateMaintenanceViewModel
+@{
+    ViewData["Title"] = "Submit Maintenance Request";
+}
+
+<style>
+    .upload-area {
+        border: 2px dashed #ced4da;
+        border-radius: 10px;
+        padding: 1.5rem;
+        text-align: center;
+        cursor: pointer;
+        transition: all .2s ease;
+        background: #fafafa;
+        min-height: 100px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .upload-area:hover, .upload-area.dragover {
+        border-color: #fd7e14;
+        background: #fffbf0;
+    }
+    .upload-area.has-image {
+        border-color: #198754;
+        background: #f0fff4;
+        padding: .75rem;
+    }
+    .unit-card {
+        cursor: pointer;
+        border: 2px solid #dee2e6;
+        border-radius: 10px;
+        padding: .75rem 1rem;
+        transition: all .15s ease;
+        background: #fff;
+    }
+    .unit-card:hover {
+        border-color: #ffc107;
+        background: #fffbf0;
+        transform: translateY(-1px);
+    }
+    .unit-card.selected {
+        border-color: #fd7e14;
+        background: #fff3cd;
+        box-shadow: 0 0 0 3px rgba(253,126,20,.2);
+    }
+    .category-card {
+        cursor: pointer;
+        border: 2px solid #dee2e6;
+        border-radius: 12px;
+        transition: all .2s ease;
+        text-align: center;
+        padding: 1.1rem .6rem;
+        user-select: none;
+    }
+    .category-card:hover {
+        border-color: #ffc107;
+        background: #fffbf0;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,.1);
+    }
+    .category-card.selected {
+        border-color: #fd7e14;
+        background: #fff3cd;
+        box-shadow: 0 0 0 3px rgba(253,126,20,.25);
+    }
+    .category-card .cat-icon { font-size: 2rem; line-height: 1; }
+    .category-card .cat-label { font-size: .8rem; font-weight: 600; margin-top: .35rem; color: #444; }
+    .priority-btn { border: 2px solid #dee2e6; border-radius: 8px; padding: .45rem 1rem;
+                    cursor: pointer; transition: all .15s; background: #fff; }
+    .priority-btn:hover { border-color: #6c757d; }
+    .priority-btn.sel-Low      { border-color: #198754; background:#d1e7dd; color:#0a3622; }
+    .priority-btn.sel-Medium   { border-color: #0dcaf0; background:#cff4fc; color:#055160; }
+    .priority-btn.sel-High     { border-color: #fd7e14; background:#ffe5d0; color:#6a2c05; }
+    .priority-btn.sel-Urgent   { border-color: #dc3545; background:#f8d7da; color:#58151c; }
+</style>
+
+<div class="row justify-content-center">
+    <div class="col-lg-8 col-md-10">
+        <div class="card shadow-sm">
+            <div class="card-header" style="background: linear-gradient(135deg,#fd7e14,#ffc107);">
+                <h4 class="mb-0 text-white"><i class="fa fa-wrench me-2"></i>Submit Maintenance Request</h4>
+                @if (!string.IsNullOrEmpty(Model.UnitNumber))
+                {
+                    <small class="text-white opacity-75">
+                        Unit @Model.UnitNumber &nbsp;·&nbsp; @Model.PropertyName
+                    </small>
+                }
+            </div>
+            <div class="card-body p-4">
+
+                <form asp-action="Submit" method="post" id="submitForm" enctype="multipart/form-data">
+                    @Html.AntiForgeryToken()
+                    <input asp-for="UnitId"       type="hidden" id="unitIdHidden" />
+                    <input asp-for="UnitNumber"   type="hidden" id="unitNumberHidden" />
+                    <input asp-for="PropertyName" type="hidden" id="propertyNameHidden" />
+                    <input asp-for="RequestType"  type="hidden" id="requestTypeHidden" />
+                    <input asp-for="Priority"     type="hidden" id="priorityHidden" value="Medium" />
+
+                    <div asp-validation-summary="ModelOnly" class="alert alert-danger small py-2"></div>
+
+                    <!-- Unit selector (shown when tenant has multiple units) -->
+                    @if (Model.AvailableUnits.Count > 1)
+                    {
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold">
+                                <i class="fa fa-building me-1 text-warning"></i> Select Unit
+                                <span class="text-danger">*</span>
+                            </label>
+                            <div class="row g-2" id="unitGrid">
+                                @foreach (var u in Model.AvailableUnits)
+                                {
+                                    var isSelected = u.UnitId == Model.UnitId;
+                                    <div class="col-sm-6">
+                                        <div class="unit-card @(isSelected ? "selected" : "")"
+                                             data-unitid="@u.UnitId"
+                                             data-unitnumber="@u.UnitNumber"
+                                             data-propertyname="@u.PropertyName"
+                                             onclick="selectUnit(this)">
+                                            <div class="fw-semibold"><i class="fa fa-door-open me-2 text-warning"></i>Unit @u.UnitNumber</div>
+                                            <small class="text-muted">@u.PropertyName</small>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                            <div id="unitError" class="text-danger small mt-1 d-none">Please select a unit.</div>
+                        </div>
+                    }
+                    else if (!string.IsNullOrEmpty(Model.UnitNumber))
+                    {
+                        <!-- Single unit: show info banner -->
+                        <div class="alert alert-info d-flex align-items-center gap-2 mb-4 py-2">
+                            <i class="fa fa-building text-info"></i>
+                            <span>Unit <strong>@Model.UnitNumber</strong> — @Model.PropertyName</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-warning mb-4">
+                            <i class="fa fa-exclamation-triangle me-2"></i>
+                            You don't have an active lease. Please contact the manager.
+                        </div>
+                    }
+
+                    <!-- Category selection -->
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold">
+                            <i class="fa fa-th-large me-1 text-warning"></i> Category
+                            <span class="text-danger">*</span>
+                        </label>
+                        <div class="row g-2" id="categoryGrid">
+                            @{
+                                var categories = new[]
+                                {
+                                    ("Plumbing",   "🔧", "Plumbing"),
+                                    ("Electrical", "⚡", "Electrical"),
+                                    ("HVAC",       "❄️", "HVAC"),
+                                    ("Carpentry",  "🪚", "Carpentry"),
+                                    ("General",    "🔨", "General"),
+                                };
+                                foreach (var (label, icon, value) in categories)
+                                {
+                                    <div class="col-6 col-sm-4 col-md-3">
+                                        <div class="category-card @(Model.RequestType == value ? "selected" : "")"
+                                             data-value="@value" onclick="selectCategory(this)">
+                                            <div class="cat-icon">@icon</div>
+                                            <div class="cat-label">@label</div>
+                                        </div>
+                                    </div>
+                                }
+                            }
+                        </div>
+                        <div id="categoryError" class="text-danger small mt-1 d-none">Please select a category.</div>
+                    </div>
+
+                    <!-- Title -->
+                    <div class="mb-3">
+                        <label asp-for="Title" class="form-label fw-semibold">
+                            <i class="fa fa-tag me-1 text-warning"></i> Issue Title
+                        </label>
+                        <input asp-for="Title" class="form-control form-control-lg"
+                               placeholder="e.g. Leaking pipe in bathroom" />
+                        <span asp-validation-for="Title" class="text-danger small"></span>
+                    </div>
+
+                    <!-- Description -->
+                    <div class="mb-4">
+                        <label asp-for="Description" class="form-label fw-semibold">
+                            <i class="fa fa-align-left me-1 text-warning"></i> Description
+                            <span class="text-muted fw-normal">(optional)</span>
+                        </label>
+                        <textarea asp-for="Description" class="form-control" rows="3"
+                                  placeholder="Describe the issue in detail — when did it start, how severe, etc."></textarea>
+                    </div>
+
+                    <!-- Priority -->
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold">
+                            <i class="fa fa-flag me-1 text-warning"></i> Priority
+                        </label>
+                        <div class="d-flex gap-2 flex-wrap" id="priorityGroup">
+                            @{
+                                var priorities = new[] {
+                                    ("Low",    "fa-circle-down",  "Success"),
+                                    ("Medium", "fa-circle-minus", "Info"),
+                                    ("High",   "fa-circle-up",    "Warning"),
+                                    ("Urgent", "fa-circle-dot",   "Danger"),
+                                };
+                                foreach (var (pVal, pIcon, pColor) in priorities)
+                                {
+                                    <button type="button"
+                                            class="priority-btn @(Model.Priority == pVal ? "sel-" + pVal : "")"
+                                            data-value="@pVal" onclick="selectPriority(this)">
+                                        <i class="fa @pIcon text-@pColor.ToLower() me-1"></i> @pVal
+                                    </button>
+                                }
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Photo Upload -->
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold">
+                            <i class="fa fa-camera me-1 text-warning"></i> Attach Photo
+                            <span class="text-muted fw-normal">(optional)</span>
+                        </label>
+                        <div id="uploadArea" class="upload-area"
+                             onclick="document.getElementById('imageFileInput').click()"
+                             ondragover="event.preventDefault(); this.classList.add('dragover')"
+                             ondragleave="this.classList.remove('dragover')"
+                             ondrop="handleDrop(event)">
+                            <div id="uploadPlaceholder">
+                                <i class="fa fa-cloud-upload-alt fa-2x text-muted mb-2"></i>
+                                <div class="text-muted small">Click or drag &amp; drop a photo here</div>
+                                <div class="text-muted" style="font-size:.75rem">JPG, PNG, WEBP — max 5 MB</div>
+                            </div>
+                            <img id="imagePreview" src="#" alt="Preview"
+                                 class="d-none rounded" style="max-height:180px; max-width:100%; object-fit:contain;" />
+                        </div>
+                        <input type="file" id="imageFileInput" name="ImageFile"
+                               accept="image/jpeg,image/png,image/webp,image/gif"
+                               class="d-none" onchange="previewImage(this)" />
+                        <div id="imageFileName" class="small text-muted mt-1"></div>
+                        <button type="button" id="removeImageBtn" class="btn btn-outline-danger btn-sm mt-1 d-none"
+                                onclick="removeImage()">
+                            <i class="fa fa-times me-1"></i>Remove photo
+                        </button>
+                    </div>
+
+                    <hr class="my-3" />
+
+                    <div class="d-flex gap-3">
+                        <button type="submit" class="btn btn-warning btn-lg flex-fill fw-semibold"
+                                onclick="return validateForm()">
+                            <i class="fa fa-paper-plane me-2"></i> Submit Request
+                        </button>
+                        <a asp-action="Index" class="btn btn-outline-secondary btn-lg px-4">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    <script>
+        function selectUnit(el) {
+            document.querySelectorAll('.unit-card').forEach(c => c.classList.remove('selected'));
+            el.classList.add('selected');
+            document.getElementById('unitIdHidden').value       = el.dataset.unitid;
+            document.getElementById('unitNumberHidden').value   = el.dataset.unitnumber;
+            document.getElementById('propertyNameHidden').value = el.dataset.propertyname;
+            document.getElementById('unitError').classList.add('d-none');
+        }
+
+        function selectCategory(el) {
+            document.querySelectorAll('.category-card').forEach(c => c.classList.remove('selected'));
+            el.classList.add('selected');
+            document.getElementById('requestTypeHidden').value = el.dataset.value;
+            document.getElementById('categoryError').classList.add('d-none');
+        }
+
+        function selectPriority(el) {
+            document.querySelectorAll('.priority-btn').forEach(b => {
+                b.className = 'priority-btn';
+            });
+            const v = el.dataset.value;
+            el.classList.add('sel-' + v);
+            document.getElementById('priorityHidden').value = v;
+        }
+
+        function validateForm() {
+            let valid = true;
+
+            // Validate unit selection (only if unit grid exists)
+            const unitGrid = document.getElementById('unitGrid');
+            if (unitGrid) {
+                const uid = document.getElementById('unitIdHidden').value;
+                if (!uid || uid === '0') {
+                    document.getElementById('unitError').classList.remove('d-none');
+                    unitGrid.scrollIntoView({ behavior: 'smooth' });
+                    valid = false;
+                }
+            }
+
+            const cat = document.getElementById('requestTypeHidden').value;
+            if (!cat) {
+                document.getElementById('categoryError').classList.remove('d-none');
+                if (valid) document.getElementById('categoryGrid').scrollIntoView({ behavior: 'smooth' });
+                valid = false;
+            }
+
+            return valid;
+        }
+
+        function previewImage(input) {
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                if (file.size > 5 * 1024 * 1024) {
+                    alert('Image is too large. Max 5 MB allowed.');
+                    input.value = '';
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = e => {
+                    document.getElementById('uploadPlaceholder').classList.add('d-none');
+                    const preview = document.getElementById('imagePreview');
+                    preview.src = e.target.result;
+                    preview.classList.remove('d-none');
+                    document.getElementById('uploadArea').classList.add('has-image');
+                    document.getElementById('imageFileName').textContent = '📎 ' + file.name;
+                    document.getElementById('removeImageBtn').classList.remove('d-none');
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            document.getElementById('uploadArea').classList.remove('dragover');
+            const dt = e.dataTransfer;
+            if (dt.files && dt.files.length > 0) {
+                const input = document.getElementById('imageFileInput');
+                // Create a new FileList-like transfer
+                const dataTransfer = new DataTransfer();
+                dataTransfer.items.add(dt.files[0]);
+                input.files = dataTransfer.files;
+                previewImage(input);
+            }
+        }
+
+        function removeImage() {
+            const input = document.getElementById('imageFileInput');
+            input.value = '';
+            document.getElementById('imagePreview').classList.add('d-none');
+            document.getElementById('imagePreview').src = '#';
+            document.getElementById('uploadPlaceholder').classList.remove('d-none');
+            document.getElementById('uploadArea').classList.remove('has-image');
+            document.getElementById('imageFileName').textContent = '';
+            document.getElementById('removeImageBtn').classList.add('d-none');
+        }
+
+        // Pre-select Medium priority on load if nothing selected
+        document.addEventListener('DOMContentLoaded', () => {
+            const hidden = document.getElementById('priorityHidden');
+            if (!hidden.value) hidden.value = 'Medium';
+            const btn = document.querySelector('[data-value="' + (hidden.value || 'Medium') + '"].priority-btn');
+            if (btn) btn.classList.add('sel-' + (hidden.value || 'Medium'));
+        });
+    </script>
+}

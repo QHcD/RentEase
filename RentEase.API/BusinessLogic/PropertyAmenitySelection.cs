@@ -88,6 +88,73 @@ public static class PropertyAmenitySelection
     public static string? JoinForUnit(IReadOnlyList<string> merged) =>
         merged.Count > 0 ? string.Join(", ", merged) : null;
 
+    /// <summary>Unit-only custom amenities (no fixed catalog).</summary>
+    public static string? JoinCustomOnly(IEnumerable<string>? customAmenities) =>
+        JoinForUnit(Merge(null, customAmenities, Array.Empty<string>()).ToList());
+
+    public static IReadOnlyList<string> ParseCommaSeparated(string? storedCommaSeparated) =>
+        string.IsNullOrWhiteSpace(storedCommaSeparated)
+            ? Array.Empty<string>()
+            : storedCommaSeparated.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+
+    public static IReadOnlyList<string> ValidateCustomAmenityList(IEnumerable<string>? customAmenities)
+    {
+        var errors = new List<string>();
+        var list = (customAmenities ?? Enumerable.Empty<string>())
+            .Select(c => c?.Trim() ?? string.Empty)
+            .Where(c => c.Length > 0)
+            .ToList();
+
+        if (list.Count > MaxCustomAmenityItems)
+            errors.Add($"At most {MaxCustomAmenityItems} custom amenities are allowed.");
+
+        if (list.Any(c => c.Length > MaxCustomAmenityItemLength))
+            errors.Add($"Each custom amenity must be at most {MaxCustomAmenityItemLength} characters.");
+
+        var joined = JoinCustomOnly(list);
+        var lengthError = ValidateJoinedLength(joined);
+        if (lengthError != null)
+            errors.Add(lengthError);
+
+        return errors;
+    }
+
+    /// <summary>Returns unit amenity names that already appear on the property (case-insensitive).</summary>
+    public static IReadOnlyList<string> FindDuplicatesAgainstProperty(
+        IEnumerable<string>? unitAmenities,
+        IEnumerable<string>? propertyAmenities)
+    {
+        var propertySet = new HashSet<string>(
+            (propertyAmenities ?? Enumerable.Empty<string>())
+                .Select(a => a.Trim())
+                .Where(a => a.Length > 0),
+            StringComparer.OrdinalIgnoreCase);
+
+        if (propertySet.Count == 0)
+            return Array.Empty<string>();
+
+        return (unitAmenities ?? Enumerable.Empty<string>())
+            .Select(a => a?.Trim() ?? string.Empty)
+            .Where(a => a.Length > 0)
+            .Where(a => propertySet.Contains(a))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    /// <summary>Unit amenities must not repeat building-wide property amenities.</summary>
+    public static IReadOnlyList<string> ValidateUnitAmenitiesAgainstProperty(
+        IEnumerable<string>? unitAmenities,
+        IEnumerable<string>? propertyAmenities)
+    {
+        var duplicates = FindDuplicatesAgainstProperty(unitAmenities, propertyAmenities);
+        if (duplicates.Count == 0)
+            return Array.Empty<string>();
+
+        return duplicates
+            .Select(d => $"'{d}' is already a property amenity — unit amenities are for extras not listed on the property.")
+            .ToList();
+    }
+
     public static string? ValidateJoinedLength(string? joined)
     {
         if (joined == null) return null;

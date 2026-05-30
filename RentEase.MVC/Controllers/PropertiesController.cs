@@ -150,7 +150,11 @@ public class PropertiesController : Controller
             FloorRows      = defaultPlans.Select(p => new FloorUnitRowInput
             {
                 UnitsOnFloor = p.UnitAreasSqm.Count,
-                UnitAreasSqm = p.UnitAreasSqm.ToList()
+                UnitAreasSqm = p.UnitAreasSqm.ToList(),
+                UnitMonthlyRents = p.UnitAreasSqm.Select(_ => (decimal?)null).ToList(),
+                UnitCustomAmenities = p.UnitAreasSqm
+                    .Select(_ => new List<string>())
+                    .ToList()
             }).ToList()
         };
         return View(vm);
@@ -190,37 +194,70 @@ public class PropertiesController : Controller
 
         ViewBag.AreaWarnings = areaWarnings;
 
-        if (model.CustomAmenities is { Count: > 0 } &&
-            model.CustomAmenities.Count > PropertyAmenitySelection.MaxCustomAmenityItems)
-            ModelState.AddModelError(nameof(model.CustomAmenities),
-                $"At most {PropertyAmenitySelection.MaxCustomAmenityItems} custom amenities are allowed.");
+        foreach (var propertyAmenityError in PropertyAmenitySelection.ValidateCustomAmenityList(model.CustomAmenities))
+            ModelState.AddModelError(nameof(model.CustomAmenities), propertyAmenityError);
 
-        if (model.CustomAmenities is { Count: > 0 })
+        var mergedPropertyAmenities = PropertyAmenitySelection.Merge(
+            model.SelectedFixedAmenities,
+            model.CustomAmenities,
+            PropertyAmenityOptions.All).ToList();
+
+        if (model.FloorRows != null)
         {
-            if (model.CustomAmenities.Any(c => (c?.Trim() ?? string.Empty).Length >
-                                                PropertyAmenitySelection.MaxCustomAmenityItemLength))
-                ModelState.AddModelError(nameof(model.CustomAmenities),
-                    $"Each custom amenity must be at most {PropertyAmenitySelection.MaxCustomAmenityItemLength} characters.");
+            for (var floorIdx = 0; floorIdx < model.FloorRows.Count; floorIdx++)
+            {
+                var floor = model.FloorRows[floorIdx];
+                for (var unitIdx = 0; unitIdx < floor.UnitsOnFloor; unitIdx++)
+                {
+                    var customs = floor.UnitCustomAmenities != null && unitIdx < floor.UnitCustomAmenities.Count
+                        ? floor.UnitCustomAmenities[unitIdx]
+                        : new List<string>();
+
+                    foreach (var unitAmenityError in PropertyAmenitySelection.ValidateCustomAmenityList(customs))
+                    {
+                        ModelState.AddModelError(string.Empty,
+                            $"Floor {floorIdx + 1}, unit {unitIdx + 1}: {unitAmenityError}");
+                    }
+
+                    foreach (var duplicateError in PropertyAmenitySelection.ValidateUnitAmenitiesAgainstProperty(
+                                 customs, mergedPropertyAmenities))
+                    {
+                        ModelState.AddModelError(string.Empty,
+                            $"Floor {floorIdx + 1}, unit {unitIdx + 1}: {duplicateError}");
+                    }
+                }
+            }
+        }
+
+        var propertyAmenitiesJoined = PropertyAmenitySelection.JoinForUnit(mergedPropertyAmenities);
+        var propertyAmenitiesLengthError = PropertyAmenitySelection.ValidateJoinedLength(propertyAmenitiesJoined);
+        if (propertyAmenitiesLengthError != null)
+            ModelState.AddModelError(nameof(model.CustomAmenities), propertyAmenitiesLengthError);
+
+        IReadOnlyList<PropertyMonthlyRentRules.FloorMonthlyRentInput> floorRentInputs = Array.Empty<PropertyMonthlyRentRules.FloorMonthlyRentInput>();
+        if (model.FloorRows != null && model.FloorRows.Count == model.NumberOfFloors)
+        {
+            floorRentInputs = model.FloorRows
+                .Select(r => new PropertyMonthlyRentRules.FloorMonthlyRentInput(
+                    r.UnitsOnFloor,
+                    r.FloorMonthlyRent,
+                    r.UnitMonthlyRents))
+                .ToList();
+
+            foreach (var rentError in PropertyMonthlyRentRules.ValidateMonthlyRentLayout(
+                         model.DefaultMonthlyRent, floorRentInputs))
+            {
+                ModelState.AddModelError(nameof(model.DefaultMonthlyRent), rentError);
+            }
         }
 
         if (!ModelState.IsValid || areaWarnings.Count > 0)
             return View(model);
 
-        var mergedAmenities = PropertyAmenitySelection.Merge(
-            model.SelectedFixedAmenities,
-            model.CustomAmenities,
-            PropertyAmenityOptions.All).ToList();
-
-        var amenitiesJoined = PropertyAmenitySelection.JoinForUnit(mergedAmenities);
-        var amenitiesLengthError = PropertyAmenitySelection.ValidateJoinedLength(amenitiesJoined);
-        if (amenitiesLengthError != null)
-            ModelState.AddModelError(nameof(model.CustomAmenities), amenitiesLengthError);
-
-        if (!ModelState.IsValid)
-            return View(model);
-
         IReadOnlyList<string> unitNumbers;
         IReadOnlyList<double> unitAreasSqm;
+        IReadOnlyList<IReadOnlyList<string>> unitCustomAmenitiesFlat;
+        IReadOnlyList<decimal> unitMonthlyRents;
         try
         {
             var prefix = model.UnitNumberPrefix;
@@ -233,6 +270,19 @@ public class PropertiesController : Controller
                 .Select(r => (r.UnitsOnFloor, (IReadOnlyList<decimal>)(r.UnitAreasSqm ?? new List<decimal>())))
                 .ToList();
             unitAreasSqm = PropertyAreaAllocationRules.FlattenUnitAreasSqm(model.TotalSizeSqm, areaFloors);
+
+            unitCustomAmenitiesFlat = model.FloorRows!
+                .SelectMany(r =>
+                {
+                    var count = r.UnitsOnFloor;
+                    var lists = r.UnitCustomAmenities ?? new List<List<string>>();
+                    return Enumerable.Range(0, count).Select(u =>
+                        (IReadOnlyList<string>)(u < lists.Count ? lists[u] ?? new List<string>() : new List<string>()));
+                })
+                .ToList();
+
+            unitMonthlyRents = PropertyMonthlyRentRules.ResolveAllUnitRents(
+                model.DefaultMonthlyRent, floorRentInputs);
         }
         catch (ArgumentOutOfRangeException)
         {
@@ -253,17 +303,23 @@ public class PropertiesController : Controller
             City             = model.City,
             PropertyType     = model.PropertyType,
             TotalSizeSqm     = (double)model.TotalSizeSqm,
+            Amenities        = propertyAmenitiesJoined,
             GracePeriodDays  = 5,
             LateFeePercent   = 5
         };
 
         for (var i = 0; i < unitNumbers.Count; i++)
         {
+            var unitCustoms = i < unitCustomAmenitiesFlat.Count
+                ? unitCustomAmenitiesFlat[i]
+                : Array.Empty<string>();
+
             property.Units.Add(new Unit
             {
                 UnitNumber           = unitNumbers[i],
                 Sizesqm              = unitAreasSqm[i],
-                Amenities            = amenitiesJoined,
+                MonthlyRent          = unitMonthlyRents[i],
+                Amenities            = PropertyAmenitySelection.JoinCustomOnly(unitCustoms),
                 AvailabilityStatus   = "Available"
             });
         }
@@ -305,11 +361,7 @@ public class PropertiesController : Controller
         var property = await _db.Properties.AsNoTracking().FirstOrDefaultAsync(p => p.PropertyId == id);
         if (property == null) return NotFound();
 
-        var amenitySource = await _db.Units
-            .Where(u => u.PropertyId == id)
-            .OrderBy(u => u.UnitId)
-            .Select(u => u.Amenities)
-            .FirstOrDefaultAsync();
+        var amenitySource = property.Amenities;
 
         var (fixedSel, customs) = PropertyAmenitySelection.SplitFromStoredString(amenitySource, PropertyAmenityOptions.All);
 
@@ -344,18 +396,8 @@ public class PropertiesController : Controller
     {
         if (id != model.PropertyId) return BadRequest();
 
-        if (model.CustomAmenities is { Count: > 0 } &&
-            model.CustomAmenities.Count > PropertyAmenitySelection.MaxCustomAmenityItems)
-            ModelState.AddModelError(nameof(model.CustomAmenities),
-                $"At most {PropertyAmenitySelection.MaxCustomAmenityItems} custom amenities are allowed.");
-
-        if (model.CustomAmenities is { Count: > 0 })
-        {
-            if (model.CustomAmenities.Any(c => (c?.Trim() ?? string.Empty).Length >
-                                                PropertyAmenitySelection.MaxCustomAmenityItemLength))
-                ModelState.AddModelError(nameof(model.CustomAmenities),
-                    $"Each custom amenity must be at most {PropertyAmenitySelection.MaxCustomAmenityItemLength} characters.");
-        }
+        foreach (var propertyAmenityError in PropertyAmenitySelection.ValidateCustomAmenityList(model.CustomAmenities))
+            ModelState.AddModelError(nameof(model.CustomAmenities), propertyAmenityError);
 
         if (!ModelState.IsValid)
             return View(model);
@@ -384,11 +426,9 @@ public class PropertiesController : Controller
         entity.ImgPath          = model.ImgPath;
         entity.GracePeriodDays  = model.GracePeriodDays;
         entity.LateFeePercent   = model.LateFeePercent;
+        entity.Amenities        = amenitiesJoined;
 
         await _db.SaveChangesAsync();
-
-        await _db.Units.Where(u => u.PropertyId == id)
-            .ExecuteUpdateAsync(s => s.SetProperty(u => u.Amenities, amenitiesJoined));
 
         TempData["Success"] = "Property updated successfully.";
         return RedirectToAction(nameof(Manage));

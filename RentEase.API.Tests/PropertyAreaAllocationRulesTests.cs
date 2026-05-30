@@ -14,11 +14,21 @@ public class PropertyAreaAllocationRulesTests
     }
 
     [Fact]
-    public void SplitPropertyAcrossFloors_SumsToTotal()
+    public void SplitPropertyAcrossFloors_RepeatsSamePlateForEveryFloor()
     {
         var parts = PropertyAreaAllocationRules.SplitPropertyAcrossFloors(1000m, 3);
         Assert.Equal(3, parts.Count);
-        Assert.True(PropertyAreaAllocationRules.NearlyEqual(parts.Sum(), 1000m));
+        Assert.All(parts, p => Assert.Equal(1000m, p));
+    }
+
+    [Fact]
+    public void BuildDefaultFloorPlans_FloorCountDoesNotShrinkPerFloorPlate()
+    {
+        var oneFloor = PropertyAreaAllocationRules.BuildDefaultFloorPlans(500m, new[] { 1 });
+        var threeFloors = PropertyAreaAllocationRules.BuildDefaultFloorPlans(500m, new[] { 1, 1, 1 });
+
+        Assert.Equal(500m, oneFloor[0].FloorPlateSqm);
+        Assert.All(threeFloors, p => Assert.Equal(500m, p.FloorPlateSqm));
     }
 
     [Fact]

@@ -1,0 +1,91 @@
+@model PropertyLeasing.MVC.ViewModels.ReUploadDocumentsViewModel
+@{
+    ViewData["Title"] = "Re-upload Documents";
+    var uploadHint = Model.RejectedDocumentCount == 1
+        ? "Upload one new PDF to replace the rejected file (max 10 MB)."
+        : $"Upload {Model.RejectedDocumentCount} new PDFs to replace the rejected files (max 10 MB each). You may submit one or both now.";
+}
+
+<div class="row justify-content-center">
+    <div class="col-md-7">
+        <div class="card shadow-sm">
+            <div class="card-header bg-warning text-dark">
+                <h4 class="mb-0">
+                    <i class="fa fa-file-pdf me-2"></i>Re-upload Rejected Documents
+                </h4>
+            </div>
+            <div class="card-body">
+                @if (TempData["Error"] != null)
+                {
+                    <div class="alert alert-danger alert-dismissible fade show">
+                        @TempData["Error"]
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                }
+                @if (TempData["Success"] != null)
+                {
+                    <div class="alert alert-success alert-dismissible fade show">
+                        @TempData["Success"]
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                }
+                <div class="alert alert-info mb-4">
+                    <strong>Application #@Model.ApplicationId</strong> — Unit @Model.UnitNumber · @Model.PropertyName<br />
+                    <span class="small">Your application stays under <strong>Screening</strong>. @uploadHint</span>
+                </div>
+
+                <form asp-action="ReUploadDocuments" asp-route-id="@Model.ApplicationId" method="post" enctype="multipart/form-data">
+                    @Html.AntiForgeryToken()
+                    @if (!ViewData.ModelState.IsValid)
+                    {
+                        <div asp-validation-summary="All" class="alert alert-danger small py-2"></div>
+                    }
+
+                    @if (Model.NeedsNationalId)
+                    {
+                        <div class="mb-4 p-3 border border-danger rounded">
+                            <h6 class="text-danger fw-semibold">National ID — Rejected</h6>
+                            @if (!string.IsNullOrWhiteSpace(Model.NationalIdRejectionReason))
+                            {
+                                <div class="alert alert-danger py-2 mb-3">
+                                    <strong>Manager note:</strong> @Model.NationalIdRejectionReason
+                                </div>
+                            }
+                            <label asp-for="NationalIdFile" class="form-label fw-semibold"></label>
+                            <input asp-for="NationalIdFile" type="file" class="form-control" accept=".pdf,application/pdf" />
+                            <span asp-validation-for="NationalIdFile" class="text-danger small"></span>
+                        </div>
+                    }
+
+                    @if (Model.NeedsSalaryIncome)
+                    {
+                        <div class="mb-4 p-3 border border-danger rounded">
+                            <h6 class="text-danger fw-semibold">Salary / Income Proof — Rejected</h6>
+                            @if (!string.IsNullOrWhiteSpace(Model.SalaryIncomeRejectionReason))
+                            {
+                                <div class="alert alert-danger py-2 mb-3">
+                                    <strong>Manager note:</strong> @Model.SalaryIncomeRejectionReason
+                                </div>
+                            }
+                            <label asp-for="SalaryIncomeFile" class="form-label fw-semibold"></label>
+                            <input asp-for="SalaryIncomeFile" type="file" class="form-control" accept=".pdf,application/pdf" />
+                            <span asp-validation-for="SalaryIncomeFile" class="text-danger small"></span>
+                        </div>
+                    }
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-warning flex-fill">
+                            <i class="fa fa-upload me-1"></i>
+                            @(Model.RejectedDocumentCount > 1 ? "Submit Document(s)" : "Submit New Document")
+                        </button>
+                        <a asp-action="Details" asp-route-id="@Model.ApplicationId" class="btn btn-outline-secondary">Back to Application</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{ await Html.RenderPartialAsync("_ValidationScriptsPartial"); }
+}

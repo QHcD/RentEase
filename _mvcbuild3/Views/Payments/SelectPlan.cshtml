@@ -1,0 +1,233 @@
+@model PropertyLeasing.MVC.ViewModels.SelectPlanViewModel
+@{
+    ViewData["Title"] = "Choose Payment Plan";
+}
+
+<div class="container" style="max-width:750px;">
+    <div class="d-flex align-items-center mb-4">
+        <i class="fa fa-credit-card fa-2x text-primary me-3"></i>
+        <div>
+            <h2 class="mb-0">Choose Your Payment Plan</h2>
+            <small class="text-muted">@Model.PropertyName — Unit @Model.UnitNumber</small>
+        </div>
+    </div>
+
+    @if (!ViewData.ModelState.IsValid)
+    {
+        <div class="alert alert-danger">
+            <i class="fa fa-exclamation-circle me-2"></i>Please select a payment plan.
+        </div>
+    }
+
+    <!-- Lease Summary -->
+    <div class="card bg-light border-0 mb-4">
+        <div class="card-body">
+            <div class="row text-center">
+                <div class="col-4 border-end">
+                    <div class="text-muted small">Lease Period</div>
+                    @if (Model.IsPartialMonth)
+                    {
+                        <div class="fw-bold text-warning">@Model.ActualDays days</div>
+                        <div class="badge bg-warning text-dark mt-1" style="font-size:.72rem;">
+                            Pro-rated
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="fw-bold">
+                            @Model.TotalMonths month@(Model.TotalMonths > 1 ? "s" : "")
+                            @if (Model.ExtraDays > 0)
+                            {
+                                <span class="text-warning ms-1">+ @Model.ExtraDays day@(Model.ExtraDays > 1 ? "s" : "")</span>
+                            }
+                        </div>
+                    }
+                    <div class="text-muted small mt-1">
+                        @Model.LeaseStartDate.ToString("dd MMM yyyy") – @Model.LeaseEndDate.ToString("dd MMM yyyy")
+                    </div>
+                </div>
+                <div class="col-4 border-end">
+                    <div class="text-muted small">Monthly Rent</div>
+                    <div class="fw-bold text-success fs-5">BD @Model.MonthlyRent.ToString("N2")</div>
+                    @if (Model.IsPartialMonth)
+                    {
+                        <div class="text-muted" style="font-size:.75rem;">
+                            (@Model.ActualDays/30 days)
+                        </div>
+                    }
+                </div>
+                <div class="col-4">
+                    <div class="text-muted small">
+                        @(Model.IsPartialMonth ? "Pro-rated Amount" : "Total Amount")
+                    </div>
+                    <div class="fw-bold text-primary fs-5">BD @Model.TotalAmount.ToString("N2")</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* Extra days info banner *@
+    @if (!Model.IsPartialMonth && Model.ExtraDays > 0)
+    {
+        <div class="alert alert-info d-flex gap-2 align-items-start mb-4 py-2">
+            <i class="fa fa-circle-info fa-lg text-info mt-1"></i>
+            <div>
+                <strong>Your lease includes @Model.ExtraDays extra day@(Model.ExtraDays > 1 ? "s" : "") beyond @Model.TotalMonths full month@(Model.TotalMonths > 1 ? "s" : "").</strong><br />
+                A pro-rated charge of <strong>BD @Model.ExtraAmount.ToString("N3")</strong>
+                (@Model.MonthlyRent.ToString("N3") / 30 × @Model.ExtraDays days)
+                will be <strong>added to your first installment</strong> if you choose Monthly payments,
+                or included in the full amount if you pay in full.
+            </div>
+        </div>
+    }
+
+    @* Partial-month info banner *@
+    @if (Model.IsPartialMonth)
+    {
+        <div class="alert alert-warning d-flex gap-2 align-items-center mb-4 py-2">
+            <i class="fa fa-circle-info fa-lg text-warning"></i>
+            <div>
+                <strong>Short-term lease (@Model.ActualDays days)</strong> — amount is calculated proportionally:
+                <strong>BD @Model.MonthlyRent.ToString("N2") × @Model.ActualDays / 30 = BD @Model.TotalAmount.ToString("N2")</strong>.
+                Only a single full payment is available for leases under one month.
+            </div>
+        </div>
+    }
+
+    <form asp-action="SelectPlan" method="post">
+        <input type="hidden" asp-for="LeaseId" />
+        <input type="hidden" asp-for="UnitNumber" />
+        <input type="hidden" asp-for="PropertyName" />
+        <input type="hidden" asp-for="LeaseStartDate" />
+        <input type="hidden" asp-for="LeaseEndDate" />
+        <input type="hidden" asp-for="MonthlyRent" />
+        <input type="hidden" asp-for="SecurityDeposit" />
+        <input type="hidden" asp-for="TotalMonths" />
+        <input type="hidden" asp-for="TotalAmount" />
+        <input type="hidden" asp-for="ActualDays" />
+        <input type="hidden" asp-for="IsPartialMonth" />
+        <input type="hidden" asp-for="ExtraDays" />
+        <input type="hidden" asp-for="ExtraAmount" />
+
+        <div class="row g-3 mb-4 @(Model.IsPartialMonth ? "justify-content-center" : "")">
+
+            <!-- Full Payment Card -->
+            <div class="@(Model.IsPartialMonth ? "col-md-6" : "col-md-6")">
+                <label class="w-100 h-100" style="cursor:pointer;">
+                    <input type="radio" asp-for="SelectedPlan" value="Full"
+                           class="d-none plan-radio" id="planFull" />
+                    <div class="card h-100 border-2 plan-card @(Model.IsPartialMonth ? "border-success shadow" : "")"
+                         id="cardFull">
+                        <div class="card-body text-center p-4">
+                            <div class="mb-3">
+                                <i class="fa fa-money-bill-wave fa-3x text-success"></i>
+                            </div>
+                            <h5 class="fw-bold">Pay in Full</h5>
+                            <p class="text-muted small mb-3">
+                                @if (Model.IsPartialMonth)
+                                { <span>Pro-rated payment for @Model.ActualDays days.</span> }
+                                else
+                                { <span>Pay the entire lease amount now and enjoy peace of mind.</span> }
+                            </p>
+                            <div class="bg-success bg-opacity-10 rounded p-2">
+                                <div class="text-muted small">Total Due Now</div>
+                                <div class="fs-4 fw-bold text-success">BD @Model.TotalAmount.ToString("N2")</div>
+                            </div>
+                            <div class="mt-2">
+                                <span class="badge bg-success">
+                                    @(Model.IsPartialMonth ? "One-time pro-rated payment" : "One-time payment")
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </label>
+            </div>
+
+            @* Monthly Installments — hidden for partial-month leases *@
+            @if (!Model.IsPartialMonth)
+            {
+                <div class="col-md-6">
+                    <label class="w-100 h-100" style="cursor:pointer;">
+                        <input type="radio" asp-for="SelectedPlan" value="Monthly"
+                               class="d-none plan-radio" id="planMonthly" />
+                        <div class="card h-100 border-2 plan-card" id="cardMonthly">
+                            <div class="card-body text-center p-4">
+                                <div class="mb-3">
+                                    <i class="fa fa-calendar-alt fa-3x text-primary"></i>
+                                </div>
+                                <h5 class="fw-bold">Monthly Installments</h5>
+                                <p class="text-muted small mb-3">Pay month by month. First installment is due today.</p>
+                                <div class="bg-primary bg-opacity-10 rounded p-2">
+                                    @if (Model.ExtraDays > 0)
+                                    {
+                                        <div class="text-muted small">1st Installment</div>
+                                        <div class="fs-4 fw-bold text-primary">
+                                            BD @((Model.MonthlyRent + Model.ExtraAmount).ToString("N3"))
+                                        </div>
+                                        <div class="text-muted" style="font-size:.75rem;">
+                                            BD @Model.MonthlyRent.ToString("N3") rent + BD @Model.ExtraAmount.ToString("N3") (@Model.ExtraDays days)
+                                        </div>
+                                        <div class="text-muted small mt-1">Then BD @Model.MonthlyRent.ToString("N2") / month</div>
+                                    }
+                                    else
+                                    {
+                                        <div class="text-muted small">Per Month</div>
+                                        <div class="fs-4 fw-bold text-primary">BD @Model.MonthlyRent.ToString("N2")</div>
+                                    }
+                                </div>
+                                <div class="mt-2">
+                                    <span class="badge bg-primary">@Model.TotalMonths installments</span>
+                                    @if (Model.ExtraDays > 0)
+                                    {
+                                        <span class="badge bg-warning text-dark ms-1">+ @Model.ExtraDays-day charge</span>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </label>
+                </div>
+            }
+        </div>
+
+        <div class="d-flex justify-content-between">
+            <a asp-controller="LeaseApplications" asp-action="Index" asp-route-tab="leases"
+               class="btn btn-outline-secondary">
+                <i class="fa fa-arrow-left me-1"></i>Back
+            </a>
+            <button type="submit" class="btn btn-primary px-4" id="proceedBtn"
+                    @(Model.IsPartialMonth ? "" : "disabled")>
+                <i class="fa fa-arrow-right me-1"></i>Proceed to Checkout
+            </button>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+<script>
+    const radios     = document.querySelectorAll('.plan-radio');
+    const proceedBtn = document.getElementById('proceedBtn');
+
+    // For partial month: Full is already pre-selected — mark card immediately
+    document.addEventListener('DOMContentLoaded', () => {
+        const checked = document.querySelector('.plan-radio:checked');
+        if (checked) {
+            const card = document.getElementById('card' + (checked.value === 'Full' ? 'Full' : 'Monthly'));
+            if (card) {
+                card.classList.add(checked.value === 'Full' ? 'border-success' : 'border-primary', 'shadow');
+                proceedBtn.disabled = false;
+            }
+        }
+    });
+
+    radios.forEach(radio => {
+        radio.addEventListener('change', function () {
+            document.querySelectorAll('.plan-card').forEach(c =>
+                c.classList.remove('border-primary', 'border-success', 'shadow'));
+            const card  = document.getElementById('card' + (this.value === 'Full' ? 'Full' : 'Monthly'));
+            const color = this.value === 'Full' ? 'border-success' : 'border-primary';
+            card.classList.add(color, 'shadow');
+            proceedBtn.disabled = false;
+        });
+    });
+</script>
+}

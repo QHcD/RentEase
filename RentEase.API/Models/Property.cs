@@ -42,6 +42,10 @@ public partial class Property
     /// <summary>Gross internal floor area (m²) for the whole building.</summary>
     public double? TotalSizeSqm { get; set; }
 
+    /// <summary>Building-wide amenities (comma-separated), shared by all units.</summary>
+    [StringLength(250)]
+    public string? Amenities { get; set; }
+
     [InverseProperty("Property")]
     public virtual ICollection<Unit> Units { get; set; } = new List<Unit>();
 

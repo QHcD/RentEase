@@ -1,0 +1,109 @@
+@model PropertyLeasing.MVC.ViewModels.ApplyRenewViewModel
+@{
+    ViewData["Title"] = "Apply for Lease Renewal";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2><i class="fa fa-sync me-2 text-info"></i>Apply for Lease Renewal</h2>
+    <a asp-action="LeaseDetails" asp-route-id="@Model.LeaseId"
+       class="btn btn-outline-secondary btn-sm">
+        <i class="fa fa-arrow-left me-1"></i>Back to Lease
+    </a>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-md-7">
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-light">
+                <i class="fa fa-info-circle me-2"></i>Renewal Details
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">Unit</dt>
+                    <dd class="col-sm-8">@Model.UnitNumber</dd>
+
+                    <dt class="col-sm-4">Property</dt>
+                    <dd class="col-sm-8">@Model.PropertyName</dd>
+
+                    @if (Model.MonthlyRent.HasValue)
+                    {
+                        <dt class="col-sm-4">Monthly Rent</dt>
+                        <dd class="col-sm-8 fw-semibold text-success">BD @Model.MonthlyRent.Value.ToString("N2")</dd>
+                    }
+
+                    <dt class="col-sm-4">New Start Date</dt>
+                    <dd class="col-sm-8">
+                        <strong>@Model.RequestedStartDate.ToString("dd MMM yyyy")</strong>
+                        <span class="badge bg-info ms-2">Fixed</span>
+                        <small class="text-muted d-block">Automatically set to the day after your current lease ends.</small>
+                    </dd>
+                </dl>
+            </div>
+        </div>
+
+        <div class="card shadow-sm border-info">
+            <div class="card-header bg-info text-white">
+                <i class="fa fa-sync me-2"></i>Renewal Application
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="fa fa-info-circle me-2"></i>
+                    This renewal application will go through the same approval process as a regular application
+                    (Pending → Screening → Approved). Your current lease continues until its original end date.
+                </div>
+
+                <form asp-action="ApplyRenew" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="LeaseId"            value="@Model.LeaseId" />
+                    <input type="hidden" name="UnitNumber"         value="@Model.UnitNumber" />
+                    <input type="hidden" name="PropertyName"       value="@Model.PropertyName" />
+                    <input type="hidden" name="MonthlyRent"        value="@Model.MonthlyRent" />
+                    <input type="hidden" name="RequestedStartDate" value="@Model.RequestedStartDate.ToString("yyyy-MM-dd")" />
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Start Date</label>
+                        <input type="text" class="form-control bg-light"
+                               value="@Model.RequestedStartDate.ToString("dd MMM yyyy")" readonly />
+                        <div class="form-text text-muted">Fixed — day after your current lease ends.</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="RequestedEndDate" class="form-label fw-semibold">
+                            End Date <span class="text-danger">*</span>
+                        </label>
+                        <input asp-for="RequestedEndDate" type="date"
+                               class="form-control @(ViewData.ModelState["RequestedEndDate"]?.Errors.Any() == true ? "is-invalid" : "")"
+                               min="@Model.MinEndDate"
+                               max="@Model.MaxEndDate" />
+                        <span asp-validation-for="RequestedEndDate" class="invalid-feedback"></span>
+                        <div class="form-text text-muted">
+                            Maximum 1 year from start date
+                            (<strong>@Model.RequestedStartDate.AddYears(1).ToString("dd MMM yyyy")</strong>).
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label asp-for="Notes" class="form-label fw-semibold">Notes (optional)</label>
+                        <textarea asp-for="Notes" class="form-control" rows="3"
+                                  placeholder="Any additional notes or requests..."></textarea>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-info">
+                            <i class="fa fa-paper-plane me-2"></i>Submit Renewal Application
+                        </button>
+                        <a asp-action="LeaseDetails" asp-route-id="@Model.LeaseId"
+                           class="btn btn-outline-secondary">
+                            <i class="fa fa-times me-1"></i>Cancel
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{ await Html.RenderPartialAsync("_ValidationScriptsPartial"); }
+}

@@ -1,7 +1,8 @@
 namespace PropertyLeasing.BusinessLogic;
 
 /// <summary>
-/// Splits property gross floor area across floors and units, reserving a fixed share for circulation (paths, elevators).
+/// Splits rentable area across units on a floor, reserving a fixed share for circulation (paths, elevators).
+/// The entered property size is the gross plate area for each floor (all floors are the same size).
 /// </summary>
 public static class PropertyAreaAllocationRules
 {
@@ -26,9 +27,15 @@ public static class PropertyAreaAllocationRules
     public static decimal GetRentableAreaSqm(decimal floorPlateSqm) =>
         decimal.Round(floorPlateSqm - GetCommonAreaSqm(floorPlateSqm), 2, MidpointRounding.AwayFromZero);
 
-    /// <summary>Equal floor plates; last floor absorbs rounding so the sum matches total exactly.</summary>
-    public static IReadOnlyList<decimal> SplitPropertyAcrossFloors(decimal totalPropertySqm, int floorCount) =>
-        DistributeExactTotal(totalPropertySqm, floorCount);
+    /// <summary>Each floor uses the same gross plate area as the entered property size.</summary>
+    public static IReadOnlyList<decimal> SplitPropertyAcrossFloors(decimal floorPlateSqm, int floorCount)
+    {
+        if (floorCount < 1)
+            throw new ArgumentOutOfRangeException(nameof(floorCount), "Floor count must be at least 1.");
+
+        var plate = decimal.Round(floorPlateSqm, 2, MidpointRounding.AwayFromZero);
+        return Enumerable.Repeat(plate, floorCount).ToList();
+    }
 
     public static IReadOnlyList<decimal> BuildDefaultUnitAreas(decimal floorPlateSqm, int unitsOnFloor) =>
         DistributeExactTotal(GetRentableAreaSqm(floorPlateSqm), unitsOnFloor);
@@ -123,9 +130,9 @@ public static class PropertyAreaAllocationRules
             if (rentable < minRentableRequired)
             {
                 errors.Add(
-                    $"Floor {floorNumber}: total property size is too small for {unitsOnFloor} unit(s) " +
+                    $"Floor {floorNumber}: per-floor size is too small for {unitsOnFloor} unit(s) " +
                     $"(need at least {minRentableRequired} m² rentable; this floor has {rentable} m²). " +
-                    "Increase the property size or reduce units on this floor.");
+                    "Increase the per-floor size or reduce units on this floor.");
             }
         }
 

@@ -1,18 +1,7 @@
 namespace PropertyLeasing.MVC.Helpers;
 
+/// <summary>Re-exports standard amenity labels from business logic for MVC views.</summary>
 public static class PropertyAmenityOptions
 {
-    public static readonly IReadOnlyList<string> All = new[]
-    {
-        "Parking",
-        "Gym",
-        "Pool",
-        "Sea View",
-        "Balcony",
-        "Central AC",
-        "24h Security",
-        "Elevator",
-        "Pet Friendly",
-        "Concierge"
-    };
+    public static IReadOnlyList<string> All => PropertyLeasing.BusinessLogic.PropertyAmenityCatalog.StandardOptions;
 }

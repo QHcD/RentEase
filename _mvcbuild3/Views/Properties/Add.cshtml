@@ -1,0 +1,664 @@
+@model PropertyLeasing.MVC.ViewModels.CreatePropertyViewModel
+@using PropertyLeasing.MVC.Helpers
+@{
+    ViewData["Title"] = "Add Property";
+    ViewData["AmenitiesApplyHint"] = "Shared by all units in this property.";
+}
+
+<div class="row justify-content-center">
+    <div class="col-lg-9">
+        <div class="card shadow-sm">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="fa fa-plus me-2"></i>Add New Property</h5>
+            </div>
+            <div class="card-body">
+                <form asp-action="Add" method="post" enctype="multipart/form-data" id="addPropertyForm">
+                    @Html.AntiForgeryToken()
+                    @if (!ViewData.ModelState.IsValid)
+                    {
+                        <div asp-validation-summary="All" class="alert alert-danger py-2 small"></div>
+                    }
+                    @if (ViewBag.AreaWarnings is IEnumerable<string> areaWarnings && areaWarnings.Any())
+                    {
+                        <div class="alert alert-warning py-2 small">
+                            @foreach (var warning in areaWarnings)
+                            {
+                                <div>@warning</div>
+                            }
+                        </div>
+                    }
+
+                    <div class="mb-3">
+                        <label asp-for="Name" class="form-label"></label>
+                        <input asp-for="Name" class="form-control" />
+                        <span asp-validation-for="Name" class="text-danger small"></span>
+                    </div>
+                    <div class="mb-3">
+                        <label asp-for="Description" class="form-label"></label>
+                        <textarea asp-for="Description" class="form-control" rows="2"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label asp-for="Address" class="form-label"></label>
+                        <input asp-for="Address" class="form-control" />
+                        <span asp-validation-for="Address" class="text-danger small"></span>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label asp-for="City" class="form-label"></label>
+                            <input asp-for="City" class="form-control" />
+                        </div>
+                        <div class="col-md-6">
+                            <label asp-for="PropertyType" class="form-label"></label>
+                            <select asp-for="PropertyType" class="form-select">
+                                <option value="">-- Select --</option>
+                                <option>Residential</option>
+                                <option>Commercial</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <partial name="_PropertyAmenitiesEditor" model="Model" />
+                    <span asp-validation-for="CustomAmenities" class="text-danger small d-block"></span>
+
+                    <div class="row g-3 mb-1">
+                        <div class="col-md-6">
+                            <label asp-for="TotalSizeSqm" class="form-label"></label>
+                            <div class="input-group">
+                                <input asp-for="TotalSizeSqm" class="form-control" type="number" min="50" max="1000000" step="0.01" id="TotalSizeSqm" />
+                                <span class="input-group-text">m²</span>
+                            </div>
+                            <span asp-validation-for="TotalSizeSqm" class="text-danger small"></span>
+                        </div>
+                        <div class="col-md-6">
+                            <label asp-for="NumberOfFloors" class="form-label"></label>
+                            <input asp-for="NumberOfFloors" class="form-control" type="number" min="1" max="99" id="NumberOfFloors" />
+                            <span asp-validation-for="NumberOfFloors" class="text-danger small"></span>
+                        </div>
+                        <div class="col-12">
+                            <div class="form-text">Total property size is the gross internal area for the whole building (50–1,000,000 m²).</div>
+                        </div>
+                    </div>
+
+                    <div class="row g-2 mb-3 align-items-end">
+                        <div class="col-md-12">
+                            <label asp-for="UnitNumberPrefix" class="form-label"></label>
+                            <input asp-for="UnitNumberPrefix" class="form-control" maxlength="20" placeholder="e.g. JUU" />
+                            <span asp-validation-for="UnitNumberPrefix" class="text-danger small"></span>
+                        </div>
+                    </div>
+                    <p class="form-text text-muted small mb-3">
+                        The same optional prefix applies to all floors (e.g. <strong>JUU 1014</strong> on floor 10, or <strong>1014</strong> if left blank).
+                    </p>
+
+                    <h6 class="text-muted mb-2">Units &amp; areas by floor</h6>
+                    <p class="form-text text-muted small mb-2">
+                        Each floor reserves <strong>@((PropertyLeasing.BusinessLogic.PropertyAreaAllocationRules.CommonAreaFraction * 100).ToString("0"))%</strong>
+                        for paths and elevators. Default unit sizes split the <strong>rentable</strong> area evenly (minimum @PropertyLeasing.BusinessLogic.PropertyAreaAllocationRules.MinUnitAreaSqm.ToString("0") m² per unit). You can adjust each unit — totals must still balance.
+                    </p>
+                    <div id="floorRowsContainer" class="border rounded p-3 bg-light mb-2"></div>
+                    <div id="areaAllocationSummary" class="alert alert-secondary py-2 small mb-3" role="status"></div>
+
+                    <!-- Property Images -->
+                    <hr />
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">
+                            <i class="fa fa-images me-1 text-primary"></i>Property Images <span class="text-muted fw-normal small">(optional — jpg, jpeg, png, webp)</span>
+                        </label>
+                        <input type="file" name="Images" id="propImagesInput"
+                               class="form-control" multiple
+                               accept=".jpg,.jpeg,.png,.webp" />
+                        <div class="form-text">You can select multiple photos at once. They will be displayed as a carousel on the property card.</div>
+                        <!-- Live preview -->
+                        <div id="imgPreviewRow" class="d-flex flex-wrap gap-2 mt-2"></div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-success">
+                            <i class="fa fa-save me-1"></i> Save
+                        </button>
+                        <a asp-action="Manage" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    <script>
+        (function () {
+            var customListEl = document.getElementById('customAmenitiesList');
+            var addBtn = document.getElementById('addCustomAmenity');
+            var maxCustom = @PropertyLeasing.BusinessLogic.PropertyAmenitySelection.MaxCustomAmenityItems;
+            var maxLen = @PropertyLeasing.BusinessLogic.PropertyAmenitySelection.MaxCustomAmenityItemLength;
+            var maxCustomUnit = maxCustom;
+
+            function readPropertyAmenitiesFromForm() {
+                var list = [];
+                document.querySelectorAll('.amenity-fixed-cb:checked').forEach(function (cb) {
+                    if (cb.value) list.push(cb.value.trim());
+                });
+                if (customListEl) {
+                    customListEl.querySelectorAll('.custom-amenity-row input[type=text]').forEach(function (inp) {
+                        var v = (inp.value || '').trim();
+                        if (v) list.push(v);
+                    });
+                }
+                return list;
+            }
+
+            function isDuplicateOfPropertyAmenity(name) {
+                var trimmed = (name || '').trim();
+                if (!trimmed) return false;
+                return readPropertyAmenitiesFromForm().some(function (p) {
+                    return p.toLowerCase() === trimmed.toLowerCase();
+                });
+            }
+
+            function validateUnitAmenityInput(input) {
+                if (!input) return;
+                var value = (input.value || '').trim();
+                if (!value) {
+                    input.setCustomValidity('');
+                    return;
+                }
+                input.setCustomValidity(
+                    isDuplicateOfPropertyAmenity(value)
+                        ? 'This amenity is already listed under property amenities.'
+                        : '');
+            }
+
+            function validateAllUnitAmenityInputs() {
+                document.querySelectorAll('.unit-custom-amenity-input').forEach(validateUnitAmenityInput);
+            }
+
+            document.querySelectorAll('.amenity-fixed-cb').forEach(function (cb) {
+                function sync() {
+                    var lbl = cb.closest('.amenity-fixed-label');
+                    if (!lbl) return;
+                    lbl.classList.toggle('btn-primary', cb.checked);
+                    lbl.classList.toggle('btn-outline-secondary', !cb.checked);
+                    var icon = lbl.querySelector('.amenity-check-icon');
+                    if (icon) icon.classList.toggle('invisible', !cb.checked);
+                    validateAllUnitAmenityInputs();
+                }
+                cb.addEventListener('change', sync);
+                sync();
+            });
+
+            function reindexCustomRows() {
+                if (!customListEl) return;
+                customListEl.querySelectorAll('.custom-amenity-row input[type=text]').forEach(function (inp, idx) {
+                    inp.name = 'CustomAmenities[' + idx + ']';
+                });
+            }
+
+            function bindRemove(btn) {
+                btn.addEventListener('click', function () {
+                    var row = btn.closest('.custom-amenity-row');
+                    if (row) row.remove();
+                    reindexCustomRows();
+                    validateAllUnitAmenityInputs();
+                });
+            }
+
+            if (customListEl) {
+                customListEl.querySelectorAll('.remove-custom-amenity').forEach(bindRemove);
+            }
+
+            if (addBtn && customListEl) {
+                addBtn.addEventListener('click', function () {
+                    var count = customListEl.querySelectorAll('.custom-amenity-row').length;
+                    if (count >= maxCustom) return;
+                    var wrap = document.createElement('div');
+                    wrap.className = 'custom-amenity-row input-group input-group-sm';
+                    wrap.innerHTML =
+                        '<input type="text" class="form-control" maxlength="' + maxLen + '" placeholder="Custom amenity name" />' +
+                        '<button type="button" class="btn btn-outline-danger remove-custom-amenity" title="Remove">' +
+                        '<i class="fa fa-times"></i></button>';
+                    customListEl.appendChild(wrap);
+                    bindRemove(wrap.querySelector('.remove-custom-amenity'));
+                    reindexCustomRows();
+                    validateAllUnitAmenityInputs();
+                });
+            }
+
+            if (customListEl) {
+                customListEl.querySelectorAll('.custom-amenity-row input[type=text]').forEach(function (inp) {
+                    inp.addEventListener('input', validateAllUnitAmenityInputs);
+                    inp.addEventListener('change', validateAllUnitAmenityInputs);
+                });
+            }
+
+            var floorInput = document.getElementById('NumberOfFloors');
+            var totalSizeInput = document.getElementById('TotalSizeSqm');
+            var container = document.getElementById('floorRowsContainer');
+            var summaryEl = document.getElementById('areaAllocationSummary');
+            if (!floorInput || !container || !totalSizeInput) return;
+
+            var commonFraction = @PropertyLeasing.BusinessLogic.PropertyAreaAllocationRules.CommonAreaFraction.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var areaTolerance = @PropertyLeasing.BusinessLogic.PropertyAreaAllocationRules.AreaToleranceSqm.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var minUnitArea = @PropertyLeasing.BusinessLogic.PropertyAreaAllocationRules.MinUnitAreaSqm.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+            var initialRows = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
+                Model.FloorRows ?? new List<FloorUnitRowInput>(),
+                new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = null }));
+
+            function round2(n) {
+                return Math.round((n + Number.EPSILON) * 100) / 100;
+            }
+
+            function clampFloors(n) {
+                if (isNaN(n) || n < 1) return 1;
+                if (n > 99) return 99;
+                return n;
+            }
+
+            function readTotalSize() {
+                var n = parseFloat(totalSizeInput.value);
+                if (isNaN(n) || n < 50) return 50;
+                if (n > 1000000) return 1000000;
+                return n;
+            }
+
+            function distributeExact(total, count) {
+                total = round2(total);
+                if (count < 1) return [];
+                var even = round2(total / count);
+                var parts = [];
+                var allocated = 0;
+                for (var i = 0; i < count - 1; i++) {
+                    parts.push(even);
+                    allocated += even;
+                }
+                parts.push(round2(total - allocated));
+                return parts;
+            }
+
+            function commonArea(floorPlate) {
+                return round2(floorPlate * commonFraction);
+            }
+
+            function rentableArea(floorPlate) {
+                return round2(floorPlate - commonArea(floorPlate));
+            }
+
+            function maxUnitsOnFloor(floorPlate) {
+                return Math.max(0, Math.floor(rentableArea(floorPlate) / minUnitArea));
+            }
+
+            function defaultUnitAreas(floorPlate, unitsOnFloor) {
+                return distributeExact(rentableArea(floorPlate), unitsOnFloor);
+            }
+
+            function sumAreas(areas) {
+                return round2(areas.reduce(function (a, b) { return a + b; }, 0));
+            }
+
+            function readUnitAreasFromRow(row) {
+                var areas = [];
+                row.querySelectorAll('.unit-area-input').forEach(function (inp) {
+                    areas.push(parseFloat(inp.value) || 0);
+                });
+                return areas;
+            }
+
+            function readUnitCustomAmenitiesFromRow(row) {
+                var lists = [];
+                row.querySelectorAll('.unit-row').forEach(function (unitRow) {
+                    var customs = [];
+                    unitRow.querySelectorAll('.unit-custom-amenity-input').forEach(function (inp) {
+                        var v = (inp.value || '').trim();
+                        if (v) customs.push(v);
+                    });
+                    lists.push(customs);
+                });
+                return lists;
+            }
+
+            function reindexUnitAmenityInputs(unitRow, floorIdx, unitIdx) {
+                unitRow.querySelectorAll('.unit-custom-amenity-row').forEach(function (wrap, amenityIdx) {
+                    var inp = wrap.querySelector('.unit-custom-amenity-input');
+                    if (inp) inp.name = 'FloorRows[' + floorIdx + '].UnitCustomAmenities[' + unitIdx + '][' + amenityIdx + ']';
+                });
+            }
+
+            function appendUnitAmenityInput(listEl, floorIdx, unitIdx, value) {
+                var wrap = document.createElement('div');
+                wrap.className = 'unit-custom-amenity-row input-group input-group-sm';
+                wrap.innerHTML =
+                    '<input type="text" class="form-control unit-custom-amenity-input" maxlength="' + maxLen + '" placeholder="Unit-specific amenity" value="' + (value || '').replace(/"/g, '&quot;') + '" />' +
+                    '<button type="button" class="btn btn-outline-danger remove-unit-amenity" title="Remove"><i class="fa fa-times"></i></button>';
+                listEl.appendChild(wrap);
+                wrap.querySelector('.remove-unit-amenity').addEventListener('click', function () {
+                    wrap.remove();
+                    var unitRow = listEl.closest('.unit-row');
+                    if (unitRow) reindexUnitAmenityInputs(unitRow, floorIdx, unitIdx);
+                    validateAllUnitAmenityInputs();
+                });
+                var inp = wrap.querySelector('.unit-custom-amenity-input');
+                inp.addEventListener('input', function () { validateUnitAmenityInput(inp); });
+                inp.addEventListener('change', function () { validateUnitAmenityInput(inp); });
+                var unitRow = listEl.closest('.unit-row');
+                if (unitRow) reindexUnitAmenityInputs(unitRow, floorIdx, unitIdx);
+            }
+
+            function bindUnitAmenityAdd(unitRow, floorIdx, unitIdx) {
+                var btn = unitRow.querySelector('.add-unit-amenity-btn');
+                var listEl = unitRow.querySelector('.unit-custom-amenities-list');
+                if (!btn || !listEl) return;
+                btn.addEventListener('click', function () {
+                    if (listEl.querySelectorAll('.unit-custom-amenity-row').length >= maxCustomUnit) return;
+                    appendUnitAmenityInput(listEl, floorIdx, unitIdx, '');
+                    validateAllUnitAmenityInputs();
+                });
+            }
+
+            function readCurrentRows() {
+                var rows = container.querySelectorAll('.floor-row');
+                var data = [];
+                rows.forEach(function (row) {
+                    var unitsEl = row.querySelector('.units-on-floor');
+                    data.push({
+                        UnitsOnFloor: unitsEl ? parseInt(unitsEl.value, 10) || 1 : 1,
+                        UnitAreasSqm: readUnitAreasFromRow(row),
+                        UnitCustomAmenities: readUnitCustomAmenitiesFromRow(row)
+                    });
+                });
+                return data;
+            }
+
+            function redistributeWhenUnitCountChanges(existingAreas, floorPlate, unitsOnFloor) {
+                return defaultUnitAreas(floorPlate, unitsOnFloor);
+            }
+
+            function bindFloorUnitAreas(wrap, floorIdx, rentable) {
+                var budgetEl = wrap.querySelector('.floor-budget-status');
+
+                function syncBudgetLimits() {
+                    var inputs = wrap.querySelectorAll('.unit-area-input');
+                    var values = readUnitAreasFromRow(wrap);
+                    var used = sumAreas(values);
+                    var unallocated = round2(rentable - used);
+
+                    inputs.forEach(function (inp, idx) {
+                        var others = round2(used - (parseFloat(inp.value) || 0));
+                        var maxForUnit = round2(rentable - others);
+                        inp.max = Math.max(minUnitArea, maxForUnit).toFixed(2);
+                    });
+
+                    if (budgetEl) {
+                        if (unallocated > areaTolerance && used <= rentable + areaTolerance) {
+                            budgetEl.className = 'small text-warning floor-budget-status';
+                            budgetEl.textContent = 'Unallocated: ' + unallocated.toFixed(2) + ' m² — assign to units before saving.';
+                        } else if (used > rentable + areaTolerance) {
+                            budgetEl.className = 'small text-danger floor-budget-status';
+                            budgetEl.textContent = 'Over budget by ' + round2(used - rentable).toFixed(2) + ' m² — reduce a unit size.';
+                        } else {
+                            budgetEl.className = 'small text-success floor-budget-status';
+                            budgetEl.textContent = 'Rentable area fully assigned.';
+                        }
+                    }
+                }
+
+                wrap.querySelectorAll('.unit-area-input').forEach(function (inp) {
+                    inp.addEventListener('input', function () {
+                        var val = parseFloat(inp.value);
+                        if (isNaN(val)) {
+                            syncBudgetLimits();
+                            updateSummary();
+                            return;
+                        }
+
+                        var inputs = wrap.querySelectorAll('.unit-area-input');
+                        var others = 0;
+                        inputs.forEach(function (other) {
+                            if (other !== inp)
+                                others += parseFloat(other.value) || 0;
+                        });
+                        others = round2(others);
+                        var maxAllowed = round2(rentable - others);
+                        if (val > maxAllowed)
+                            inp.value = maxAllowed.toFixed(2);
+                        if (val > 0 && val < minUnitArea)
+                            inp.setCustomValidity('Minimum ' + minUnitArea + ' m² per unit.');
+                        else
+                            inp.setCustomValidity('');
+
+                        syncBudgetLimits();
+                        updateSummary();
+                    });
+                });
+
+                syncBudgetLimits();
+            }
+
+            function renderUnitInputs(unitsHost, floorIdx, count, areas, customAmenityLists, rentable, wrap) {
+                unitsHost.innerHTML = '';
+                unitsHost.className = 'unit-areas-host d-flex flex-column gap-3';
+
+                for (var u = 0; u < count; u++) {
+                    var areaVal = (areas && areas[u] != null && !isNaN(areas[u]))
+                        ? round2(areas[u])
+                        : 0;
+                    var customs = (customAmenityLists && customAmenityLists[u]) ? customAmenityLists[u] : [];
+
+                    var row = document.createElement('div');
+                    row.className = 'unit-row border rounded p-3 bg-white';
+                    row.innerHTML =
+                        '<div class="row g-3 align-items-start">' +
+                        '<div class="col-md-4 col-lg-3">' +
+                        '<label class="form-label small mb-0" for="unit_area_' + floorIdx + '_' + u + '">Unit ' + (u + 1) + ' area (m²)</label>' +
+                        '<input type="number" class="form-control unit-area-input" id="unit_area_' + floorIdx + '_' + u + '" ' +
+                        'name="FloorRows[' + floorIdx + '].UnitAreasSqm[' + u + ']" min="' + minUnitArea + '" step="0.01" required ' +
+                        'title="Minimum ' + minUnitArea + ' m². Cannot exceed remaining rentable budget." value="' + areaVal.toFixed(2) + '" />' +
+                        '</div>' +
+                        '<div class="col-md-8 col-lg-9">' +
+                        '<label class="form-label small mb-1">Unit amenities <span class="text-muted">(optional — specific to this unit)</span></label>' +
+                        '<div class="unit-custom-amenities-list d-flex flex-column gap-1"></div>' +
+                        '<button type="button" class="btn btn-sm btn-outline-primary mt-2 add-unit-amenity-btn">' +
+                        '<i class="fa fa-plus me-1"></i>Add amenity</button>' +
+                        '</div></div>';
+
+                    var listEl = row.querySelector('.unit-custom-amenities-list');
+                    customs.forEach(function (c) { appendUnitAmenityInput(listEl, floorIdx, u, c); });
+                    bindUnitAmenityAdd(row, floorIdx, u);
+                    unitsHost.appendChild(row);
+                }
+
+                bindFloorUnitAreas(wrap, floorIdx, rentable);
+                validateAllUnitAmenityInputs();
+            }
+
+            function updateSummary() {
+                if (!summaryEl) return;
+                var totalSize = readTotalSize();
+                var floorCount = clampFloors(parseInt(floorInput.value, 10));
+                var floorPlates = distributeExact(totalSize, floorCount);
+                var prev = readCurrentRows();
+                var capacityOk = true;
+                var budgetOk = true;
+
+                for (var i = 0; i < floorCount; i++) {
+                    var floorPlate = floorPlates[i];
+                    var rentable = rentableArea(floorPlate);
+                    var row = prev[i] || { UnitsOnFloor: 1, UnitAreasSqm: [] };
+                    var unitsOnFloor = row.UnitsOnFloor || 1;
+                    var used = sumAreas(row.UnitAreasSqm || []);
+
+                    if (unitsOnFloor > maxUnitsOnFloor(floorPlate))
+                        capacityOk = false;
+                    if (used > rentable + areaTolerance)
+                        budgetOk = false;
+                }
+
+                summaryEl.className = 'alert py-2 small mb-3 ' + (capacityOk && budgetOk ? 'alert-secondary' : 'alert-warning');
+                var message = 'Building total ' + totalSize.toFixed(2) + ' m² across ' + floorCount + ' floor(s). ';
+                if (!capacityOk)
+                    message += 'Too many units on at least one floor for the minimum unit size. ';
+                else if (!budgetOk)
+                    message += 'At least one floor exceeds its rentable budget. ';
+                else
+                    message += 'Adjust unit sizes until each floor\'s rentable area is fully assigned.';
+
+                summaryEl.innerHTML = '<strong>Area check:</strong> ' + message;
+            }
+
+            function render(resetAllAreas) {
+                var n = clampFloors(parseInt(floorInput.value, 10));
+                floorInput.value = String(n);
+                totalSizeInput.value = String(readTotalSize());
+
+                var totalSize = readTotalSize();
+                var floorPlates = distributeExact(totalSize, n);
+                var snapshot = readCurrentRows();
+                var prev;
+
+                if (resetAllAreas) {
+                    prev = [];
+                    for (var fi = 0; fi < n; fi++) {
+                        var fromSnap = snapshot[fi];
+                        var fromInitial = initialRows[fi];
+                        prev.push({
+                            UnitsOnFloor: (fromSnap && fromSnap.UnitsOnFloor) ||
+                                (fromInitial && fromInitial.UnitsOnFloor) || 1,
+                            UnitAreasSqm: [],
+                            UnitCustomAmenities: []
+                        });
+                    }
+                } else {
+                    prev = snapshot;
+                }
+
+                container.innerHTML = '';
+
+                for (let floorIdx = 0; floorIdx < n; floorIdx++) {
+                    var seed = prev[floorIdx] || initialRows[floorIdx] || { UnitsOnFloor: 1, UnitAreasSqm: [], UnitCustomAmenities: [] };
+                    var unitsVal = seed.UnitsOnFloor != null ? seed.UnitsOnFloor : 1;
+                    var floorPlate = floorPlates[floorIdx];
+                    var rentable = rentableArea(floorPlate);
+                    var unitAreas = (seed.UnitAreasSqm && seed.UnitAreasSqm.length === unitsVal)
+                        ? seed.UnitAreasSqm.map(function (a) { return round2(a); })
+                        : defaultUnitAreas(floorPlate, unitsVal);
+                    var unitCustomLists = [];
+                    for (var uc = 0; uc < unitsVal; uc++) {
+                        unitCustomLists.push(
+                            (seed.UnitCustomAmenities && seed.UnitCustomAmenities[uc]) ? seed.UnitCustomAmenities[uc] : []
+                        );
+                    }
+
+                    var wrap = document.createElement('div');
+                    wrap.className = 'border rounded p-3 mb-3 bg-white floor-row';
+                    wrap.dataset.floorIndex = String(floorIdx);
+
+                    var header = document.createElement('div');
+                    header.className = 'd-flex flex-wrap align-items-center gap-2 mb-2';
+                    header.innerHTML =
+                        '<span class="badge bg-secondary">Floor ' + (floorIdx + 1) + '</span>' +
+                        '<span class="small text-muted">Rentable: <strong>' + rentable.toFixed(2) + ' m²</strong></span>' +
+                        '<span class="small floor-budget-status text-muted"></span>';
+                    wrap.appendChild(header);
+
+                    var unitsRow = document.createElement('div');
+                    unitsRow.className = 'row g-2 mb-2 align-items-end';
+                    unitsRow.innerHTML =
+                        '<div class="col-12 col-md-4">' +
+                        '<label class="form-label small mb-0" for="units_' + floorIdx + '">Units on this floor</label>' +
+                        '<input type="number" class="form-control units-on-floor" id="units_' + floorIdx + '" ' +
+                        'name="FloorRows[' + floorIdx + '].UnitsOnFloor" min="1" max="99" required value="' + unitsVal + '" />' +
+                        '</div>';
+                    wrap.appendChild(unitsRow);
+
+                    var unitsHost = document.createElement('div');
+                    unitsHost.className = 'unit-areas-host';
+                    wrap.appendChild(unitsHost);
+
+                    renderUnitInputs(unitsHost, floorIdx, unitsVal, unitAreas, unitCustomLists, rentable, wrap);
+
+                    var resetBtnRow = document.createElement('div');
+                    resetBtnRow.className = 'mt-2';
+                    var resetBtn = document.createElement('button');
+                    resetBtn.type = 'button';
+                    resetBtn.className = 'btn btn-sm btn-outline-secondary redistribute-floor-btn';
+                    resetBtn.textContent = 'Reset to equal sizes (rentable ÷ units)';
+                    resetBtn.addEventListener('click', function () {
+                        var count = parseInt(wrap.querySelector('.units-on-floor').value, 10) || 1;
+                        if (count < 1) count = 1;
+                        if (count > 99) count = 99;
+                        var plate = distributeExact(readTotalSize(), clampFloors(parseInt(floorInput.value, 10)))[floorIdx];
+                        var r = rentableArea(plate);
+                        var defaults = defaultUnitAreas(plate, count);
+                        var existingCustoms = readUnitCustomAmenitiesFromRow(wrap);
+                        var customs = [];
+                        for (var ci = 0; ci < count; ci++) {
+                            customs.push(existingCustoms[ci] || []);
+                        }
+                        renderUnitInputs(unitsHost, floorIdx, count, defaults, customs, r, wrap);
+                        updateSummary();
+                    });
+                    resetBtnRow.appendChild(resetBtn);
+                    wrap.appendChild(resetBtnRow);
+
+                    wrap.querySelector('.units-on-floor').addEventListener('change', function () {
+                        var count = parseInt(this.value, 10) || 1;
+                        if (count < 1) count = 1;
+                        if (count > 99) count = 99;
+                        this.value = String(count);
+                        var plate = distributeExact(readTotalSize(), clampFloors(parseInt(floorInput.value, 10)))[floorIdx];
+                        var r = rentableArea(plate);
+                        var defaults = defaultUnitAreas(plate, count);
+                        var existingCustoms = readUnitCustomAmenitiesFromRow(wrap);
+                        var customs = [];
+                        for (var ci = 0; ci < count; ci++) {
+                            customs.push(existingCustoms[ci] || []);
+                        }
+                        renderUnitInputs(unitsHost, floorIdx, count, defaults, customs, r, wrap);
+                        updateSummary();
+                    });
+
+                    container.appendChild(wrap);
+                }
+
+                updateSummary();
+            }
+
+            var lastRenderedFloorCount = clampFloors(parseInt(floorInput.value, 10));
+
+            function onFloorCountChange() {
+                var newCount = clampFloors(parseInt(floorInput.value, 10));
+                var resetAreas = newCount !== lastRenderedFloorCount;
+                lastRenderedFloorCount = newCount;
+                render(resetAreas);
+            }
+
+            floorInput.addEventListener('change', onFloorCountChange);
+            floorInput.addEventListener('input', onFloorCountChange);
+            totalSizeInput.addEventListener('change', function () { render(true); });
+            totalSizeInput.addEventListener('input', function () { updateSummary(); });
+
+            render(false);
+        })();
+
+        // Image preview
+        (function () {
+            var input = document.getElementById('propImagesInput');
+            var preview = document.getElementById('imgPreviewRow');
+            if (!input || !preview) return;
+            input.addEventListener('change', function () {
+                preview.innerHTML = '';
+                Array.from(input.files).forEach(function (file) {
+                    if (!file.type.startsWith('image/')) return;
+                    var reader = new FileReader();
+                    reader.onload = function (e) {
+                        var img = document.createElement('img');
+                        img.src = e.target.result;
+                        img.style.cssText = 'height:90px;width:120px;object-fit:cover;border-radius:6px;border:1px solid #dee2e6;';
+                        preview.appendChild(img);
+                    };
+                    reader.readAsDataURL(file);
+                });
+            });
+        })();
+    </script>
+}

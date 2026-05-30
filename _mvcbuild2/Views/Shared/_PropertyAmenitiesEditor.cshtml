@@ -1,0 +1,57 @@
+@model PropertyLeasing.MVC.ViewModels.IPropertyAmenitiesForm
+@using PropertyLeasing.MVC.Helpers
+@using PropertyLeasing.BusinessLogic
+@{
+    var selectedFixed = Model.SelectedFixedAmenities ?? new List<string>();
+    var customList = Model.CustomAmenities ?? new List<string>();
+    var applyHint = ViewData["AmenitiesApplyHint"] as string ?? "Applied to units.";
+}
+
+<div class="mb-4">
+    <div class="form-label">Property amenities</div>
+    <div class="d-flex flex-column gap-3">
+        <div>
+            <div class="form-label small text-muted mb-1">Standard amenities</div>
+            <div class="d-flex flex-column gap-2 align-items-stretch">
+                @foreach (var option in PropertyAmenityOptions.All)
+                {
+                    var isOn = selectedFixed.Contains(option);
+                    <label class="btn btn-sm text-start amenity-fixed-label @(isOn ? "btn-primary" : "btn-outline-secondary")">
+                        @if (isOn)
+                        {
+                            <input type="checkbox" name="SelectedFixedAmenities" value="@option" class="d-none amenity-fixed-cb" checked="checked" />
+                        }
+                        else
+                        {
+                            <input type="checkbox" name="SelectedFixedAmenities" value="@option" class="d-none amenity-fixed-cb" />
+                        }
+                        <i class="fa fa-check me-1 amenity-check-icon @(isOn ? "" : "invisible")"></i>@option
+                    </label>
+                }
+            </div>
+            <div class="form-text">Tap to toggle. @applyHint</div>
+        </div>
+        <div>
+            <div class="form-label small text-muted mb-1">Additional amenities</div>
+            <div id="customAmenitiesList" class="d-flex flex-column gap-2">
+                @for (var i = 0; i < customList.Count; i++)
+                {
+                    <div class="custom-amenity-row input-group input-group-sm">
+                        <input type="text"
+                               name="CustomAmenities[@i]"
+                               value="@customList[i]"
+                               class="form-control"
+                               maxlength="@PropertyAmenitySelection.MaxCustomAmenityItemLength"
+                               placeholder="Custom amenity name" />
+                        <button type="button" class="btn btn-outline-danger remove-custom-amenity" title="Remove">
+                            <i class="fa fa-times"></i>
+                        </button>
+                    </div>
+                }
+            </div>
+            <button type="button" id="addCustomAmenity" class="btn btn-sm btn-outline-primary mt-2">
+                <i class="fa fa-plus me-1"></i>Add amenity
+            </button>
+        </div>
+    </div>
+</div>
