@@ -1,3 +1,8 @@
+@using System.Security.Claims
+@using PropertyLeasing.BusinessLogic
+@using PropertyLeasing.API.Data
+@using Microsoft.EntityFrameworkCore
+@inject PropertyLeasingDbContext _layoutDb
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -10,10 +15,24 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
 </head>
 <body class="d-flex flex-column min-vh-100">
-    @using System.Security.Claims
-    @using PropertyLeasing.BusinessLogic
     @{
         var isMaintenanceStaff = User.Identity?.IsAuthenticated == true && User.IsInRole("MaintenanceStaff");
+
+        // Unread notification count for bell badge
+        int unreadCount = 0;
+        if (User.Identity?.IsAuthenticated == true)
+        {
+            var identityId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!string.IsNullOrEmpty(identityId))
+            {
+                var bizUser = await _layoutDb.Users
+                    .FirstOrDefaultAsync(u => u.IdentityUserId == identityId);
+                if (bizUser != null)
+                    unreadCount = await _layoutDb.Notifications
+                        .CountAsync(n => n.UserId == bizUser.UserId && n.Status == "Unread");
+            }
+        }
+
         var navDisplayName = User.Identity?.IsAuthenticated == true
             ? (User.FindFirst(TenantProfileSync.DisplayNameClaimType)?.Value
                ?? User.FindFirst(ClaimTypes.Name)?.Value
@@ -54,8 +73,15 @@
                         </ul>
                         <ul class="navbar-nav">
                             <li class="nav-item">
-                                <a class="@Lnk("Notifications")" asp-controller="Notifications" asp-action="Index">
+                                <a class="@Lnk("Notifications") position-relative me-1" asp-controller="Notifications" asp-action="Index">
                                     <i class="fa fa-bell"></i>
+                                    @if (unreadCount > 0)
+                                    {
+                                        <span class="position-absolute badge rounded-pill bg-danger"
+                                              style="font-size:.55rem;top:-4px;left:8px;min-width:16px;padding:2px 4px;">
+                                            @(unreadCount > 99 ? "99+" : unreadCount.ToString())
+                                        </span>
+                                    }
                                 </a>
                             </li>
                             <li class="nav-item dropdown">
@@ -219,6 +245,112 @@
     <script src="~/lib/bootstrap/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
     @await RenderSectionAsync("Scripts", required: false)
+
+    @if (User.Identity?.IsAuthenticated == true)
+    {
+        <script>
+        (function () {
+            var current = window.location.pathname + window.location.search;
+            var skipPages = ['/', '/Account/Login', '/Account/Logout', '/Account/Register'];
+
+            // Save current page (skip login/home pages)
+            if (!skipPages.includes(window.location.pathname)) {
+                localStorage.setItem('rentease_lastPage_@User.Identity.Name', window.location.href);
+            }
+
+            // If on home page, redirect to last visited page
+            if (window.location.pathname === '/' || window.location.pathname === '') {
+                var last = localStorage.getItem('rentease_lastPage_@User.Identity.Name');
+                if (last && last !== window.location.href) {
+                    window.location.replace(last);
+                }
+            }
+        })();
+        </script>
+    }
+
+    <!-- ── Session Timeout Warning Modal ────────────────────────────────── -->
+    @if (User.Identity?.IsAuthenticated == true)
+    {
+        <div class="modal fade" id="sessionWarningModal" tabindex="-1" data-bs-backdrop="static" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content border-0 shadow">
+                    <div class="modal-header bg-warning text-dark">
+                        <h5 class="modal-title mb-0">
+                            <i class="fa fa-clock me-2"></i>Session Expiring Soon
+                        </h5>
+                    </div>
+                    <div class="modal-body py-4 text-center">
+                        <p class="mb-1">You have been inactive. Your session will expire in</p>
+                        <h2 class="text-danger fw-bold" id="sessionCountdown">2:00</h2>
+                        <p class="text-muted small mb-0">Click "Stay Logged In" to continue your session.</p>
+                    </div>
+                    <div class="modal-footer border-0 pt-0 justify-content-center gap-2">
+                        <button type="button" class="btn btn-success px-4" id="sessionStayBtn">
+                            <i class="fa fa-check me-1"></i>Stay Logged In
+                        </button>
+                        <form asp-controller="Account" asp-action="Logout" method="post" class="d-inline">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="btn btn-outline-secondary">
+                                <i class="fa fa-sign-out-alt me-1"></i>Logout Now
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <script>
+        (function () {
+            var IDLE_TIMEOUT   = 28 * 60 * 1000;  // 28 min → show warning
+            var WARN_DURATION  =  2 * 60 * 1000;  // 2 min countdown then logout
+            var warningModal   = new bootstrap.Modal(document.getElementById('sessionWarningModal'), { backdrop: 'static' });
+            var countdownEl    = document.getElementById('sessionCountdown');
+            var stayBtn        = document.getElementById('sessionStayBtn');
+            var idleTimer, countdownTimer, secondsLeft;
+
+            function resetIdle() {
+                clearTimeout(idleTimer);
+                idleTimer = setTimeout(showWarning, IDLE_TIMEOUT);
+            }
+
+            function showWarning() {
+                secondsLeft = WARN_DURATION / 1000;
+                updateCountdown();
+                warningModal.show();
+                countdownTimer = setInterval(function () {
+                    secondsLeft--;
+                    updateCountdown();
+                    if (secondsLeft <= 0) {
+                        clearInterval(countdownTimer);
+                        // Auto logout
+                        document.querySelector('#sessionWarningModal form').submit();
+                    }
+                }, 1000);
+            }
+
+            function updateCountdown() {
+                var m = Math.floor(secondsLeft / 60);
+                var s = secondsLeft % 60;
+                countdownEl.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+            }
+
+            stayBtn.addEventListener('click', function () {
+                clearInterval(countdownTimer);
+                warningModal.hide();
+                // Ping server to reset sliding cookie
+                fetch(window.location.href, { method: 'HEAD', credentials: 'same-origin' });
+                resetIdle();
+            });
+
+            // Track user activity
+            ['mousemove','keydown','click','scroll','touchstart'].forEach(function (ev) {
+                document.addEventListener(ev, resetIdle, { passive: true });
+            });
+
+            resetIdle();
+        })();
+        </script>
+    }
 
     <!-- ── Global Confirm Modal ─────────────────────────────────────────── -->
     <div class="modal fade" id="globalConfirmModal" tabindex="-1" aria-hidden="true">

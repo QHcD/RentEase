@@ -30,8 +30,13 @@ builder.Services.AddIdentity<AppUser, IdentityRole>(options =>
 // Configure login path
 builder.Services.ConfigureApplicationCookie(options =>
 {
-    options.LoginPath = "/Account/Login";
+    options.LoginPath        = "/Account/Login";
     options.AccessDeniedPath = "/Account/AccessDenied";
+    options.ExpireTimeSpan    = TimeSpan.FromHours(1);     // session expires after 1 hour of inactivity
+    options.SlidingExpiration = true;                      // resets timer on each request
+    options.Cookie.HttpOnly   = true;
+    options.Cookie.MaxAge     = TimeSpan.FromHours(1);     // persistent cookie (survives browser close)
+    options.Cookie.SecurePolicy = Microsoft.AspNetCore.Http.CookieSecurePolicy.Always;
 });
 
 // ── MVC ───────────────────────────────────────────────
