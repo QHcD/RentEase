@@ -31,6 +31,9 @@ public partial class PropertyLeasingDbContext : DbContext
     public virtual DbSet<PropertyImage> PropertyImages { get; set; }
     public virtual DbSet<UnitImage> UnitImages { get; set; }
     public virtual DbSet<LeaseRefund> LeaseRefunds { get; set; }
+    public virtual DbSet<Amenity> Amenities { get; set; }
+    public virtual DbSet<PropertyAmenity> PropertyAmenities { get; set; }
+    public virtual DbSet<UnitAmenity> UnitAmenities { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) { }
 
@@ -219,6 +222,45 @@ public partial class PropertyLeasingDbContext : DbContext
                 .HasConstraintName("FK_MaintenanceStaff_User");
 
             entity.HasIndex(d => d.UserId).IsUnique();
+        });
+
+        modelBuilder.Entity<Amenity>(entity =>
+        {
+            entity.HasIndex(a => a.Name).IsUnique();
+        });
+
+        modelBuilder.Entity<PropertyAmenity>(entity =>
+        {
+            entity.HasKey(pa => new { pa.PropertyId, pa.AmenityId });
+
+            entity.HasOne(pa => pa.Property)
+                .WithMany(p => p.PropertyAmenities)
+                .HasForeignKey(pa => pa.PropertyId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_PropertyAmenities_Property");
+
+            entity.HasOne(pa => pa.Amenity)
+                .WithMany(a => a.PropertyAmenities)
+                .HasForeignKey(pa => pa.AmenityId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_PropertyAmenities_Amenity");
+        });
+
+        modelBuilder.Entity<UnitAmenity>(entity =>
+        {
+            entity.HasKey(ua => new { ua.UnitId, ua.AmenityId });
+
+            entity.HasOne(ua => ua.Unit)
+                .WithMany(u => u.UnitAmenities)
+                .HasForeignKey(ua => ua.UnitId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_UnitAmenities_Unit");
+
+            entity.HasOne(ua => ua.Amenity)
+                .WithMany(a => a.UnitAmenities)
+                .HasForeignKey(ua => ua.AmenityId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_UnitAmenities_Amenity");
         });
 
         OnModelCreatingPartial(modelBuilder);

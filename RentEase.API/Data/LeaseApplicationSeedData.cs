@@ -193,11 +193,14 @@ public static class LeaseApplicationSeedData
             UnitType           = "2BR Apartment",
             Sizesqm            = 118,
             MonthlyRent        = 280m,
-            AvailabilityStatus = "Occupied",
-            Amenities          = "Sea View, Balcony, Parking x2, Gym, Central AC"
+            AvailabilityStatus = "Occupied"
         };
         db.Units.Add(mUnit);
         await db.SaveChangesAsync();
+        await AmenityLinkService.SyncUnitAmenitiesAsync(
+            db,
+            mUnit.UnitId,
+            PropertyAmenitySelection.ParseCommaSeparated("Sea View, Balcony, Parking x2, Gym, Central AC"));
 
         var appM = App(tenant.UserId, mUnit.UnitId, leaseStart, leaseEnd, "Approved", leaseStart.AddDays(-14));
         db.LeaseApplications.Add(appM);

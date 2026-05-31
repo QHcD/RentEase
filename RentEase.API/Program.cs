@@ -9,6 +9,7 @@ using PropertyLeasing.API.Data;
 using PropertyLeasing.API.Hubs;
 using PropertyLeasing.API.Models;
 using PropertyLeasing.API.Services;
+using PropertyLeasing.BusinessLogic;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -168,12 +169,34 @@ using (var scope = app.Services.CreateScope())
     {
         var db = services.GetRequiredService<PropertyLeasingDbContext>();
         await db.Database.ExecuteSqlRawAsync(@"
-            IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Property' AND COLUMN_NAME = 'Amenities')
-                ALTER TABLE [Property] ADD [Amenities] NVARCHAR(250) NULL;
-            IF NOT EXISTS (SELECT 1 FROM [__EFMigrationsHistory] WHERE [MigrationId] = N'20260525120000_AddPropertyAmenities')
+            IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Amenity')
+            CREATE TABLE [Amenity] (
+                [AmenityID] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                [Name] NVARCHAR(80) NOT NULL
+            );
+            IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Amenity_Name')
+                CREATE UNIQUE INDEX [IX_Amenity_Name] ON [Amenity]([Name]);
+            IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'PropertyAmenities')
+            CREATE TABLE [PropertyAmenities] (
+                [PropertyID] INT NOT NULL,
+                [AmenityID] INT NOT NULL,
+                CONSTRAINT [PK_PropertyAmenities] PRIMARY KEY ([PropertyID], [AmenityID]),
+                CONSTRAINT [FK_PropertyAmenities_Property] FOREIGN KEY ([PropertyID]) REFERENCES [Property]([PropertyID]) ON DELETE CASCADE,
+                CONSTRAINT [FK_PropertyAmenities_Amenity] FOREIGN KEY ([AmenityID]) REFERENCES [Amenity]([AmenityID]) ON DELETE CASCADE
+            );
+            IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'UnitAmenities')
+            CREATE TABLE [UnitAmenities] (
+                [UnitID] INT NOT NULL,
+                [AmenityID] INT NOT NULL,
+                CONSTRAINT [PK_UnitAmenities] PRIMARY KEY ([UnitID], [AmenityID]),
+                CONSTRAINT [FK_UnitAmenities_Unit] FOREIGN KEY ([UnitID]) REFERENCES [Unit]([UnitID]) ON DELETE CASCADE,
+                CONSTRAINT [FK_UnitAmenities_Amenity] FOREIGN KEY ([AmenityID]) REFERENCES [Amenity]([AmenityID]) ON DELETE CASCADE
+            );
+            IF NOT EXISTS (SELECT 1 FROM [__EFMigrationsHistory] WHERE [MigrationId] = N'20260527120000_AddAmenityLinkTables')
                 INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
-                VALUES (N'20260525120000_AddPropertyAmenities', N'9.0.0');
+                VALUES (N'20260527120000_AddAmenityLinkTables', N'9.0.0');
         ");
+        await AmenityLinkService.MigrateLegacyAmenityColumnsAsync(db);
     }
     catch { }
 

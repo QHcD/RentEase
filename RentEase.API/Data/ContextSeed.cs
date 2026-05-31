@@ -10,6 +10,8 @@ namespace PropertyLeasing.API.Data;
 
 public static class ContextSeed
 {
+    private static List<(Unit Unit, string AmenityCsv)>? _pendingUnitAmenitySeeds;
+
     // ── Entry point ───────────────────────────────────────────────────────────
     public static async Task SeedRolesAndUsersAsync(IServiceProvider serviceProvider)
     {
@@ -381,6 +383,8 @@ DELETE FROM [MaintenanceStaff];
         await db.SaveChangesAsync();
 
         // ── Units (20 per property) ────────────────────────────────────────────
+        _pendingUnitAmenitySeeds = new List<(Unit, string)>();
+
         // Helper: U(propertyId, number, type, bedrooms, sqm, rent, status, amenities)
 
         // ── Seef Tower (20 units) ──
@@ -645,6 +649,19 @@ DELETE FROM [MaintenanceStaff];
         db.Units.AddRange(muharraqUnits);
         await db.SaveChangesAsync();
 
+        if (_pendingUnitAmenitySeeds is { Count: > 0 })
+        {
+            foreach (var (unit, amenityCsv) in _pendingUnitAmenitySeeds)
+            {
+                await AmenityLinkService.SyncUnitAmenitiesAsync(
+                    db,
+                    unit.UnitId,
+                    PropertyAmenitySelection.ParseCommaSeparated(amenityCsv));
+            }
+
+            _pendingUnitAmenitySeeds = null;
+        }
+
 
         var tM = await db.Users.FirstOrDefaultAsync(u => u.Email == "murtadhaahss05@gmail.com");
         await LeaseApplicationSeedData.SeedAsync(db, logger,
@@ -750,17 +767,21 @@ DELETE FROM [MaintenanceStaff];
         new Property { Name = name, Description = desc, Address = address, City = city, PropertyType = type };
 
     private static Unit U(int propertyId, string number, string type, int bedrooms,
-        double sqm, decimal rent, string status, string amenities) =>
-        new Unit
+        double sqm, decimal rent, string status, string amenities)
+    {
+        var unit = new Unit
         {
             PropertyId         = propertyId,
             UnitNumber         = number,
             UnitType           = bedrooms == 0 ? type : $"{bedrooms}BR {type}",
             Sizesqm            = sqm,
             MonthlyRent        = rent,
-            AvailabilityStatus = status,
-            Amenities          = amenities
+            AvailabilityStatus = status
         };
+
+        _pendingUnitAmenitySeeds?.Add((unit, amenities));
+        return unit;
+    }
 
 
     private static Notification Notif(int userId, string message, string type) =>

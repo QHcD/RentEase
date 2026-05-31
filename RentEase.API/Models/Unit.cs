@@ -27,9 +27,6 @@ public partial class Unit
     [Column(TypeName = "decimal(10,2)")]
     public decimal? MonthlyRent { get; set; }
 
-    [StringLength(250)]
-    public string? Amenities { get; set; }
-
     // Available / Occupied / UnderMaintenance
     [StringLength(50)]
     public string? AvailabilityStatus { get; set; }
@@ -40,6 +37,9 @@ public partial class Unit
     [ForeignKey("PropertyId")]
     [InverseProperty("Units")]
     public virtual Property Property { get; set; } = null!;
+
+    [InverseProperty("Unit")]
+    public virtual ICollection<UnitAmenity> UnitAmenities { get; set; } = new List<UnitAmenity>();
 
     [InverseProperty("Unit")]
     public virtual ICollection<LeaseApplication> LeaseApplications { get; set; } = new List<LeaseApplication>();

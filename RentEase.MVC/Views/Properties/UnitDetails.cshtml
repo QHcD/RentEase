@@ -6,8 +6,8 @@
     if (!detailImgs.Any() && !string.IsNullOrWhiteSpace(Model.ImgPath))
         detailImgs.Add(Model.ImgPath);
 
-    var propertyAmenities = PropertyAmenitySelection.ParseCommaSeparated(Model.Property.Amenities);
-    var unitAmenities = PropertyAmenitySelection.ParseCommaSeparated(Model.Amenities);
+    var propertyAmenities = AmenityLinkService.GetPropertyAmenityNames(Model.Property);
+    var unitAmenities = AmenityLinkService.GetUnitAmenityNames(Model);
 
     var statusColor = Model.AvailabilityStatus switch {
         "Available"        => "success",

@@ -81,14 +81,18 @@ public class PropertiesController : Controller
             query = query.Where(u => u.MonthlyRent <= maxRent);
 
         var units = await query
-            .Select(u => new UnitListViewModel
+            .Include(u => u.UnitAmenities)
+            .ThenInclude(ua => ua.Amenity)
+            .ToListAsync();
+
+        var unitModels = units.Select(u => new UnitListViewModel
             {
                 UnitId             = u.UnitId,
                 UnitNumber         = u.UnitNumber,
                 UnitType           = u.UnitType,
                 Sizesqm            = u.Sizesqm,
                 MonthlyRent        = u.MonthlyRent,
-                Amenities          = u.Amenities,
+                Amenities          = AmenityLinkService.JoinDisplayNames(AmenityLinkService.GetUnitAmenityNames(u)),
                 AvailabilityStatus = u.AvailabilityStatus,
                 ImgPath            = u.ImgPath,
                 PropertyName       = u.Property.Name,
@@ -96,7 +100,7 @@ public class PropertiesController : Controller
                 PropertyId         = u.PropertyId,
                 ImagePaths         = u.UnitImages.OrderBy(i => i.SortOrder).Select(i => i.ImagePath).ToList()
             })
-            .ToListAsync();
+            .ToList();
 
         ViewBag.PropertyName = property.Name;
         ViewBag.PropertyId   = propertyId;
@@ -110,7 +114,7 @@ public class PropertiesController : Controller
             .Select(i => i.ImagePath)
             .ToListAsync();
 
-        return View(units);
+        return View(unitModels);
     }
 
     // GET /Properties/UnitDetails/{id}
@@ -118,6 +122,10 @@ public class PropertiesController : Controller
     {
         var unit = await _db.Units
             .Include(u => u.Property)
+                .ThenInclude(p => p.PropertyAmenities)
+                .ThenInclude(pa => pa.Amenity)
+            .Include(u => u.UnitAmenities)
+                .ThenInclude(ua => ua.Amenity)
             .Include(u => u.UnitImages.OrderBy(i => i.SortOrder))
             .FirstOrDefaultAsync(u => u.UnitId == id);
 
@@ -303,7 +311,6 @@ public class PropertiesController : Controller
             City             = model.City,
             PropertyType     = model.PropertyType,
             TotalSizeSqm     = (double)model.TotalSizeSqm,
-            Amenities        = propertyAmenitiesJoined,
             GracePeriodDays  = 5,
             LateFeePercent   = 5
         };
@@ -319,13 +326,27 @@ public class PropertiesController : Controller
                 UnitNumber           = unitNumbers[i],
                 Sizesqm              = unitAreasSqm[i],
                 MonthlyRent          = unitMonthlyRents[i],
-                Amenities            = PropertyAmenitySelection.JoinCustomOnly(unitCustoms),
                 AvailabilityStatus   = "Available"
             });
         }
 
         _db.Properties.Add(property);
         await _db.SaveChangesAsync();
+
+        await AmenityLinkService.SyncPropertyAmenitiesAsync(_db, property.PropertyId, mergedPropertyAmenities);
+
+        var unitIndex = 0;
+        foreach (var unit in property.Units)
+        {
+            var unitCustoms = unitIndex < unitCustomAmenitiesFlat.Count
+                ? unitCustomAmenitiesFlat[unitIndex]
+                : Array.Empty<string>();
+            await AmenityLinkService.SyncUnitAmenitiesAsync(
+                _db,
+                unit.UnitId,
+                PropertyAmenitySelection.Merge(null, unitCustoms, Array.Empty<string>()));
+            unitIndex++;
+        }
 
         // Save uploaded property images
         if (model.Images is { Count: > 0 })
@@ -358,10 +379,15 @@ public class PropertiesController : Controller
     [Authorize(Roles = "PropertyManager")]
     public async Task<IActionResult> Edit(int id)
     {
-        var property = await _db.Properties.AsNoTracking().FirstOrDefaultAsync(p => p.PropertyId == id);
+        var property = await _db.Properties
+            .Include(p => p.PropertyAmenities)
+            .ThenInclude(pa => pa.Amenity)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.PropertyId == id);
         if (property == null) return NotFound();
 
-        var amenitySource = property.Amenities;
+        var propertyAmenityNames = AmenityLinkService.GetPropertyAmenityNames(property);
+        var amenitySource = AmenityLinkService.JoinDisplayNames(propertyAmenityNames);
 
         var (fixedSel, customs) = PropertyAmenitySelection.SplitFromStoredString(amenitySource, PropertyAmenityOptions.All);
 
@@ -426,9 +452,9 @@ public class PropertiesController : Controller
         entity.ImgPath          = model.ImgPath;
         entity.GracePeriodDays  = model.GracePeriodDays;
         entity.LateFeePercent   = model.LateFeePercent;
-        entity.Amenities        = amenitiesJoined;
 
         await _db.SaveChangesAsync();
+        await AmenityLinkService.SyncPropertyAmenitiesAsync(_db, entity.PropertyId, mergedAmenities);
 
         TempData["Success"] = "Property updated successfully.";
         return RedirectToAction(nameof(Manage));
