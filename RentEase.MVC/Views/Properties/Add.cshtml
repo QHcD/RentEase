@@ -252,6 +252,15 @@
             var maxLen = @PropertyLeasing.BusinessLogic.PropertyAmenitySelection.MaxCustomAmenityItemLength;
             var maxCustomUnit = maxCustom;
 
+            var unitTypeOptions = ['Studio', 'Apartment', 'Office', 'Shop'];
+            function unitTypeOptionsHtml(selected) {
+                var html = '<option value="">-- Select type --</option>';
+                unitTypeOptions.forEach(function (t) {
+                    html += '<option value="' + t + '"' + (t === selected ? ' selected' : '') + '>' + t + '</option>';
+                });
+                return html;
+            }
+
             function readPropertyAmenitiesFromForm() {
                 var list = [];
                 document.querySelectorAll('.amenity-fixed-cb:checked').forEach(function (cb) {
@@ -533,6 +542,14 @@
                 return rents;
             }
 
+            function readUnitTypesFromRow(row) {
+                var types = [];
+                row.querySelectorAll('.unit-row .unit-type-select').forEach(function (sel) {
+                    types.push(sel.value || null);
+                });
+                return types;
+            }
+
             function parseOptionalRentInput(value) {
                 if (value == null || value === '') return null;
                 var n = parseFloat(value);
@@ -667,6 +684,7 @@
                         FloorMonthlyRent: floorRentInp ? parseOptionalRentInput(floorRentInp.value) : null,
                         UnitAreasSqm: readUnitAreasFromRow(row),
                         UnitMonthlyRents: readUnitMonthlyRentsFromRow(row),
+                        UnitTypes: readUnitTypesFromRow(row),
                         UnitCustomAmenities: readUnitCustomAmenitiesFromRow(row)
                     });
                 });
@@ -698,13 +716,16 @@
                 var defaults = defaultUnitAreas(floorPlate, count);
                 var existingCustoms = readUnitCustomAmenitiesFromRow(wrap);
                 var existingRents = readUnitMonthlyRentsFromRow(wrap);
+                var existingTypes = readUnitTypesFromRow(wrap);
                 var customs = [];
                 var rents = [];
+                var types = [];
                 for (var ci = 0; ci < count; ci++) {
                     customs.push(existingCustoms[ci] || []);
                     rents.push(existingRents[ci] != null ? existingRents[ci] : null);
+                    types.push(existingTypes[ci] || null);
                 }
-                renderUnitInputs(unitsHost, floorIdx, count, defaults, rents, customs, r, wrap);
+                renderUnitInputs(unitsHost, floorIdx, count, defaults, rents, types, customs, r, wrap);
                 updateSummary();
             }
 
@@ -788,7 +809,27 @@
                 syncBudgetLimits();
             }
 
-            function renderUnitInputs(unitsHost, floorIdx, count, areas, unitMonthlyRents, customAmenityLists, rentable, wrap) {
+            function bindUnitImagePreview(row) {
+                var input = row.querySelector('.unit-image-input');
+                var preview = row.querySelector('.unit-image-preview');
+                if (!input || !preview) return;
+                input.addEventListener('change', function () {
+                    preview.innerHTML = '';
+                    Array.from(input.files).forEach(function (file) {
+                        if (!file.type.startsWith('image/')) return;
+                        var reader = new FileReader();
+                        reader.onload = function (e) {
+                            var img = document.createElement('img');
+                            img.src = e.target.result;
+                            img.style.cssText = 'height:54px;width:72px;object-fit:cover;border-radius:4px;border:1px solid #dee2e6;';
+                            preview.appendChild(img);
+                        };
+                        reader.readAsDataURL(file);
+                    });
+                });
+            }
+
+            function renderUnitInputs(unitsHost, floorIdx, count, areas, unitMonthlyRents, unitTypes, customAmenityLists, rentable, wrap) {
                 unitsHost.innerHTML = '';
                 unitsHost.className = 'unit-areas-host d-flex flex-column gap-3';
 
@@ -800,12 +841,20 @@
                     var unitRentVal = (unitMonthlyRents && unitMonthlyRents[u] != null && !isNaN(unitMonthlyRents[u]))
                         ? unitMonthlyRents[u]
                         : '';
+                    var selType = (unitTypes && unitTypes[u]) ? unitTypes[u] : '';
 
                     var row = document.createElement('div');
                     row.className = 'unit-row border rounded p-3';
                     row.innerHTML =
                         '<div class="row g-3 align-items-start">' +
                         '<div class="col-lg-5">' +
+                        '<div class="mb-2">' +
+                        '<label class="form-label small mb-0" for="unit_type_' + floorIdx + '_' + u + '">Unit ' + (u + 1) + ' type</label>' +
+                        '<select class="form-select form-select-sm unit-type-select" id="unit_type_' + floorIdx + '_' + u + '" ' +
+                        'name="FloorRows[' + floorIdx + '].UnitTypes[' + u + ']" required>' +
+                        unitTypeOptionsHtml(selType) +
+                        '</select>' +
+                        '</div>' +
                         '<div class="row g-2 align-items-start">' +
                         '<div class="col-sm-6">' +
                         '<label class="form-label small mb-0" for="unit_area_' + floorIdx + '_' + u + '">Unit ' + (u + 1) + ' area (m²)</label>' +
@@ -831,6 +880,11 @@
                         '<button type="button" class="btn btn-sm btn-outline-primary mt-2 add-unit-amenity-btn">' +
                         '<i class="fa fa-plus me-1"></i>Add amenity</button>' +
                         '<p class="field-hint mb-0 mt-2">Extras for this unit only — not shared with other units or the property.</p>' +
+                        '<hr class="my-2" />' +
+                        '<label class="form-label small mb-1"><i class="fa fa-images me-1 text-primary"></i>Unit images <span class="text-muted">(optional — jpg, png, webp)</span></label>' +
+                        '<input type="file" class="form-control form-control-sm unit-image-input" multiple accept=".jpg,.jpeg,.png,.webp" name="unitImages_F' + floorIdx + '_U' + u + '" />' +
+                        '<div class="unit-image-preview d-flex flex-wrap gap-1 mt-1"></div>' +
+                        '<p class="field-hint mb-0 mt-1">Photos for this unit only. You can also add them later from the unit page.</p>' +
                         '</div></div>';
 
                     var listEl = row.querySelector('.unit-custom-amenities-list');
@@ -839,6 +893,7 @@
                     row.querySelector('.unit-monthly-rent').addEventListener('input', updateRentSummary);
                     row.querySelector('.unit-monthly-rent').addEventListener('change', updateRentSummary);
                     bindRentInputValidation(row.querySelector('.unit-monthly-rent'));
+                    bindUnitImagePreview(row);
                     unitsHost.appendChild(row);
                 }
 
@@ -924,12 +979,16 @@
                         : defaultUnitAreas(floorPlate, unitsVal);
                     var unitCustomLists = [];
                     var unitMonthlyRents = [];
+                    var unitTypes = [];
                     for (var uc = 0; uc < unitsVal; uc++) {
                         unitCustomLists.push(
                             (seed.UnitCustomAmenities && seed.UnitCustomAmenities[uc]) ? seed.UnitCustomAmenities[uc] : []
                         );
                         unitMonthlyRents.push(
                             (seed.UnitMonthlyRents && seed.UnitMonthlyRents[uc] != null) ? seed.UnitMonthlyRents[uc] : null
+                        );
+                        unitTypes.push(
+                            (seed.UnitTypes && seed.UnitTypes[uc]) ? seed.UnitTypes[uc] : null
                         );
                     }
                     var floorRentVal = seed.FloorMonthlyRent != null ? seed.FloorMonthlyRent : '';
@@ -973,7 +1032,7 @@
                     unitsHost.className = 'unit-areas-host';
                     wrap.appendChild(unitsHost);
 
-                    renderUnitInputs(unitsHost, floorIdx, unitsVal, unitAreas, unitMonthlyRents, unitCustomLists, rentable, wrap);
+                    renderUnitInputs(unitsHost, floorIdx, unitsVal, unitAreas, unitMonthlyRents, unitTypes, unitCustomLists, rentable, wrap);
                     wrap.dataset.unitRowCount = String(unitsVal);
                     bindUnitsOnFloorLimits(wrap, floorIdx, unitsHost, floorPlate);
                     bindRentInputValidation(wrap.querySelector('.floor-monthly-rent'));
@@ -995,13 +1054,16 @@
                         var defaults = defaultUnitAreas(getFloorPlate(), count);
                         var existingCustoms = readUnitCustomAmenitiesFromRow(wrap);
                         var existingRents = readUnitMonthlyRentsFromRow(wrap);
+                        var existingTypes = readUnitTypesFromRow(wrap);
                         var customs = [];
                         var rents = [];
+                        var types = [];
                         for (var ci = 0; ci < count; ci++) {
                             customs.push(existingCustoms[ci] || []);
                             rents.push(existingRents[ci] != null ? existingRents[ci] : null);
+                            types.push(existingTypes[ci] || null);
                         }
-                        renderUnitInputs(unitsHost, floorIdx, count, defaults, rents, customs, r, wrap);
+                        renderUnitInputs(unitsHost, floorIdx, count, defaults, rents, types, customs, r, wrap);
                         wrap.dataset.unitRowCount = String(count);
                         updateSummary();
                     });

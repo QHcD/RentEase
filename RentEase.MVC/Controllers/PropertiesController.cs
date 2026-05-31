@@ -266,6 +266,7 @@ public class PropertiesController : Controller
         IReadOnlyList<double> unitAreasSqm;
         IReadOnlyList<IReadOnlyList<string>> unitCustomAmenitiesFlat;
         IReadOnlyList<decimal> unitMonthlyRents;
+        IReadOnlyList<string?> unitTypesFlat;
         try
         {
             var prefix = model.UnitNumberPrefix;
@@ -286,6 +287,16 @@ public class PropertiesController : Controller
                     var lists = r.UnitCustomAmenities ?? new List<List<string>>();
                     return Enumerable.Range(0, count).Select(u =>
                         (IReadOnlyList<string>)(u < lists.Count ? lists[u] ?? new List<string>() : new List<string>()));
+                })
+                .ToList();
+
+            unitTypesFlat = model.FloorRows!
+                .SelectMany(r =>
+                {
+                    var count = r.UnitsOnFloor;
+                    var list = r.UnitTypes ?? new List<string?>();
+                    return Enumerable.Range(0, count).Select(u =>
+                        u < list.Count ? list[u] : null);
                 })
                 .ToList();
 
@@ -326,6 +337,7 @@ public class PropertiesController : Controller
                 UnitNumber           = unitNumbers[i],
                 Sizesqm              = unitAreasSqm[i],
                 MonthlyRent          = unitMonthlyRents[i],
+                UnitType             = i < unitTypesFlat.Count ? unitTypesFlat[i] : null,
                 AvailabilityStatus   = "Available"
             });
         }
@@ -347,6 +359,40 @@ public class PropertiesController : Controller
                 PropertyAmenitySelection.Merge(null, unitCustoms, Array.Empty<string>()));
             unitIndex++;
         }
+
+        // Save optional per-unit images uploaded from the Add form.
+        // Inputs are named unitImages_F{floor}_U{unit}; units were created in floor-major order.
+        var createdUnits = property.Units.ToList();
+        int flatUnitIndex = 0;
+        for (var f = 0; f < model.FloorRows!.Count; f++)
+        {
+            var unitsOnFloor = model.FloorRows[f].UnitsOnFloor;
+            for (var u = 0; u < unitsOnFloor && flatUnitIndex < createdUnits.Count; u++, flatUnitIndex++)
+            {
+                var unitFiles = Request.Form.Files.GetFiles($"unitImages_F{f}_U{u}");
+                if (unitFiles.Count == 0) continue;
+
+                var unit = createdUnits[flatUnitIndex];
+                var unitDir = Path.Combine(_env.WebRootPath, "uploads", "units", unit.UnitId.ToString());
+                Directory.CreateDirectory(unitDir);
+                int unitImgOrder = 0;
+                foreach (var file in unitFiles.Where(ff => ff.Length > 0))
+                {
+                    var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+                    if (!AllowedImgExt.Contains(ext)) continue;
+                    var name = $"{Guid.NewGuid()}{ext}";
+                    await using var fs = System.IO.File.Create(Path.Combine(unitDir, name));
+                    await file.CopyToAsync(fs);
+                    _db.UnitImages.Add(new UnitImage
+                    {
+                        UnitId    = unit.UnitId,
+                        ImagePath = $"/uploads/units/{unit.UnitId}/{name}",
+                        SortOrder = unitImgOrder++
+                    });
+                }
+            }
+        }
+        await _db.SaveChangesAsync();
 
         // Save uploaded property images
         if (model.Images is { Count: > 0 })
@@ -372,7 +418,7 @@ public class PropertiesController : Controller
         }
 
         TempData["Success"] = $"Property added successfully with {unitNumbers.Count} unit(s).";
-        return RedirectToAction("Manage");
+        return RedirectToAction("Units", new { propertyId = property.PropertyId });
     }
 
     // GET /Properties/Edit/{id}
@@ -466,6 +512,19 @@ public class PropertiesController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Delete(int id)
     {
+        // Return the user to whichever page they deleted from (Index cards or Manage table).
+        IActionResult BackToOrigin()
+        {
+            var referer = Request.Headers["Referer"].ToString();
+            if (!string.IsNullOrEmpty(referer) &&
+                Uri.TryCreate(referer, UriKind.Absolute, out var refUri) &&
+                Url.IsLocalUrl(refUri.PathAndQuery))
+            {
+                return Redirect(refUri.PathAndQuery);
+            }
+            return RedirectToAction(nameof(Manage));
+        }
+
         var property = await _db.Properties.FirstOrDefaultAsync(p => p.PropertyId == id);
         if (property == null) return NotFound();
 
@@ -477,7 +536,7 @@ public class PropertiesController : Controller
             if (!ok)
             {
                 TempData["Error"] = error;
-                return RedirectToAction(nameof(Manage));
+                return BackToOrigin();
             }
 
             var propRow = await _db.Properties.FindAsync(id);
@@ -494,7 +553,7 @@ public class PropertiesController : Controller
             TempData["Error"] = "Unable to delete this property because related data could not be removed. Try again or contact support.";
         }
 
-        return RedirectToAction(nameof(Manage));
+        return BackToOrigin();
     }
 
     // ── Image Management ─────────────────────────────────────────────────────

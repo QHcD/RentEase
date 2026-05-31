@@ -64,6 +64,9 @@ public class FloorUnitRowInput
     /// <summary>Monthly rent per unit (parallel to <see cref="UnitAreasSqm"/>).</summary>
     public List<decimal?> UnitMonthlyRents { get; set; } = new();
 
+    /// <summary>Unit type per unit (parallel to <see cref="UnitAreasSqm"/>), e.g. Studio, 1BR Apartment.</summary>
+    public List<string?> UnitTypes { get; set; } = new();
+
     /// <summary>Custom amenities per unit (parallel to <see cref="UnitAreasSqm"/>).</summary>
     public List<List<string>> UnitCustomAmenities { get; set; } = new();
 }
