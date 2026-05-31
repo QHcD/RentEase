@@ -579,6 +579,12 @@ public class LeaseApplicationsController : Controller
         if (!LeaseApplicationDocumentRules.IsActiveDocumentStatus(document.Status))
             return NotFound();
 
+        // Prefer DB-stored bytes (persistent on Azure); fall back to disk for local dev
+        if (document.FileContent is { Length: > 0 })
+        {
+            Response.Headers.ContentDisposition = $"inline; filename=\"{document.FileName}\"";
+            return File(document.FileContent, "application/pdf");
+        }
         var absolutePath = _documents.ResolveAbsolutePath(document.StoragePath);
         if (absolutePath == null) return NotFound();
 
@@ -595,6 +601,10 @@ public class LeaseApplicationsController : Controller
         var (document, error) = await GetAccessibleDocumentAsync(id, appUser);
         if (error != null) return error;
         if (document == null) return NotFound();
+
+        // Prefer DB-stored bytes (persistent on Azure); fall back to disk for local dev
+        if (document.FileContent is { Length: > 0 })
+            return File(document.FileContent, "application/pdf", document.FileName);
 
         var absolutePath = _documents.ResolveAbsolutePath(document.StoragePath);
         if (absolutePath == null) return NotFound();

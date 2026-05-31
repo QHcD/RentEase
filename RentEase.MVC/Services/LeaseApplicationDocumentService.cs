@@ -90,18 +90,28 @@ public class LeaseApplicationDocumentService
         var storedName  = LeaseApplicationDocumentRules.BuildStoredFileName(
             applicationId, userId, applicantFullName, documentType);
         var relativeDir = Path.Combine("uploads", "lease-applications", applicationId.ToString());
-        var absoluteDir = Path.Combine(_env.WebRootPath, relativeDir);
-        Directory.CreateDirectory(absoluteDir);
 
-        var absolutePath = Path.Combine(absoluteDir, storedName);
-        await using (var stream = new FileStream(absolutePath, FileMode.Create))
-            await file.CopyToAsync(stream, cancellationToken);
+        // Read file bytes — stored in DB for Azure persistence
+        using var ms = new MemoryStream();
+        await file.CopyToAsync(ms, cancellationToken);
+        var fileBytes = ms.ToArray();
 
-        doc.FileName      = storedName;
-        doc.StoragePath   = "/" + relativeDir.Replace('\\', '/') + "/" + storedName;
-        doc.Status        = LeaseApplicationDocumentRules.DocumentStatusSubmitted;
+        // Also save to disk for local dev (best-effort, non-fatal on Azure)
+        try
+        {
+            var absoluteDir  = Path.Combine(_env.WebRootPath, relativeDir);
+            Directory.CreateDirectory(absoluteDir);
+            var absolutePath = Path.Combine(absoluteDir, storedName);
+            await File.WriteAllBytesAsync(absolutePath, fileBytes, cancellationToken);
+        }
+        catch { /* ephemeral on Azure — DB copy is the authoritative source */ }
+
+        doc.FileName        = storedName;
+        doc.StoragePath     = "/" + relativeDir.Replace('\\', '/') + "/" + storedName;
+        doc.FileContent     = fileBytes;
+        doc.Status          = LeaseApplicationDocumentRules.DocumentStatusSubmitted;
         doc.RejectionReason = null;
-        doc.UploadedAt    = DateTime.Now;
+        doc.UploadedAt      = DateTime.Now;
     }
 
     public void DeletePhysicalFile(string? storagePath)

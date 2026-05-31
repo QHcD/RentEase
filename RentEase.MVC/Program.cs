@@ -142,6 +142,8 @@ using (var scope = app.Services.CreateScope())
             END;
             IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Document' AND COLUMN_NAME = 'RejectionReason')
                 ALTER TABLE [Document] ADD [RejectionReason] NVARCHAR(500) NULL;
+            IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Document' AND COLUMN_NAME = 'FileContent')
+                ALTER TABLE [Document] ADD [FileContent] VARBINARY(MAX) NULL;
             IF NOT EXISTS (SELECT 1 FROM [__EFMigrationsHistory] WHERE [MigrationId] = N'20260519120000_AddDocumentReviewStatus')
                 INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
                 VALUES (N'20260519120000_AddDocumentReviewStatus', N'9.0.0');

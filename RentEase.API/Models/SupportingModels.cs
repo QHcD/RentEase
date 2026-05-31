@@ -154,6 +154,9 @@ public partial class Document
     [StringLength(500)]
     public string? RejectionReason { get; set; }
 
+    /// <summary>Binary content of the PDF — stored in DB for persistence across Azure redeploys.</summary>
+    public byte[]? FileContent { get; set; }
+
     [ForeignKey("UserId")]
     [InverseProperty("Documents")]
     public virtual User? User { get; set; }
